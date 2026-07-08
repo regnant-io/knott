@@ -1,0 +1,4 @@
+# KW Sagittarii — AI Decision Engine
+# This service intentionally uses ONLY the Python standard library so it runs on
+# any Python 3.9+ interpreter with zero `pip install` steps. No dependencies are
+# required. (Anthropic and Ollama are called over HTTP via urllib.)
