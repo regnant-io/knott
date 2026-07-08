@@ -1118,11 +1118,8 @@ func taskCompleteCallback(w http.ResponseWriter, r *http.Request) {
 func directCompleteTask(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "task_id")
 
-	var req struct {
-		Decision      string `json:"decision"`
-		Justification string `json:"justification"`
-		CompletedBy   string `json:"completed_by"`
-	}
+	// Forward the body as-is so optional fields (form_data) survive the hop.
+	var req map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "INVALID_REQUEST", err.Error())
 		return
