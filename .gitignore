@@ -1,0 +1,32 @@
+# ─── Secrets & local config ──────────────────────────────────────────────────
+.env
+.env.local
+*.local
+
+# ─── Runtime data & logs ──────────────────────────────────────────────────────
+/data/
+/logs/
+*.db
+*.db-wal
+*.db-shm
+ai-config.json
+
+# ─── Build artifacts ──────────────────────────────────────────────────────────
+/bin/
+**/dist/
+*.exe
+# Compiled Go service binaries dropped next to their main.go
+services/*/agent-integration
+services/*/human-task-service
+services/*/execution-engine
+services/*/workflow-registry
+
+# ─── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+__pycache__/
+
+# ─── Editor / OS ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
