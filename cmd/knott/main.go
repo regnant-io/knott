@@ -271,7 +271,21 @@ func shutdownAI(cmd *exec.Cmd) {
 	_, _ = cmd.Process.Wait()
 }
 
+// findAIScript locates the optional Python decision engine.
+//
+// Each packaging format puts it somewhere different — beside the binary in a
+// release archive and in the macOS bundle, under /usr/share in the Linux
+// packages, in services/ in a checkout — so all of them are checked rather than
+// each format having to set an environment variable. KNOTT_AI_SCRIPT overrides
+// the search for anyone who puts it somewhere else entirely.
 func findAIScript() string {
+	if v := strings.TrimSpace(os.Getenv("KNOTT_AI_SCRIPT")); v != "" {
+		if _, err := os.Stat(v); err == nil {
+			return v
+		}
+		log.Printf("KNOTT_AI_SCRIPT points at %s, which does not exist — searching the usual places", v)
+	}
+
 	candidates := []string{
 		filepath.Join("services", "ai-decision-engine", "main.py"),
 		filepath.Join("..", "services", "ai-decision-engine", "main.py"),
@@ -279,11 +293,19 @@ func findAIScript() string {
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)
 		candidates = append(candidates,
+			// Release archive, container image, macOS bundle.
 			filepath.Join(dir, "ai-decision-engine", "main.py"),
+			// Linux .deb / .rpm: /usr/bin/knott with the script under /usr/share.
+			filepath.Join(dir, "..", "share", "knott", "ai-decision-engine", "main.py"),
 			filepath.Join(dir, "services", "ai-decision-engine", "main.py"),
 			filepath.Join(dir, "..", "services", "ai-decision-engine", "main.py"),
 		)
 	}
+	candidates = append(candidates,
+		filepath.Join("/usr", "share", "knott", "ai-decision-engine", "main.py"),
+		filepath.Join("/usr", "local", "share", "knott", "ai-decision-engine", "main.py"),
+	)
+
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
 			if abs, err := filepath.Abs(c); err == nil {
