@@ -13,7 +13,7 @@ matters, and keep an audit trail of every decision — from one binary you own.
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev)
 
-[Install](#install) · [How it works](#how-it-works) · [Connectors](#connectors) · [Deploying](#deploying) · [Contributing](CONTRIBUTING.md)
+[Install](#install) · [How it works](#how-it-works) · [Connectors](#connectors) · [Building workflows](docs/workflows.md) · [Deploying](docs/deployment.md) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -168,6 +168,9 @@ or add it — CONTRIBUTING.md has a walkthrough.
 ---
 
 ## Deploying
+
+[docs/deployment.md](docs/deployment.md) covers this properly — backups,
+monitoring, systemd, upgrades. The essentials:
 
 ### One node
 
