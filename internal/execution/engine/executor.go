@@ -95,6 +95,10 @@ type Executor struct {
 	// It is consulted before environment variables, enabling UI-managed
 	// credentials. Returns (value, true) if a stored credential exists.
 	SecretLookup func(name string) (string, bool)
+	// SubRunner starts and observes child runs for sub_workflow nodes. It is nil
+	// in deployments that do not host the run store (the node then fails with a
+	// clear message rather than silently doing nothing).
+	SubRunner SubWorkflowRunner
 	// SignCallback returns an HMAC signature for the task-complete callback of
 	// (runID, nodeID). The engine verifies it on receipt so the callback endpoint
 	// cannot be used to forge human decisions or resume arbitrary runs.
@@ -159,6 +163,8 @@ func (e *Executor) ExecuteNode(runID string, def *WorkflowDefinition, node *Work
 		return e.executeLoop(runID, def, node, ctx)
 	case "merge":
 		return e.executeMerge(node, ctx)
+	case "sub_workflow", "workflow":
+		return e.executeSubWorkflow(runID, node, ctx)
 	default:
 		return nil, fmt.Errorf("unknown node type: %s", node.Type)
 	}
@@ -601,10 +607,11 @@ func actionFromConfig(config map[string]any) string {
 // a candidate item; the caller dedups by config.dedup_key.
 //
 // config shape:
-//   source:        "http" | "connector"
-//   url / method:  for http
-//   connector_id / action / <connector fields>: for connector
-//   items_path:    dotted path to the array in the response (default: whole body if it's an array)
+//
+//	source:        "http" | "connector"
+//	url / method:  for http
+//	connector_id / action / <connector fields>: for connector
+//	items_path:    dotted path to the array in the response (default: whole body if it's an array)
 func (e *Executor) PollSource(config map[string]any) ([]any, error) {
 	source := strings.ToLower(str(config["source"]))
 	if source == "" {
@@ -683,16 +690,10 @@ func (e *Executor) executeToolCall(runID string, node *WorkflowStep, ctx map[str
 	// connector response so downstream steps can reference a clean shape.
 	output, err := e.callConnector(connectorID, action, resolvedInputs)
 	if err != nil {
-		// On failure, allow an optional on_error fallback node; otherwise fail the run.
-		if fb, _ := config["on_error"].(string); fb != "" {
-			return &NodeResult{
-				Action: "NEXT", Next: fb, Actor: "system",
-				Output: map[string]any{"error": err.Error(), "connector_id": connectorID},
-				ContextUpdate: map[string]any{
-					"steps." + node.ID: map[string]any{"status": "failed", "error": err.Error()},
-				},
-			}, nil
-		}
+		// Failures are returned, not routed. The engine's run loop owns error
+		// routing so config.on_error behaves identically on every node type, and
+		// only after the node's retries are exhausted — this handler used to
+		// branch on the first attempt, skipping retry entirely.
 		return nil, fmt.Errorf("tool_call %s (%s) failed: %w", node.ID, connectorID, err)
 	}
 
@@ -895,7 +896,8 @@ func (e *Executor) callConnector(connectorID, action string, in map[string]any) 
 // fill a few fields — no URL/auth/JSON wrangling.
 
 // Telegram bot operations. Secret: TELEGRAM_BOT_TOKEN.
-//   send_message (default): chat_id, text, parse_mode
+//
+//	send_message (default): chat_id, text, parse_mode
 func (e *Executor) callTelegram(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["bot_token"]), e.secret("TELEGRAM_BOT_TOKEN"))
 	if token == "" {
@@ -920,9 +922,10 @@ func (e *Executor) callTelegram(action string, in map[string]any) (map[string]an
 }
 
 // GitHub operations. Secret: GITHUB_TOKEN (PAT with repo scope).
-//   create_issue (default): repo, title, body, labels
-//   comment_issue: repo, issue_number, body
-//   close_issue:   repo, issue_number
+//
+//	create_issue (default): repo, title, body, labels
+//	comment_issue: repo, issue_number, body
+//	close_issue:   repo, issue_number
 func (e *Executor) callGitHub(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("GITHUB_TOKEN"))
 	if token == "" {
@@ -1002,9 +1005,10 @@ func (e *Executor) callGitHub(action string, in map[string]any) (map[string]any,
 }
 
 // Airtable operations. Secret: AIRTABLE_TOKEN.
-//   create_record (default): base_id, table, fields
-//   update_record: base_id, table, record_id, fields
-//   list_records:  base_id, table, max_records
+//
+//	create_record (default): base_id, table, fields
+//	update_record: base_id, table, record_id, fields
+//	list_records:  base_id, table, max_records
 func (e *Executor) callAirtable(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("AIRTABLE_TOKEN"))
 	if token == "" {
@@ -1062,7 +1066,8 @@ func (e *Executor) callAirtable(action string, in map[string]any) (map[string]an
 }
 
 // Notion operations. Secret: NOTION_TOKEN.
-//   create_page (default): database_id, title, title_property
+//
+//	create_page (default): database_id, title, title_property
 func (e *Executor) callNotion(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("NOTION_TOKEN"))
 	if token == "" {
@@ -1126,7 +1131,8 @@ func (e *Executor) callNotion(action string, in map[string]any) (map[string]any,
 // ─── Additional connectors ─────────────────────────────────────────────────────
 
 // Discord: send a message via an incoming webhook. Secret: DISCORD_WEBHOOK_URL.
-//   send_message (default): content (or text)
+//
+//	send_message (default): content (or text)
 func (e *Executor) callDiscord(action string, in map[string]any) (map[string]any, error) {
 	hook := firstNonEmpty(str(in["webhook"]), str(in["url"]), e.secret("DISCORD_WEBHOOK_URL"))
 	if hook == "" {
@@ -1149,8 +1155,9 @@ func (e *Executor) callDiscord(action string, in map[string]any) (map[string]any
 }
 
 // Jira Cloud operations. Secrets: JIRA_EMAIL + JIRA_API_TOKEN (basic auth).
-//   create_issue (default): base_url(site), project_key, summary, issue_type, description
-//   comment_issue: issue_key, body
+//
+//	create_issue (default): base_url(site), project_key, summary, issue_type, description
+//	comment_issue: issue_key, body
 func (e *Executor) callJira(action string, in map[string]any) (map[string]any, error) {
 	email := firstNonEmpty(str(in["email"]), e.secret("JIRA_EMAIL"))
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("JIRA_API_TOKEN"))
@@ -1211,8 +1218,9 @@ func jiraADF(text string) map[string]any {
 }
 
 // HubSpot CRM operations. Secret: HUBSPOT_TOKEN (private app token).
-//   create_contact (default): email, firstname, lastname, properties(JSON)
-//   create_deal: dealname, amount, properties(JSON)
+//
+//	create_contact (default): email, firstname, lastname, properties(JSON)
+//	create_deal: dealname, amount, properties(JSON)
 func (e *Executor) callHubSpot(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("HUBSPOT_TOKEN"))
 	if token == "" {
@@ -1274,9 +1282,12 @@ func (e *Executor) callHubSpot(action string, in map[string]any) (map[string]any
 
 // Google Sheets operations. Auth: a refresh-token flow is used so the connector
 // keeps working past the 1-hour access-token expiry. Configure these credentials:
-//   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
+//
+//	GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
+//
 // (Alternatively, supply a short-lived GOOGLE_ACCESS_TOKEN directly for testing.)
-//   append_row (default): spreadsheet_id, range (e.g. Sheet1!A1), values (list)
+//
+//	append_row (default): spreadsheet_id, range (e.g. Sheet1!A1), values (list)
 func (e *Executor) callGoogleSheets(action string, in map[string]any) (map[string]any, error) {
 	token, err := e.googleAccessToken(in)
 	if err != nil {
@@ -1359,8 +1370,9 @@ func (e *Executor) googleAccessToken(in map[string]any) (string, error) {
 }
 
 // Google Calendar operations (reuses the Google OAuth refresh flow).
-//   create_event (default): calendar_id (default "primary"), summary, start, end
-//   (start/end are RFC3339, e.g. 2026-07-01T10:00:00Z)
+//
+//	create_event (default): calendar_id (default "primary"), summary, start, end
+//	(start/end are RFC3339, e.g. 2026-07-01T10:00:00Z)
 func (e *Executor) callGoogleCalendar(action string, in map[string]any) (map[string]any, error) {
 	token, err := e.googleAccessToken(in)
 	if err != nil {
@@ -1429,7 +1441,8 @@ func (e *Executor) callTeams(action string, in map[string]any) (map[string]any, 
 
 // Stripe operations. Secret: STRIPE_SECRET_KEY (bearer). The Stripe API is
 // form-encoded.  create_customer (default): email, name
-//   create_payment_link: not implemented (varies); use the HTTP node for custom calls.
+//
+//	create_payment_link: not implemented (varies); use the HTTP node for custom calls.
 func (e *Executor) callStripe(action string, in map[string]any) (map[string]any, error) {
 	key := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("STRIPE_SECRET_KEY"))
 	if key == "" {
@@ -1500,17 +1513,19 @@ func (e *Executor) callStripe(action string, in map[string]any) (map[string]any,
 
 // callWebhook performs a fully-configurable HTTP request. Supported inputs (all
 // templated against run context):
-//   url (required), method (default POST)
-//   query        map → appended as query-string params
-//   headers      map → request headers
-//   auth_type    none | bearer | basic | api_key
-//   auth_credential  name of a stored credential / env var holding the secret
-//   auth_username    username for basic auth (secret is the password)
-//   auth_header      header name for api_key (default "X-API-Key")
-//   body_type    none | json | form | raw  (default json if a body is present)
-//   body/payload any (object for json/form, string for raw)
-//   timeout_seconds  per-request timeout override
-//   success_codes    list of status codes to treat as success (default < 400)
+//
+//	url (required), method (default POST)
+//	query        map → appended as query-string params
+//	headers      map → request headers
+//	auth_type    none | bearer | basic | api_key
+//	auth_credential  name of a stored credential / env var holding the secret
+//	auth_username    username for basic auth (secret is the password)
+//	auth_header      header name for api_key (default "X-API-Key")
+//	body_type    none | json | form | raw  (default json if a body is present)
+//	body/payload any (object for json/form, string for raw)
+//	timeout_seconds  per-request timeout override
+//	success_codes    list of status codes to treat as success (default < 400)
+//
 // Output: { status, ok, headers, body }
 func (e *Executor) callWebhook(in map[string]any) (map[string]any, error) {
 	target := firstNonEmpty(str(in["url"]), str(in["endpoint"]))
@@ -1632,12 +1647,12 @@ func isSuccess(status int, codes []int) bool {
 }
 
 type reqSpec struct {
-	method, url            string
-	headers                map[string]string
-	basicUser, basicPass   string
-	bodyType               string
-	body                   any
-	timeout                time.Duration
+	method, url          string
+	headers              map[string]string
+	basicUser, basicPass string
+	bodyType             string
+	body                 any
+	timeout              time.Duration
 }
 
 // doRequest is the fully-featured low-level HTTP call used by the HTTP node.
@@ -2591,8 +2606,6 @@ func envOr(key, fallback string) string {
 	}
 	return fallback
 }
-
-
 
 func truncate(s string, n int) string {
 	if len(s) <= n {

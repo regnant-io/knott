@@ -70,9 +70,9 @@ func decryptSecret(encoded string) (string, error) {
 
 // Credential is the public (non-secret) view of a stored credential.
 type Credential struct {
-	Name      string    `json:"name"`
-	Configured bool     `json:"configured"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name       string    `json:"name"`
+	Configured bool      `json:"configured"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (s *DB) migrateCredentials() error {

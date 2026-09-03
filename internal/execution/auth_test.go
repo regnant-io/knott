@@ -104,13 +104,13 @@ func TestAuthMiddlewareExemptions(t *testing.T) {
 		}
 	}
 
-	check("GET", "/api/v1/health", "", 200)                 // public
-	check("OPTIONS", "/api/v1/stats", "", 200)              // preflight
-	check("POST", "/api/v1/hooks/abc", "", 200)             // webhook (HMAC handled downstream)
+	check("GET", "/api/v1/health", "", 200)                  // public
+	check("OPTIONS", "/api/v1/stats", "", 200)               // preflight
+	check("POST", "/api/v1/hooks/abc", "", 200)              // webhook (HMAC handled downstream)
 	check("POST", "/internal/v1/task-complete/r/n", "", 200) // internal callback
-	check("GET", "/api/v1/stats", "", 401)                  // protected, no token
-	check("GET", "/api/v1/stats", "tok", 200)               // protected, good token
-	check("GET", "/api/v1/stats", "bad", 401)               // protected, bad token
+	check("GET", "/api/v1/stats", "", 401)                   // protected, no token
+	check("GET", "/api/v1/stats", "tok", 200)                // protected, good token
+	check("GET", "/api/v1/stats", "bad", 401)                // protected, bad token
 }
 
 func TestRBACRoles(t *testing.T) {

@@ -296,7 +296,7 @@ func reclaimExpiredRuns() {
 	}
 	for _, id := range ids {
 		log.Printf("[Engine] Reclaiming run %s with expired lease", id)
-		go processRun(id)
+		startRunInBackground(id)
 	}
 }
 
@@ -322,7 +322,7 @@ func resumeDueTimers() {
 		}
 		db.UpdateRun(r.ID, map[string]any{"status": "RUNNING"})
 		db.AddEvent(r.ID, "TIMER_RESUMED", r.CurrentNode, map[string]any{}, "system")
-		go processRun(r.ID)
+		startRunInBackground(r.ID)
 	}
 }
 
@@ -481,5 +481,5 @@ func firePollRun(workflowID string, item any) {
 		return
 	}
 	db.AddEvent(run.ID, "POLL_TRIGGERED", "", map[string]any{"workflow_id": workflowID}, "system")
-	go processRun(run.ID)
+	startRunInBackground(run.ID)
 }

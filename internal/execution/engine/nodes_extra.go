@@ -128,10 +128,12 @@ func (e *Executor) executeCode(node *WorkflowStep, ctx map[string]any) (*NodeRes
 
 // ─── Loop node ─────────────────────────────────────────────────────────────--
 // Iterate over a list and run a sub-path once per item. config:
-//   items:       expression yielding a list (e.g. "{{ steps.poll.output.records }}")
-//   body:        node id of the first node in the loop body
-//   item_var:    context key for the current item (default "item")
-//   max_items:   safety cap (default 1000)
+//
+//	items:       expression yielding a list (e.g. "{{ steps.poll.output.records }}")
+//	body:        node id of the first node in the loop body
+//	item_var:    context key for the current item (default "item")
+//	max_items:   safety cap (default 1000)
+//
 // Each iteration runs the body path (until a node with no next, or an 'end'/loop)
 // with ctx["<item_var>"] and ctx["loop_index"] set. Outputs are collected.
 func (e *Executor) executeLoop(runID string, def *WorkflowDefinition, node *WorkflowStep, ctx map[string]any) (*NodeResult, error) {

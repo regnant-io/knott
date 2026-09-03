@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -71,8 +72,13 @@ func lockForRun(runID string) *sync.Mutex {
 type nodePolicy struct {
 	Retries         int
 	RetryDelay      time.Duration
+	MaxRetryDelay   time.Duration
 	Timeout         time.Duration
 	ContinueOnError bool
+	// OnError names a node to route to when this one fails after its retries.
+	// It is the workflow's error output: a real branch the author draws, rather
+	// than a run that simply stops.
+	OnError string
 }
 
 // resolveNodePolicy reads retry/timeout/continue-on-error from node config,
@@ -91,7 +97,7 @@ func resolveNodePolicy(node *engine.WorkflowStep) nodePolicy {
 	}
 
 	// Defaults by node type.
-	p := nodePolicy{Retries: 0, RetryDelay: 2 * time.Second, Timeout: 0}
+	p := nodePolicy{Retries: 0, RetryDelay: 2 * time.Second, MaxRetryDelay: 60 * time.Second, Timeout: 0}
 	switch node.Type {
 	case "tool_call", "agent_call", "ai_decision":
 		p.Retries = 2
@@ -104,12 +110,18 @@ func resolveNodePolicy(node *engine.WorkflowStep) nodePolicy {
 	if v, ok := getF("retry_delay"); ok {
 		p.RetryDelay = time.Duration(v * float64(time.Second))
 	}
+	if v, ok := getF("max_retry_delay"); ok {
+		p.MaxRetryDelay = time.Duration(v * float64(time.Second))
+	}
 	if v, ok := getF("timeout"); ok {
 		p.Timeout = time.Duration(v * float64(time.Second))
 	}
 	if cfg != nil {
 		if v, ok := cfg["continue_on_error"].(bool); ok {
 			p.ContinueOnError = v
+		}
+		if v, ok := cfg["on_error"].(string); ok {
+			p.OnError = strings.TrimSpace(v)
 		}
 	}
 	if p.Retries < 0 {
@@ -118,7 +130,35 @@ func resolveNodePolicy(node *engine.WorkflowStep) nodePolicy {
 	if p.RetryDelay < 0 {
 		p.RetryDelay = 0
 	}
+	if p.MaxRetryDelay <= 0 {
+		p.MaxRetryDelay = 60 * time.Second
+	}
 	return p
+}
+
+// backoff returns how long to wait before a retry: exponential from RetryDelay,
+// capped at MaxRetryDelay, with up to 25% jitter.
+//
+// Linear backoff was the previous behaviour, and it is the wrong shape for the
+// failure it exists to survive — a rate-limited or briefly overloaded API. Worse,
+// with fixed steps every KNOTT replica that hit the same outage retried in
+// lockstep; the jitter spreads them out.
+func backoff(p nodePolicy, attempt int) time.Duration {
+	d := p.RetryDelay
+	for i := 1; i < attempt; i++ {
+		d *= 2
+		if d >= p.MaxRetryDelay {
+			d = p.MaxRetryDelay
+			break
+		}
+	}
+	if d > p.MaxRetryDelay {
+		d = p.MaxRetryDelay
+	}
+	if d <= 0 {
+		return 0
+	}
+	return d + time.Duration(rand.Int63n(int64(d)/4+1))
 }
 
 // executeNodeWithPolicy runs a node honoring its timeout and retry policy.
@@ -158,7 +198,7 @@ func executeNodeWithPolicy(runID string, def *engine.WorkflowDefinition, node *e
 		}
 
 		if attempt < attempts {
-			delay := p.RetryDelay * time.Duration(attempt) // linear backoff
+			delay := backoff(p, attempt)
 			db.AddEvent(runID, "NODE_RETRY", node.ID, map[string]any{
 				"attempt": attempt, "max_attempts": attempts, "error": err.Error(),
 				"retry_in_ms": delay.Milliseconds(),
@@ -209,6 +249,18 @@ func runNodeWithTimeout(runID string, def *engine.WorkflowDefinition, node *engi
 	case <-time.After(timeout):
 		return nil, fmt.Errorf("node %s timed out after %s", node.ID, timeout)
 	}
+}
+
+// nodeExists reports whether a node id is present in the definition. Routing
+// targets are validated before use so a typo fails the run loudly rather than
+// silently ending it.
+func nodeExists(def *engine.WorkflowDefinition, id string) bool {
+	for _, s := range def.Steps {
+		if s.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // isRunCancelled re-reads the run status so an in-flight execution can stop
@@ -265,7 +317,6 @@ func checkpointedNext(ctx map[string]any, nodeID string) (string, bool) {
 	s, _ := v.(string)
 	return s, true
 }
-
 
 // ─── Workflow Execution Loop ──────────────────────────────────────────────────
 
@@ -439,12 +490,42 @@ func processRun(runID string) {
 		policy := resolveNodePolicy(node)
 		result, err := executeNodeWithPolicy(runID, def, node, ctx, policy)
 		if err != nil {
+			// Record the failure in context either way, so an error branch (or a
+			// later step) can read what went wrong and act on it.
+			ctx["steps."+currentNodeID] = map[string]any{
+				"status": "failed",
+				"error":  err.Error(),
+			}
+			ctx["error"] = map[string]any{
+				"node":    currentNodeID,
+				"type":    node.Type,
+				"name":    node.Name,
+				"message": err.Error(),
+				"at":      time.Now().UTC().Format(time.RFC3339),
+			}
+
+			// An error output routes the run down a branch the author drew for
+			// exactly this — compensate, notify, escalate — instead of stopping.
+			if policy.OnError != "" && nodeExists(def, policy.OnError) {
+				db.AddEvent(runID, "NODE_FAILED", currentNodeID, map[string]any{
+					"error": err.Error(), "routed_to": policy.OnError,
+				}, "system")
+				log.Printf("[Engine] Node %s failed, routing to error output %s: %v", currentNodeID, policy.OnError, err)
+				setCheckpoint(ctx, currentNodeID, policy.OnError)
+				db.SetRunContext(runID, ctx)
+				currentNodeID = policy.OnError
+				freshExecution = true
+				continue
+			}
+			if policy.OnError != "" {
+				log.Printf("[Engine] Node %s names a missing error output %q — failing the run", currentNodeID, policy.OnError)
+			}
+
 			// continue_on_error: log the failure but route forward via node.Next
 			// so a non-critical step (e.g. a notification) doesn't kill the run.
 			if policy.ContinueOnError {
 				db.AddEvent(runID, "NODE_FAILED", currentNodeID, map[string]any{"error": err.Error(), "continued": true}, "system")
 				log.Printf("[Engine] Node %s failed but continue_on_error set: %v", currentNodeID, err)
-				ctx["steps."+currentNodeID] = map[string]any{"status": "failed", "error": err.Error()}
 				db.SetRunContext(runID, ctx)
 				if node.Next != "" {
 					currentNodeID = node.Next
@@ -456,6 +537,7 @@ func processRun(runID string) {
 				return
 			}
 			log.Printf("[Engine] Node %s failed: %v", currentNodeID, err)
+			db.SetRunContext(runID, ctx)
 			db.UpdateRun(runID, map[string]any{"status": "FAILED"})
 			db.AddEvent(runID, "NODE_FAILED", currentNodeID, map[string]any{"error": err.Error()}, "system")
 			return
@@ -625,7 +707,7 @@ func resumeFromHumanTask(runID, nodeID string, taskResult map[string]any) {
 	db.UpdateRun(runID, map[string]any{"status": "RUNNING", "current_node": nextNodeID})
 
 	// Continue execution in a goroutine
-	go processRun(runID)
+	startRunInBackground(runID)
 }
 
 // ─── HTTP Handlers ────────────────────────────────────────────────────────────
@@ -664,7 +746,7 @@ func createRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start processing in background
-	go processRun(run.ID)
+	startRunInBackground(run.ID)
 
 	writeJSON(w, 201, run)
 }
@@ -726,7 +808,7 @@ func triggerWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db.AddEvent(run.ID, "WEBHOOK_TRIGGERED", "", map[string]any{"source": r.RemoteAddr, "idempotency_key": idemKey}, "system")
-	go processRun(run.ID)
+	startRunInBackground(run.ID)
 
 	writeJSON(w, 202, map[string]any{"run_id": run.ID, "status": "accepted", "workflow_id": workflowID})
 }
@@ -923,15 +1005,15 @@ func getStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, 200, map[string]any{
-		"total_workflows": wfCount,
-		"total_runs":      stats.TotalRuns,
-		"active_runs":     stats.ActiveRuns,
-		"completed_runs":  stats.CompletedRuns,
-		"failed_runs":     stats.FailedRuns,
-		"pending_tasks":   pendingTasks,
-		"total_decisions": stats.TotalDecisions,
-		"avg_confidence":  stats.AvgConfidence,
-		"daily":           stats.Daily,
+		"total_workflows":         wfCount,
+		"total_runs":              stats.TotalRuns,
+		"active_runs":             stats.ActiveRuns,
+		"completed_runs":          stats.CompletedRuns,
+		"failed_runs":             stats.FailedRuns,
+		"pending_tasks":           pendingTasks,
+		"total_decisions":         stats.TotalDecisions,
+		"avg_confidence":          stats.AvgConfidence,
+		"daily":                   stats.Daily,
 		"confidence_distribution": stats.Confidence,
 	})
 }
@@ -1087,10 +1169,10 @@ func taskCompleteCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload struct {
-		TaskID    string         `json:"task_id"`
-		Decision  string         `json:"decision"`
-		Justification string     `json:"justification"`
-		Response  map[string]any `json:"response"`
+		TaskID        string         `json:"task_id"`
+		Decision      string         `json:"decision"`
+		Justification string         `json:"justification"`
+		Response      map[string]any `json:"response"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, 400, "INVALID_REQUEST", err.Error())
@@ -1483,7 +1565,7 @@ func resumeInFlightRuns() {
 		}
 		for _, r := range runs {
 			log.Printf("[Engine] Resuming in-flight run %s (was %s)", r.ID, status)
-			go processRun(r.ID)
+			startRunInBackground(r.ID)
 		}
 	}
 }
@@ -1585,7 +1667,7 @@ func fireSchedule(sc *store.Schedule) {
 		"schedule_id": sc.ID, "schedule": engine.DescribeSchedule(sc.Kind, sc.Expr),
 	}, "system")
 	log.Printf("[Scheduler] schedule %s fired run %s (%s)", sc.ID, run.ID, engine.DescribeSchedule(sc.Kind, sc.Expr))
-	go processRun(run.ID)
+	startRunInBackground(run.ID)
 }
 
 // ─── Schedule HTTP handlers ─────────────────────────────────────────────────--
@@ -1825,6 +1907,8 @@ func Run() error {
 	// Sign task-complete callback URLs so the (auth-exempt) callback endpoint
 	// only accepts callbacks the engine itself minted.
 	executor.SignCallback = callbackSignature
+	// Sub-workflow nodes start child runs through the run store directly.
+	executor.SubRunner = subRunner{}
 
 	// Resume any runs that were mid-flight before a restart so executions are durable.
 	go func() {

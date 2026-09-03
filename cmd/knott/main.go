@@ -220,7 +220,12 @@ func serve(desktop bool) error {
 		shutdownAI(aiCmd)
 		return err
 	case <-stop:
-		log.Printf("Shutting down…")
+		log.Printf("Shutting down — waiting for in-flight runs…")
+		// Runs are checkpointed, so anything still going at the deadline resumes
+		// on the next start. Draining first simply avoids the wait.
+		if !execution.WaitForBackgroundRuns(20 * time.Second) {
+			log.Printf("Some runs were still in flight; they will resume on next start.")
+		}
 		shutdownAI(aiCmd)
 		return nil
 	}
