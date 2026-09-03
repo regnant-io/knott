@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Activity, Workflow, Play, Inbox, Brain, TrendingUp, Clock, CheckCircle } from 'lucide-react';

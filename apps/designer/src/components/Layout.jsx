@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { KnottLogo } from './Brand.jsx';
 import {

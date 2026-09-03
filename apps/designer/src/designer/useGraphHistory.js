@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import { useRef, useCallback, useState } from 'react';
 
 /**

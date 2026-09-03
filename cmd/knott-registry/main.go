@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Command knott-registry runs the Workflow Registry as a standalone service.
 // Use it for horizontally scaled or containerised deployments; for a single
 // node, the all-in-one `knott` binary runs this service in-process.

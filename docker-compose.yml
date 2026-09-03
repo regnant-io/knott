@@ -1,124 +1,60 @@
-version: "3.9"
-
-# ─── KW Sagittarii — Docker Compose ──────────────────────────────────────────
-# Usage:
-#   docker-compose up --build
-#   Open http://localhost:8002
+# KNOTT — run it with one command.
 #
-# Set ANTHROPIC_API_KEY in .env before starting.
-
-x-common: &common
-  restart: unless-stopped
-  networks: [kw-net]
-
-networks:
-  kw-net:
-    driver: bridge
-
-volumes:
-  kw-data:
+#   docker compose up --build
+#   open http://localhost:8002
+#
+# KNOTT is a single process: the registry, execution engine, task service and
+# agent registry all run inside it and talk over loopback, so there is nothing to
+# wire together here. The optional Ollama service below gives you local AI
+# decisions with no data leaving the machine.
 
 services:
-
-  # ── Workflow Registry (Go) ──────────────────────────────────────────────────
-  workflow-registry:
-    <<: *common
+  knott:
     build:
-      context: ./services/workflow-registry
-      dockerfile: ../../Dockerfile.go
+      context: .
+      dockerfile: build/docker/Dockerfile
       args:
-        SERVICE: workflow-registry
-    image: kw-sagittarii/workflow-registry:latest
-    ports: ["8001:8001"]
-    environment:
-      PORT: "8001"
-      DB_PATH: /data/workflows.db
-    volumes: [kw-data:/data]
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8001/api/v1/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  # ── Execution Engine (Go) ───────────────────────────────────────────────────
-  execution-engine:
-    <<: *common
-    build:
-      context: ./services/execution-engine
-      dockerfile: ../../Dockerfile.go
-      args:
-        SERVICE: execution-engine
-    image: kw-sagittarii/execution-engine:latest
-    ports: ["8002:8002"]
-    environment:
-      PORT: "8002"
-      DB_PATH: /data/runs.db
-      REGISTRY_URL: http://workflow-registry:8001
-      AI_DECISION_URL: http://ai-decision-engine:8003
-      HUMAN_TASK_URL: http://human-task-service:8004
-      AGENT_URL: http://agent-integration:8005
-      EXECUTION_ENGINE_URL: http://execution-engine:8002
-      API_TOKEN: ${API_TOKEN:-}
-      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
-      KNOTT_SECRET_KEY: ${KNOTT_SECRET_KEY:-}
-      FRONTEND_PATH: /app/frontend
+        VERSION: ${KNOTT_VERSION:-dev}
+    image: regnant/knott:${KNOTT_VERSION:-latest}
+    container_name: knott
+    restart: unless-stopped
+    ports:
+      - "${KNOTT_PORT:-8002}:8002"
     volumes:
-      - kw-data:/data
-      - ./apps/designer/dist:/app/frontend:ro
-    depends_on:
-      workflow-registry:
-        condition: service_healthy
-
-  # ── AI Decision Engine (Python FastAPI) ─────────────────────────────────────
-  ai-decision-engine:
-    <<: *common
-    build:
-      context: ./services/ai-decision-engine
-      dockerfile: Dockerfile
-    image: kw-sagittarii/ai-decision-engine:latest
-    ports: ["8003:8003"]
+      - knott-data:/var/lib/knott
     environment:
-      PORT: "8003"
-      AI_PROVIDER: ${AI_PROVIDER:-auto}
+      # Set at least one key before exposing this beyond your machine.
+      # Format: key:role — roles are admin, operator, viewer.
+      API_KEYS: ${API_KEYS:-}
+      # Require an HMAC signature on inbound webhooks.
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      # Encrypts stored credentials. Generated and persisted on first run when
+      # unset; set it explicitly to survive a volume rebuild.
+      KNOTT_SECRET_KEY: ${KNOTT_SECRET_KEY:-}
+      # AI provider — leave both unset for the built-in rule-based decisions.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:latest}
-      AI_CONFIG_PATH: /data/ai-config.json
-    volumes: [kw-data:/data]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      # Restrict browser origins in production.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/internal/v1/health').status==200 else 1)"]
-      interval: 10s
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8002/api/v1/health"]
+      interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 20s
 
-  # ── Human Task Service (Go) ─────────────────────────────────────────────────
-  human-task-service:
-    <<: *common
-    build:
-      context: ./services/human-task-service
-      dockerfile: ../../Dockerfile.go
-      args:
-        SERVICE: human-task-service
-    image: kw-sagittarii/human-task-service:latest
-    ports: ["8004:8004"]
-    environment:
-      PORT: "8004"
-      DB_PATH: /data/tasks.db
-    volumes: [kw-data:/data]
+  # Local AI decisions, nothing leaving the machine.
+  # Start with:  docker compose --profile local-ai up
+  ollama:
+    profiles: ["local-ai"]
+    image: ollama/ollama:latest
+    container_name: knott-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
 
-  # ── Agent Integration (Go) ──────────────────────────────────────────────────
-  agent-integration:
-    <<: *common
-    build:
-      context: ./services/agent-integration
-      dockerfile: ../../Dockerfile.go
-      args:
-        SERVICE: agent-integration
-    image: kw-sagittarii/agent-integration:latest
-    ports: ["8005:8005"]
-    environment:
-      PORT: "8005"
-      DB_PATH: /data/agents.db
-    volumes: [kw-data:/data]
+volumes:
+  knott-data:
+  ollama-models:

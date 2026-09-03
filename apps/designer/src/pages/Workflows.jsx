@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect } from 'react';
 import { Plus, Play, Pencil, Trash2, Tag, Clock, GitBranch, Search, Sparkles, Wand2, Bot, AlertTriangle } from 'lucide-react';
 import { workflows as wfApi, runs as runsApi, examples as examplesApi, aiGenerate } from '../lib/api.js';

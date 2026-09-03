@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Copyright 2026 Regnant
+# SPDX-License-Identifier: Apache-2.0
+
 # KNOTT — Stop all services
 echo "⊗  Stopping KNOTT..."
 pkill -f "bin/workflow-registry"       2>/dev/null && echo "  ● Workflow Registry   stopped" || true

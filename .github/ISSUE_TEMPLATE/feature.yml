@@ -1,0 +1,25 @@
+name: Feature request
+description: Something KNOTT should be able to do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: >
+        Describe the situation, not the feature. Knowing the workflow you are
+        trying to build usually surfaces a better answer than the one either of
+        us had in mind.
+    validations: { required: true }
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How are you handling it today
+      description: What you do instead, and where that falls down.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: Optional — if you already have a shape for it, describe it.

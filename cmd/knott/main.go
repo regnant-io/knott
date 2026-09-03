@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Command knott is the all-in-one KNOTT server.
 //
 // One executable, one port, no runtime dependencies: it runs the workflow

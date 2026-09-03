@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 package store
 
 // The connector catalog: one source of truth for every integration KNOTT ships.

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Copyright 2026 Regnant
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 
 # ─── KNOTT — Platform Launcher ───────────────────────────────────────────────

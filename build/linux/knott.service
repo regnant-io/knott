@@ -1,0 +1,41 @@
+# Run KNOTT as a system service.
+#
+# Not enabled on install: enable it deliberately, after setting API_KEYS.
+#     sudo systemctl enable --now knott
+#
+# Configuration lives in /etc/knott/knott.env — at minimum set API_KEYS before
+# binding to anything other than loopback.
+
+[Unit]
+Description=KNOTT workflow orchestration
+Documentation=https://github.com/regnant/knott
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=knott
+Group=knott
+Environment=KNOTT_HOME=/var/lib/knott
+EnvironmentFile=-/etc/knott/knott.env
+ExecStart=/usr/bin/knott serve --quiet
+Restart=on-failure
+RestartSec=5s
+
+# The service needs its state directory and the network. Nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+StateDirectory=knott
+ReadWritePaths=/var/lib/knott
+
+[Install]
+WantedBy=multi-user.target

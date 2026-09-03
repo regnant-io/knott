@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   RefreshCw, XCircle, ChevronRight, Activity, Search, Cpu, Clock,

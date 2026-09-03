@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // ─── AIDecisions.jsx ──────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { Brain, RefreshCw, Search, Filter } from 'lucide-react';

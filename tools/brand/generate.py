@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# Copyright 2026 Regnant
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate every KNOTT brand asset from one source of truth: the geometry.
 
 The KNOTT mark is a trefoil — the simplest knot that cannot be untied — from the

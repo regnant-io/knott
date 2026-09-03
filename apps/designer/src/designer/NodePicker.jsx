@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, CornerDownLeft } from 'lucide-react';
 import { searchNodes, NODE_GROUPS } from './nodeCatalog.js';

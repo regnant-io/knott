@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Command knott-engine runs the Execution Engine as a standalone service.
 package main
 

@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ui serves the KNOTT web console.
 //
 // The built single-page app is compiled into the binary with go:embed, so a

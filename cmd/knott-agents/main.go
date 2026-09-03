@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Command knott-agents runs the Agent Integration service as a standalone
 // service.
 package main

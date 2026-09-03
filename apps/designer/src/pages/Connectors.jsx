@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // ─── Connectors ───────────────────────────────────────────────────────────────
 //
 // One section, one card per connector. A card carries everything that connector

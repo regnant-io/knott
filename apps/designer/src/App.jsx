@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect } from 'react';
 import { Layout, ToastProvider } from './components/Layout.jsx';
 import Dashboard from './pages/Dashboard.jsx';

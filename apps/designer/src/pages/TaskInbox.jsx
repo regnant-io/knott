@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Clock, CheckCircle, XCircle, MessageCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 import { tasks as tasksApi } from '../lib/api.js';

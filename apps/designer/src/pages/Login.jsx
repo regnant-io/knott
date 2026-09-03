@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState } from 'react';
 import { KnottMark } from '../components/Brand.jsx';
 import { Lock, LogIn } from 'lucide-react';

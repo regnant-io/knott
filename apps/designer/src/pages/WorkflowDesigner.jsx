@@ -1,6 +1,10 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect } from 'react';
 import { Check, CheckSquare, KeyRound, X } from 'lucide-react';
 import {
+  workflows as wfApi,
   connectors as connectorsApi,
   credentials as credsApi,
   triggers as triggersApi,
@@ -356,6 +360,10 @@ function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], t
         <ToolCallEditor d={d} onChange={onChange} connectorOpts={connectorOpts} previewCtx={previewCtx} />
       )}
 
+      {node.type === 'sub_workflow' && (
+        <SubWorkflowEditor d={d} onChange={onChange} workflowId={workflowId} />
+      )}
+
       {node.type === 'agent_call' && (
         <>
           <div className="divider" />
@@ -411,6 +419,88 @@ function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], t
 // Per-node reliability controls: retries, backoff, timeout, continue-on-error.
 // These map directly to the engine's nodePolicy. Network-bound nodes default to
 // 2 retries / 45s timeout server-side; leaving fields blank uses those defaults.
+// Sub-workflow configuration. The workflow list comes from the registry so the
+// author picks by name; the id is what gets stored.
+function SubWorkflowEditor({ d, onChange, workflowId }) {
+  const cfg = d.config || {};
+  const set = (k, v) => onChange({ config: { ...cfg, [k]: v } });
+  const [options, setOptions] = useState([]);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    wfApi.list()
+      .then(r => setOptions((r.data || []).filter(w => w.id !== workflowId)))
+      .catch(() => setFailed(true));
+  }, [workflowId]);
+
+  const mode = cfg.mode === 'async' ? 'async' : 'wait';
+
+  return (
+    <>
+      <div className="divider" />
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        Sub-workflow
+      </div>
+
+      <div className="form-group" style={{ marginBottom: 0 }}>
+        <label className="form-label">Workflow to run</label>
+        {failed ? (
+          <input className="input" value={cfg.workflow_id || ''} placeholder="workflow id"
+            onChange={e => set('workflow_id', e.target.value)} />
+        ) : (
+          <select className="select" value={cfg.workflow_id || ''}
+            onChange={e => set('workflow_id', e.target.value)}>
+            <option value="">Choose a workflow…</option>
+            {options.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        )}
+        <div className="form-hint">
+          A workflow cannot call itself, directly or in a circle — nesting stops at
+          eight levels and fails the step rather than running away.
+        </div>
+      </div>
+
+      <div className="form-group" style={{ marginBottom: 0 }}>
+        <label className="form-label">Then</label>
+        <select className="select" value={mode} onChange={e => set('mode', e.target.value)}>
+          <option value="wait">Wait for it to finish and use its output</option>
+          <option value="async">Start it and carry on</option>
+        </select>
+      </div>
+
+      {mode === 'wait' && (
+        <>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Give up after (seconds)</label>
+            <input className="input" type="number" min={1}
+              value={cfg.timeout ?? 600}
+              onChange={e => set('timeout', parseInt(e.target.value, 10) || 600)} />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!cfg.wait_for_human}
+              onChange={e => set('wait_for_human', e.target.checked)} />
+            Keep waiting if it pauses for a human
+          </label>
+          <div className="form-hint">
+            A child parked on a human task can sit there for days. Left off, this step
+            fails instead of holding the parent run open — route the failure somewhere,
+            or start the child and carry on.
+          </div>
+        </>
+      )}
+
+      <ToolInputsEditor d={d} onChange={onChange}
+        label="Input to pass (blank passes this run's input through)" />
+      <div className="form-hint">
+        The child's result is available as{' '}
+        <code style={{ fontFamily: 'var(--font-mono)' }}>
+          {'{{ steps.' + (d.id || 'node') + '.output.output }}'}
+        </code>.
+      </div>
+    </>
+  );
+}
+
 /** The display name of a node id, for showing what a branch is wired to. */
 function nodeLabel(nodes, id) {
   const n = (nodes || []).find(x => x.id === id);

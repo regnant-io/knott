@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 package agents
 
 import (
@@ -20,18 +23,18 @@ import (
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 type Agent struct {
-	ID           string          `json:"id"`
-	Name         string          `json:"name"`
-	Description  string          `json:"description"`
-	Endpoint     string          `json:"endpoint"`
-	AuthType     string          `json:"auth_type"`
-	InputSchema  json.RawMessage `json:"input_schema"`
-	OutputSchema json.RawMessage `json:"output_schema"`
-	Capabilities []string        `json:"capabilities"`
-	Status       string          `json:"status"`
-	HealthStatus string          `json:"health_status"`
-	LastHealthCheck *time.Time  `json:"last_health_check,omitempty"`
-	CreatedAt    time.Time       `json:"created_at"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Description     string          `json:"description"`
+	Endpoint        string          `json:"endpoint"`
+	AuthType        string          `json:"auth_type"`
+	InputSchema     json.RawMessage `json:"input_schema"`
+	OutputSchema    json.RawMessage `json:"output_schema"`
+	Capabilities    []string        `json:"capabilities"`
+	Status          string          `json:"status"`
+	HealthStatus    string          `json:"health_status"`
+	LastHealthCheck *time.Time      `json:"last_health_check,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
 }
 
 // ─── Database ─────────────────────────────────────────────────────────────────
@@ -167,7 +170,7 @@ func createAgent(w http.ResponseWriter, r *http.Request) {
 func updateAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var body struct {
-		Status      string `json:"status"`
+		Status       string `json:"status"`
 		HealthStatus string `json:"health_status"`
 	}
 	json.NewDecoder(r.Body).Decode(&body)

@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Client-side mirror of the engine's template resolver (engine/executor.go).
 // Keeping these in sync means the designer's live preview matches what actually
 // happens at runtime. Supported syntax:

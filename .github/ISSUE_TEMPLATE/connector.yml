@@ -1,0 +1,37 @@
+name: Connector request
+description: Ask for an integration with a service KNOTT does not reach yet
+labels: [connector]
+body:
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      placeholder: Linear, Zoho CRM, Snowflake…
+    validations: { required: true }
+
+  - type: textarea
+    id: actions
+    attributes:
+      label: What should it do
+      description: The specific operations you need — create a ticket, list rows, send a message.
+    validations: { required: true }
+
+  - type: input
+    id: docs
+    attributes:
+      label: API documentation
+      placeholder: https://…
+
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How it authenticates
+      options: [API key or token, Basic auth, OAuth 2.0, Something else, Not sure]
+    validations: { required: true }
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Would you like to build it?
+      options:
+        - label: I would be up for opening a pull request (CONTRIBUTING.md has a walkthrough)

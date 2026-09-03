@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Check go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      - name: Build every command
+        run: go build ./...
+
+  console:
+    name: Console
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/designer/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+        working-directory: apps/designer
+
+      - run: npm test
+        working-directory: apps/designer
+
+      - run: npm run build
+        working-directory: apps/designer
+
+  # The binary people download is built on one platform and must run on six.
+  # Compiling for all of them on every change catches a platform-specific break
+  # at the pull request rather than at release time.
+  cross-compile:
+    name: Cross-compile
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: go build -trimpath -o /dev/null ./cmd/knott
+
+  # A binary built from a fresh clone must serve the console and answer the API.
+  # Unit tests do not cover the wiring between the four in-process services.
+  smoke:
+    name: End-to-end smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25', cache: true }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/designer/package-lock.json
+
+      - name: Build console and binary
+        run: |
+          npm --prefix apps/designer ci --no-audit --no-fund
+          npm --prefix apps/designer run build
+          make embed
+          go build -o knott ./cmd/knott
+
+      - name: Start KNOTT
+        run: |
+          KNOTT_HOME="$RUNNER_TEMP/knott" ./knott serve --port 8799 --quiet &
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8799/api/v1/health >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+
+      - name: Exercise the API and console
+        run: |
+          set -euo pipefail
+          echo "· health"
+          curl -fsS http://127.0.0.1:8799/api/v1/health | grep -q '"status":"ok"'
+          echo "· console is served"
+          curl -fsS http://127.0.0.1:8799/ | grep -qi '<div id="root">'
+          echo "· single-port proxy reaches the registry, tasks and agents"
+          curl -fsS http://127.0.0.1:8799/api/v1/workflows | grep -q '"data"'
+          curl -fsS http://127.0.0.1:8799/api/v1/tasks     | grep -q '"data"'
+          curl -fsS http://127.0.0.1:8799/api/v1/agents    | grep -q '"data"'
+          echo "· connectors report their credentials"
+          curl -fsS http://127.0.0.1:8799/api/v1/connectors | grep -q '"credentials"'
+          echo "· a seeded workflow runs to completion"
+          curl -fsS -X POST http://127.0.0.1:8799/api/v1/examples/seed >/dev/null
+          WF=$(curl -fsS http://127.0.0.1:8799/api/v1/workflows \
+               | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"][0]["id"])')
+          RUN=$(curl -fsS -X POST http://127.0.0.1:8799/api/v1/runs \
+                  -H 'Content-Type: application/json' \
+                  -d "{\"workflow_id\":\"$WF\",\"input_data\":{\"amount\":10}}" \
+                | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+          for i in $(seq 1 30); do
+            STATUS=$(curl -fsS "http://127.0.0.1:8799/api/v1/runs/$RUN" \
+                     | python3 -c 'import sys,json; print(json.load(sys.stdin)["status"])')
+            echo "  run status: $STATUS"
+            case "$STATUS" in COMPLETED|WAITING_HUMAN) exit 0 ;; FAILED) exit 1 ;; esac
+            sleep 1
+          done
+          echo "run did not reach a settled state"; exit 1
+
+  docker:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/docker/Dockerfile
+          push: false
+          load: true
+          tags: knott:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: The image starts and answers
+        run: |
+          docker run -d --name knott-ci -p 8002:8002 knott:ci
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8002/api/v1/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8002/api/v1/health | grep -q '"status":"ok"'
+          docker rm -f knott-ci

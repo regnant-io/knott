@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import {
   Zap, Brain, User, GitBranch, Wrench, Bot, Split, CheckCircle, Repeat,
   Code2, Sliders, Filter as FilterIcon, Clock, GitMerge, Workflow, StickyNote,

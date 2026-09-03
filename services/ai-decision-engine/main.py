@@ -1,3 +1,6 @@
+# Copyright 2026 Regnant
+# SPDX-License-Identifier: Apache-2.0
+
 """
 KNOTT — AI Decision Engine
 Pure standard-library HTTP service (no third-party dependencies) so it runs on

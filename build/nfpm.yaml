@@ -1,0 +1,68 @@
+# Linux package definition for KNOTT (nfpm — https://nfpm.goreleaser.com).
+#
+# Produces both .deb and .rpm from one description:
+#     nfpm package -f build/nfpm.yaml -p deb -t dist/
+#     nfpm package -f build/nfpm.yaml -p rpm -t dist/
+#
+# The package installs a single binary, a desktop entry so KNOTT appears in the
+# applications menu, and a systemd unit for running it as a service. The unit is
+# not enabled on install — a workflow engine that starts listening the moment it
+# is unpacked is a surprise, not a convenience.
+
+name: knott
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: Regnant <opensource@regnant.io>
+description: |
+  Sovereign workflow orchestration.
+  KNOTT runs AI-assisted, human-in-the-loop workflows entirely on your own
+  infrastructure — a visual designer, a durable execution engine, an approval
+  queue and a full audit trail, in one self-contained binary.
+vendor: Regnant
+homepage: https://github.com/regnant/knott
+license: Apache-2.0
+
+contents:
+  - src: ./dist/pkgroot/knott
+    dst: /usr/bin/knott
+    file_info:
+      mode: 0755
+
+  - src: ./services/ai-decision-engine/main.py
+    dst: /usr/share/knott/ai-decision-engine/main.py
+
+  - src: ./brand/icons/knott-256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/knott.png
+  - src: ./brand/icons/knott-128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/knott.png
+  - src: ./brand/knott-icon.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/knott.svg
+
+  - src: ./build/linux/knott.desktop
+    dst: /usr/share/applications/knott.desktop
+
+  - src: ./build/linux/knott.service
+    dst: /usr/lib/systemd/system/knott.service
+    type: config
+
+  - src: ./LICENSE
+    dst: /usr/share/doc/knott/LICENSE
+  - src: ./NOTICE
+    dst: /usr/share/doc/knott/NOTICE
+  - src: ./README.md
+    dst: /usr/share/doc/knott/README.md
+
+scripts:
+  postinstall: ./build/linux/postinstall.sh
+  preremove: ./build/linux/preremove.sh
+
+overrides:
+  deb:
+    recommends:
+      - python3
+  rpm:
+    recommends:
+      - python3

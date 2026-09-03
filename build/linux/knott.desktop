@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=KNOTT
+GenericName=Workflow Orchestration
+Comment=Design, run and audit workflows on your own infrastructure
+Exec=knott desktop
+Icon=knott
+Terminal=false
+Categories=Development;Utility;
+Keywords=workflow;automation;orchestration;integration;
+StartupNotify=true

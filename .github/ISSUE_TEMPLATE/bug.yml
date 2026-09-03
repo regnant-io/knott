@@ -1,0 +1,48 @@
+name: Bug report
+description: Something behaves differently from how it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations: { required: true }
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      description: >
+        The smallest sequence that shows the problem. If it involves a workflow,
+        the definition JSON (Designer → JSON) is the most useful thing you can
+        paste — with any credentials removed.
+      placeholder: |
+        1. Add a Connector step with …
+        2. Run it with input …
+        3. The run fails with …
+    validations: { required: true }
+
+  - type: input
+    id: version
+    attributes:
+      label: KNOTT version
+      description: The output of `knott version`, or the image tag.
+      placeholder: v0.9.0
+    validations: { required: true }
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where it runs
+      options: [macOS, Windows, Linux, Docker, Kubernetes, Other]
+    validations: { required: true }
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        Anything KNOTT printed around the failure, and the run's events if a run
+        was involved. Check for credentials before pasting.
+      render: shell

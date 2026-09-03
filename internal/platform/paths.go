@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Package platform resolves the per-OS locations and defaults a self-contained
 // KNOTT install needs: where state lives, where the secret key is kept, and how
 // to open a browser window.

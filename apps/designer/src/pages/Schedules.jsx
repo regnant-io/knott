@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Plus, Trash2, Play, Pause, Zap, CalendarClock, RefreshCw } from 'lucide-react';
 import { schedules as schedApi, workflows as wfApi } from '../lib/api.js';

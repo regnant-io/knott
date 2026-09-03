@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 import { describe, it, expect } from 'vitest';
 import { defToFlow, flowToDef } from './WorkflowDesignerShell.jsx';
 

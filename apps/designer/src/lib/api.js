@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 const BASE = {
   registry:  '/api/v1',    // proxied → :8001
   engine:    '/api/v1',    // proxied → :8002 (runs, decisions, connectors, stats)

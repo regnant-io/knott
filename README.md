@@ -1,332 +1,261 @@
-# ⊗ KNOTT
-### Sovereign Workflow Orchestration Platform
+<div align="center">
 
-**Self-hosted, AI-powered workflow automation with human-in-the-loop decisions, a visual designer, real-time execution monitoring, and a full audit trail — with zero cloud lock-in.**
+<img src="brand/knott-icon.svg" width="72" height="72" alt="">
 
-KNOTT is built for organizations that want the power of an automation platform like n8n, but with **data sovereignty**: run every AI decision locally with Ollama, keep all data on your own infrastructure, and expose a single port to the outside world.
+# KNOTT
+
+**Workflow orchestration that stays on your infrastructure.**
+
+Design workflows visually, run them durably, put a human in the loop where it
+matters, and keep an audit trail of every decision — from one binary you own.
+
+[![CI](https://github.com/regnant/knott/actions/workflows/ci.yml/badge.svg)](https://github.com/regnant/knott/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev)
+
+[Install](#install) · [How it works](#how-it-works) · [Connectors](#connectors) · [Deploying](#deploying) · [Contributing](CONTRIBUTING.md)
+
+</div>
 
 ---
 
-## Why KNOTT
+## Why KNOTT exists
 
-- **Sovereign by default** — run 100% offline with local Ollama models. No data leaves your network.
-- **AI with a human in the loop** — automatic escalation to human reviewers when AI confidence is low, with a required justification on every decision for compliance.
-- **Immutable audit trail** — every AI decision, human approval, and node transition is recorded.
-- **Runtime-configurable AI** — switch providers, set models, and test connectivity from the Settings page. No restart, no editing files on the server.
-- **Real-world triggers** — start workflows from inbound webhooks, not just manual runs.
-- **No heavy runtime** — Go services use a pure-Go SQLite driver (no CGO); the AI engine uses only the Python standard library (no `pip install`).
+Most automation platforms ask you to send your data through them. That is fine
+until the data is a loan application, a patient record, or a payment you have to
+be able to explain to an auditor three years later.
+
+KNOTT runs entirely on your own machines. Workflows execute in your network,
+credentials are encrypted in your database, and AI decisions can run against a
+local model so nothing leaves the building. Every decision — which model made
+it, how confident it was, what it reasoned, who approved it — is written to an
+append-only log.
+
+It is a single binary. No cluster, no message broker, no managed service.
 
 ---
 
-## 🚀 Quick Start
+## Install
 
-### Prerequisites
-- **Go 1.22+** — only to build the backend services
-- **Python 3.9+** — runs the AI engine (standard library only)
-- **Node.js 18+** — only to rebuild the frontend
-- **AI provider (optional)** — Anthropic Claude (cloud) or Ollama (local). Falls back to a rule-based simulation if neither is configured.
+<table>
+<tr><td width="33%">
 
-### 1. Configure environment
+**macOS**
+
+Download the `.dmg` from
+[Releases](https://github.com/regnant/knott/releases),
+drag KNOTT to Applications.
+
+</td><td width="33%">
+
+**Windows**
+
+Download the `.msi` from
+[Releases](https://github.com/regnant/knott/releases)
+and run it.
+
+</td><td width="33%">
+
+**Linux**
+
+`.deb`, `.rpm`, or the `.AppImage`
+to run without installing.
+
+</td></tr>
+</table>
 
 ```bash
-cp .env.example .env
-# Optionally set ANTHROPIC_API_KEY or OLLAMA_BASE_URL — or configure later in the UI.
+# Docker
+docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/regnant/knott
+
+# Homebrew
+brew install regnant/tap/knott
+
+# From source (Go 1.25+, Node 18+)
+git clone https://github.com/regnant/knott && cd knott
+make ui && make run
 ```
 
-You no longer have to choose the AI provider in `.env`. The `.env` values are just
-the initial defaults — everything can be changed at runtime on the **Settings** page.
-
-> **Tip:** on first launch, open **Workflows → Examples** to load ready-made starter
-> workflows for finance, marketing, supply chain, and HR/IT. Each is a complete
-> trigger → AI decision → human-review → outcome graph you can run immediately.
-
-### 2. Start the platform
-
-**Windows:** `start.bat`
-**Linux/macOS:** `chmod +x start.sh stop.sh && ./start.sh`
-
-### 3. Open the platform
-
-```
-→ http://localhost:8002
-```
-
-### 4. Configure AI in the UI
-
-Go to **Settings → AI Provider Configuration**:
-1. Pick a provider: **Auto**, **Anthropic**, **Ollama**, or **Simulation**.
-2. For Ollama, set the base URL, click **refresh** to list installed models, and pick one.
-3. Click **Test Connection** to verify, then **Save Configuration**. The choice is persisted and survives restarts.
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                          KNOTT Platform                          │
-├──────────────────┬──────────────────┬───────────────────────────┤
-│  Workflow        │  Execution       │  AI Decision Engine        │
-│  Registry        │  Engine          │  Python stdlib             │
-│  Go + Chi        │  Go + Goroutines │  Anthropic / Ollama / Sim  │
-│  :8001           │  :8002           │  :8003                     │
-├──────────────────┼──────────────────┼───────────────────────────┤
-│  Human Task      │  Agent           │  React Frontend            │
-│  Service         │  Integration     │  Vite + React Flow         │
-│  Go + Chi :8004  │  Go + Chi :8005  │  → served on :8002         │
-└──────────────────┴──────────────────┴───────────────────────────┘
-                         │
-                    SQLite Databases  (./data/*.db)
-```
-
-> **Single-port deployment:** in production the Execution Engine (8002) serves the
-> built UI *and* reverse-proxies the registry, task, agent, and AI-engine APIs.
-> Clients expose only **port 8002**; 8001/8003/8004/8005 stay internal.
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| **Workflow Registry** | 8001 | Definitions, versioning, validation |
-| **Execution Engine** | 8002 | Orchestration, state, webhooks, UI hosting, single-port proxy |
-| **AI Decision Engine** | 8003 | Anthropic / Ollama / simulation, runtime config, task specs |
-| **Human Task Service** | 8004 | HITL queue, approvals, SLA tracking |
-| **Agent Integration** | 8005 | External agent registry & health |
-
----
-
-## 🔌 Triggering workflows from the real world
-
-Any external system can start a workflow run by POSTing JSON to the inbound webhook:
+Then:
 
 ```bash
-curl -X POST http://localhost:8002/api/v1/hooks/<workflow_id> \
-  -H "Content-Type: application/json" \
-  -d '{ "transaction_id": "TXN-12345", "amount": 5000 }'
+knott desktop          # opens KNOTT in its own window
+knott serve --open     # or just serve, and open a browser
 ```
 
-The request body becomes the run input, available downstream as `{{ input.* }}`.
-Returns `202 Accepted` with the new `run_id`.
+The console is at **http://localhost:8002**. On first run, open
+**Workflows → Examples** for ten complete starter workflows covering finance,
+support, supply chain and HR — each a working trigger → decision → review →
+outcome graph you can run immediately.
 
-You can also start runs from the UI, or via the API:
+> KNOTT binds to loopback with authentication off, which is right for a laptop
+> and wrong for a server. Set `API_KEYS` before exposing it — see
+> [SECURITY.md](SECURITY.md).
+
+---
+
+## How it works
+
+A workflow is a graph of steps. You draw it; KNOTT runs it.
+
+```
+   ┌─────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────┐
+   │ Trigger │───▶│ AI Decision  │───▶│  Human Review │───▶│  Action  │
+   │ webhook │    │  confidence  │    │  when unsure  │    │  Slack,  │
+   │ schedule│    │  threshold   │    │               │    │  Jira, … │
+   └─────────┘    └──────┬───────┘    └───────────────┘    └──────────┘
+                         │ on error
+                         ▼
+                   ┌───────────┐
+                   │ Escalate  │
+                   └───────────┘
+```
+
+**Building it.** Click the **+** on any step and search for what you want the
+next one to do — "slack", "wait", "approval". The step arrives already
+connected. `Tab` opens the same search from anywhere. Undo, copy/paste and a
+tidy-layout button work the way you expect.
+
+**Steps you can use**
+
+| | |
+|---|---|
+| **Trigger** | Webhook, schedule, polled source, or a manual run |
+| **AI Decision** | A model decides, with a confidence threshold and a fallback |
+| **Human Task** | Pauses for a person; approval, rejection and justification are recorded |
+| **Condition** | One labelled output per branch, plus a default |
+| **Connector** | Call an app or any HTTP endpoint |
+| **Sub-workflow** | Run another workflow and use its result |
+| **Loop / Parallel / Merge** | Iterate, fan out, fan back in |
+| **Set / Expression / Filter / Wait** | Shape data, compute values, gate, pause |
+| **Agent** | Hand work to a registered external agent |
+
+**When something fails.** Steps that can fail have a second, red output. Draw a
+line from it and that is where the run goes when the step fails — after its
+retries, with the failure available to the branch as `error`. Retries back off
+exponentially with jitter, so a rate-limited API is not hammered and replicas do
+not retry in lockstep.
+
+**Runs are durable.** Each step checkpoints its resolved forward edge, so a
+restart resumes where it left off without re-firing a side effect that already
+happened. A distributed lease means exactly one replica executes a given run.
+
+**AI, wherever you want it.** Anthropic Claude, a local Ollama model, or a
+deterministic rule-based simulation. Switch provider and model from the Settings
+page — no restart, no editing files on the server. Set a confidence threshold
+per step and low-confidence decisions escalate to a person automatically.
+
+---
+
+## Connectors
+
+Around forty integrations ship in the box: Slack, Microsoft Teams, Discord,
+Telegram, WhatsApp, SendGrid, Twilio, Outlook, Pushover, Mattermost · GitHub,
+GitLab, Linear, Jira, Zendesk, Freshdesk, ServiceNow, PagerDuty · HubSpot,
+Intercom, Close · Notion, Google Sheets, Google Calendar, Airtable, Trello,
+Asana, ClickUp, Monday, Coda, Calendly · Stripe, Shopify, Mailchimp · OpenAI ·
+SQL (SQLite, PostgreSQL, MySQL) · and generic HTTP and GraphQL for everything
+else.
+
+Each connector has its own card on the Connectors page: a switch, the exact
+credentials it needs — each with a line telling you where to find the value —
+and a button that makes a real call to check them. Credentials are encrypted at
+rest and never shown again once saved.
+
+Missing one? [Ask for it](https://github.com/regnant/knott/issues/new?template=connector.yml),
+or add it — CONTRIBUTING.md has a walkthrough.
+
+---
+
+## Deploying
+
+### One node
+
+The default. One binary, one port, SQLite on local disk. This comfortably runs
+thousands of workflows a day.
 
 ```bash
-curl -X POST http://localhost:8002/api/v1/runs \
-  -H "Content-Type: application/json" \
-  -d '{ "workflow_id": "...", "input_data": { "amount": 5000 } }'
+API_KEYS='long-random-key:admin,readonly:viewer' \
+KNOTT_SECRET_KEY="$(openssl rand -hex 32)" \
+WEBHOOK_SECRET="$(openssl rand -hex 32)" \
+knott serve --host 0.0.0.0
 ```
 
----
+Put TLS in front of it — `infra/nginx/nginx.conf` is a working starting point.
 
-## 🤖 AI providers
+### Several nodes
 
-| Provider | Best for | Notes |
-|----------|----------|-------|
-| **Ollama** | Sovereignty, offline, cost control | Local models (Llama 3.1/3.2, Mistral, …). No data egress. GPU recommended. |
-| **Anthropic** | Highest quality | Cloud Claude models. Requires API key + internet. |
-| **Simulation** | Testing / demos | Deterministic rule-based fallback. Always available. |
-
-Configure and test all of this at runtime from **Settings**. The active provider
-is shown live in the sidebar status and on the Settings page.
-
-### Runtime AI configuration API
+The four services also build as separate binaries (`knott-registry`,
+`knott-engine`, `knott-tasks`, `knott-agents`) and can be scaled independently.
+Run leases mean several engine replicas can share a queue safely.
 
 ```bash
-GET  /internal/v1/config             # current provider config
-PUT  /internal/v1/config             # update provider / key / ollama url+model (persisted)
-POST /internal/v1/config/test        # test connectivity without saving
-GET  /internal/v1/ollama/models      # list models installed in Ollama
+make services
+REGISTRY_URL=http://registry:8001 HUMAN_TASK_URL=http://tasks:8004 \
+AGENT_URL=http://agents:8005 knott-engine
 ```
 
-(These are proxied through the engine on `:8002` for single-port deployments.)
+### Configuration
+
+| Variable | What it does |
+|---|---|
+| `API_KEYS` | `key:role` pairs. Roles: `admin`, `operator`, `viewer` |
+| `KNOTT_SECRET_KEY` | Encrypts stored credentials. Generated on first run if unset |
+| `WEBHOOK_SECRET` | Requires an HMAC signature on inbound webhooks |
+| `CORS_ORIGINS` | Restricts browser origins. Permissive by default |
+| `KNOTT_HOME` | State directory. Defaults to the per-OS application data path |
+| `PORT`, `KNOTT_BIND_HOST` | Where to listen. Defaults to `127.0.0.1:8002` |
+| `ANTHROPIC_API_KEY` / `OLLAMA_BASE_URL` | AI provider. Also settable in the UI |
+| `RUN_RETENTION_DAYS` | Prunes finished runs after this many days |
+| `METRICS_TOKEN` | Gates `/metrics` behind a bearer token |
+
+### Operating it
+
+- `/metrics` — Prometheus: runs by status, decision counts and confidence,
+  connector readiness, build info
+- `/api/v1/system-health` — every service, checked server-side, so it works
+  behind any proxy topology
+- **Observability** page — run volume, failure rates, decision confidence
+- **AI Decisions** page — the full audit log, searchable, with reasoning and
+  confidence per decision
 
 ---
 
-## ⚡ Triggers — how workflows start
-
-The **Trigger node is the source of truth** for how a workflow runs. Pick a
-`trigger_type` in the node and the engine reconciles it from the saved workflow
-(self-healing, survives restarts — no manual wiring):
-
-| Trigger type | How it starts | Config |
-|---|---|---|
-| **Manual** | Operator clicks Run, or `POST /api/v1/runs` | — |
-| **Webhook** | External system POSTs JSON | shows the live URL; optional HMAC signing |
-| **Schedule** | interval / daily / cron | auto-registers a schedule (also on the Schedules page) |
-| **Polling** | engine checks a source on an interval, fires a run per *new* item | source (HTTP or connector), items path, dedup key, interval, max/poll |
-| **Email** | inbound email (via your mail provider's inbound-parse webhook) | points at the webhook URL; native IMAP polling on the roadmap |
-
-**Polling** is the key autonomous capability for systems that don't push
-webhooks (most enterprise apps). On each interval the engine fetches the source,
-extracts items via `items_path`, dedups by `dedup_key`, and fires one run per
-new item with the item available as `{{ input.item }}`. On first activation it
-records existing items as seen *without* replaying them (toggle with
-`fire_on_first`). A **Test Poll** button shows exactly what would be processed.
-
-Trigger management API:
-```
-GET  /api/v1/triggers/polls       # active polling triggers + cursor state
-POST /api/v1/triggers/test-poll   # dry poll: returns items + dedup keys, fires nothing
-GET  /api/v1/schedules            # registered schedules
-```
-
-## 🔌 Connectors & operations
-
-Tool Call nodes ship with first-class connectors. Pick a connector, choose an
-operation, fill a few fields — credentials are referenced by name from the
-encrypted store, never inline.
-
-| Connector | Operations | Credential(s) |
-|-----------|-----------|---------------|
-| HTTP / Webhook | any method, query, headers, auth (bearer/basic/api-key), JSON/form/raw body | per-request |
-| Slack | post message | `SLACK_WEBHOOK_URL` or `SLACK_BOT_TOKEN` |
-| Telegram | send message | `TELEGRAM_BOT_TOKEN` |
-| Discord | send message | `DISCORD_WEBHOOK_URL` |
-| GitHub | create issue, comment, close, get, list issues | `GITHUB_TOKEN` |
-| Jira | create issue, comment issue | `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_BASE_URL` |
-| Airtable | create / update / list records | `AIRTABLE_TOKEN` |
-| Notion | create page, query database | `NOTION_TOKEN` |
-| HubSpot | create contact, create deal | `HUBSPOT_TOKEN` |
-| Google Sheets | append row, read range | OAuth: `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_REFRESH_TOKEN` (auto-refreshed), or a short-lived `GOOGLE_ACCESS_TOKEN` |
-| Google Calendar | create event | same Google OAuth as Sheets |
-| Microsoft Teams | send message | `TEAMS_WEBHOOK_URL` |
-| Stripe | create customer, create charge | `STRIPE_SECRET_KEY` |
-| Database (SQL) | query, exec | `DATABASE_DSN` (SQLite built-in; Postgres/MySQL need a driver build) |
-| SendGrid | send email | `SENDGRID_API_KEY`, `SENDGRID_FROM` |
-| Twilio | send SMS | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
-
-All connectors accept an optional `base_url` to target self-hosted/enterprise
-instances (e.g. GitHub Enterprise, a Jira data-center site). Tool Call and Agent
-Call nodes support an **Output Path** (e.g. `response.data.0.id`) to extract a
-clean value for downstream steps, plus per-node timeout and on-error routing.
-
-Every Tool Call node has a **Test Connector** button: it runs the connector live
-with the current config and sample Test Data, showing the result or the exact
-error — so you validate an integration before wiring it into a workflow.
-
-The **Trigger** node can declare an **input schema** (field types, required
-flags, defaults). The engine validates inbound run input against it and applies
-defaults, so a workflow fully describes and guards the data it expects.
-
-## 📈 Observability
-
-The **Observability** page surfaces, across all runs:
-- recent node/run **failures with their exact error text**,
-- **retry volume** and tasks **awaiting humans**,
-- a **per-node health table** (completed / failed / retries / failure rate).
-
-Backed by `GET /api/v1/diagnostics`, computed live from the immutable event log.
-
-## 🎨 Workflow node types
-
-| Node | Purpose |
-|------|---------|
-| **Trigger** | Entry point (manual / webhook / schedule / polling / email) |
-| **AI Decision** | Confidence-scored decision; Anthropic *or* Ollama model profiles |
-| **Human Task** | Pause for review/approval with SLA |
-| **Condition** | Branch on expressions (multi-case + default) |
-| **Filter** | Pass when a condition is true; drop or route the rest |
-| **Loop** | Iterate a list, running a body sub-path once per item (`{{ item }}`) |
-| **Set Fields** | Build/modify a data object from templates |
-| **Code** | Compute fields with the full expression language (no external runtime) |
-| **Tool Call** | Real connectors with operations + Test button (HTTP, Slack, Telegram, Discord, GitHub, Jira, Airtable, Notion, HubSpot, Google Sheets/Calendar, Database, Stripe, SendGrid, Twilio, Teams) |
-| **Agent Call** | Call a registered external agent (timeout, output path) |
-| **Wait** | Durable timed delay (duration or until a timestamp) — survives restarts |
-| **Parallel** | Fan-out branches |
-| **Merge** | Combine outputs of multiple upstream nodes |
-| **Transform** | Map outputs via templates |
-| **End** | Terminal outcome (Approve/Reject/Complete/Escalate) |
-
-Every node can be **disabled** (skipped at runtime) and annotated with **notes**.
-
-## 🧮 Expressions
-
-Fields support a real expression language inside `{{ }}`:
-- **Paths:** `{{ input.amount }}`, `{{ steps.assess.output.decision }}`
-- **Operators:** `+ - * /`, `== != > < >= <=`, `&& ||`, `??` (default), `!`
-- **Functions:** `upper, lower, trim, len, concat, replace, split, substring, contains, number, round, abs, min, max, default, coalesce, if, json, jsonparse, now, today, dateadd`
-- **Special vars:** `$now`, `$today`, `$timestamp`
-- Examples: `{{ upper(input.name) }}` · `{{ input.email ?? 'none@x.com' }}` · `{{ if(input.score > 80, 'HOT', 'COLD') }}` · `{{ dateadd($now, 3, 'days') }}`
-
----
-
-## 🛠️ Designer experience
-
-- **Live expression preview:** any field using `{{ input.* }}` or `{{ steps.<id>.output.* }}` shows its resolved value as you type, evaluated against editable **Test Data** in the properties panel. Unresolved references are flagged so you catch typos before running.
-- **Run replay:** from Run Monitor, replay any completed/failed run with one click — it starts a fresh run of the same workflow with the same input, so you can iterate quickly.
-- **Per-node reliability:** retries, retry delay, timeout, and continue-on-error are editable per node.
-
-## 🎨 Theming
-
-KNOTT ships with full light/dark theming plus a **System** mode that follows the
-operating system preference live. Switch from the sidebar (cycles System → Light →
-Dark) or pick explicitly on the Settings page. Your choice is saved per device.
-
----
-
-## 🔒 Security & deployment notes
-
-- **Single port:** only expose `:8002`. The Execution Engine is the **only** trust boundary — it enforces auth and reverse-proxies the sibling services. Set `BIND_HOST=127.0.0.1` so the registry/AI/task/agent services bind to loopback only and cannot be reached directly (which would bypass auth). The included `infra/nginx/nginx.conf` routes *all* traffic through the engine over TLS.
-- **API token:** set `API_TOKEN` to require authentication on every API call. The UI prompts for it once and stores it in the browser (sent as `X-API-Key`). When unset, the engine runs open and logs a warning — never expose KNOTT publicly without it.
-- **Webhook signing:** set `WEBHOOK_SECRET` to require an HMAC-SHA256 signature on inbound webhooks. Callers send `X-KNOTT-Signature: sha256=<hex>` where the hex is `HMAC_SHA256(secret, raw_body)`. Missing/forged signatures are rejected with 401.
-- **Secrets:** connector credentials (Slack/SendGrid/Twilio) and agent tokens are read from environment variables at runtime and are **never** stored in a workflow definition. Never commit real secrets to `.env` (a `.gitignore` excludes it).
-- **UI credential store:** operators can manage connector secrets from **Connectors → Connector Credentials**. Values are encrypted at rest with AES-256-GCM (key derived from `KNOTT_SECRET_KEY`), are **write-only** (never returned by the API), and override the matching environment variable at runtime. Set a strong `KNOTT_SECRET_KEY` in production.
-- **TLS:** put KNOTT behind a reverse proxy (see `infra/nginx/nginx.conf`) terminating TLS.
-- **Audit:** every AI decision and human approval is recorded with timestamps and justification.
-
-### Signing a webhook (example)
+## Triggering a run
 
 ```bash
-BODY='{"amount":5000}'
-SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/^.* //')
-curl -X POST "https://your-host/api/v1/hooks/<workflow_id>" \
-  -H "Content-Type: application/json" \
-  -H "X-KNOTT-Signature: sha256=$SIG" \
+curl -X POST http://localhost:8002/api/v1/hooks/<workflow-id> \
+  -H 'Content-Type: application/json' \
+  -H "X-KNOTT-Signature: $(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -r | cut -d' ' -f1)" \
   -d "$BODY"
 ```
 
+Pass an `Idempotency-Key` header and a repeated delivery returns the original
+run rather than starting a second one.
+
 ---
 
-## 🐳 Docker
+## Contributing
+
+Issues and pull requests are welcome — [CONTRIBUTING.md](CONTRIBUTING.md) covers
+the layout, the house style, and a walkthrough for adding a connector.
 
 ```bash
-cp .env.example .env
-docker-compose up --build -d
-# open http://localhost:8002
+make check     # gofmt, vet, Go tests, console tests — what CI runs
 ```
 
-Ollama on the host is reached from containers via `host.docker.internal:11434`
-(configured in `docker-compose.yml`).
-
 ---
 
-## 🛠️ Development
+## Licence
 
-```bash
-# Rebuild Go services
-cd services/workflow-registry  && go build -o ../../bin/workflow-registry .
-cd services/execution-engine   && go build -o ../../bin/execution-engine .
-cd services/human-task-service && go build -o ../../bin/human-task-service .
-cd services/agent-integration  && go build -o ../../bin/agent-integration .
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-# Frontend
-cd apps/designer && npm install && npm run build
-```
+"KNOTT" and the KNOTT mark are trademarks of Regnant; the licence covers the
+code, not the marks. See the trademark section of
+[CONTRIBUTING.md](CONTRIBUTING.md#trademarks) for what you may do without asking
+(which is most things).
 
-Data lives in `./data/*.db` (SQLite). Logs in `./logs/`.
-
----
-
-## 🆘 Troubleshooting
-
-**AI engine shows simulation / offline** — open Settings, pick your provider, click Test Connection. For Ollama, ensure `ollama serve` is running and the model is pulled (`ollama pull llama3.1`).
-
-**Workflow stuck in RUNNING** — check the run's event timeline in Run Monitor and the service logs in `./logs/`.
-
-**Ports busy** — change them in `.env` (`REGISTRY_PORT`, `ENGINE_PORT`, …).
-
----
-
-## 📄 License
-
-**Proprietary Software** — © 2026 KNOTT. All rights reserved.
-
-*KNOTT — workflows that tie your systems, your AI, and your people together, on your own terms.*
+<div align="center">
+<br>
+Built by <a href="https://regnant.io">Regnant</a>
+</div>

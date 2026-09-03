@@ -1,3 +1,6 @@
+// Copyright 2026 Regnant
+// SPDX-License-Identifier: Apache-2.0
+
 // Vitest global setup: extends expect with jest-dom matchers and provides a
 // minimal localStorage stub for modules that read it at import time.
 import '@testing-library/jest-dom/vitest';
