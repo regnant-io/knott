@@ -146,7 +146,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
   const [showJSON, setShowJSON] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [validErrs, setValidErrs] = useState([]);
+  const [findings, setFindings] = useState(null);
   const [showRunModal, setShowRunModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -504,9 +504,10 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
     try {
       const def = flowToDef(nodes, edges, wf?.definition?.trigger);
       const res = await wfApi.validate(workflowId || 'new', def);
-      setValidErrs(res.errors || []);
-      if (res.valid) toast('This workflow is valid', 'success');
-      else toast(`${res.errors.length} problem${res.errors.length === 1 ? '' : 's'} to fix`, 'warning');
+      const errors = res.errors || [];
+      const warnings = res.warnings || [];
+      setFindings({ errors, warnings });
+      if (!errors.length && !warnings.length) toast('This workflow is ready to run', 'success');
     } catch (e) {
       toast('Could not validate', 'error', e.message);
     }
@@ -611,10 +612,13 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
         <div style={{ flex: 1 }} />
 
         {dirty && <span className="toolbar-dirty">Unsaved</span>}
-        {validErrs.length > 0 && (
-          <button className="toolbar-errors" onClick={() => setValidErrs([])} title={validErrs.join('\n')}>
-            <AlertTriangle size={13} /> {validErrs.length} problem{validErrs.length === 1 ? '' : 's'}
-          </button>
+        {findings && (findings.errors.length > 0 || findings.warnings.length > 0) && (
+          <span className={`toolbar-errors ${findings.errors.length ? '' : 'is-warning'}`}>
+            <AlertTriangle size={13} />
+            {findings.errors.length
+              ? `${findings.errors.length} to fix`
+              : `${findings.warnings.length} to check`}
+          </span>
         )}
         <button
           className={`btn btn-ghost btn-icon btn-sm ${overlay.active ? 'is-on' : ''}`}
@@ -692,6 +696,9 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
         ) : (
           <div className="designer-canvas" ref={canvasRef}>
             {overlay.active && <RunStrip overlay={overlay} nodes={nodes} />}
+            {findings && (findings.errors.length > 0 || findings.warnings.length > 0) && (
+              <FindingsPanel findings={findings} onClose={() => setFindings(null)} />
+            )}
             <ReactFlow
               nodes={decorated}
               edges={edges}
@@ -826,6 +833,42 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What validation found, listed rather than counted.
+ *
+ * Errors block; warnings do not. A half-finished draft is a normal thing to
+ * save, and a validator that refuses to let you save one gets ignored — so the
+ * two are shown apart and neither prevents saving.
+ */
+function FindingsPanel({ findings, onClose }) {
+  const { errors, warnings } = findings;
+  return (
+    <div className="findings">
+      <div className="findings-head">
+        <strong>
+          {errors.length > 0
+            ? `${errors.length} thing${errors.length === 1 ? '' : 's'} to fix`
+            : `${warnings.length} thing${warnings.length === 1 ? '' : 's'} worth checking`}
+        </strong>
+        <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose} aria-label="Dismiss">
+          <X size={13} />
+        </button>
+      </div>
+      <ul className="findings-list">
+        {errors.map((e, i) => (
+          <li key={`e${i}`} className="finding is-error"><AlertTriangle size={12} /><span>{e}</span></li>
+        ))}
+        {warnings.map((w, i) => (
+          <li key={`w${i}`} className="finding is-warning"><AlertTriangle size={12} /><span>{w}</span></li>
+        ))}
+      </ul>
+      {errors.length === 0 && (
+        <p className="findings-note">None of these stop the workflow running.</p>
       )}
     </div>
   );
