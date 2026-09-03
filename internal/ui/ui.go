@@ -50,10 +50,38 @@ func Handler(dir string) (http.Handler, string) {
 	}
 	assets, ok := Assets()
 	if !ok {
-		return nil, ""
+		return placeholder(), "placeholder"
 	}
 	return spa(http.FS(assets)), "embedded"
 }
+
+// placeholder answers every request with build instructions. A binary compiled
+// without running the console build is still a working API server, and this
+// says so rather than returning a bare 404 that reads like a bug.
+func placeholder() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		io.WriteString(w, placeholderHTML)
+	})
+}
+
+const placeholderHTML = `<!doctype html>
+<meta charset="utf-8"><title>KNOTT</title>
+<style>
+ body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0a0b;
+      color:#fafafa;font:14px/1.7 -apple-system,"Segoe UI",Roboto,sans-serif}
+ main{max-width:34rem;padding:2rem} h1{font-size:1rem;letter-spacing:.14em;
+      text-transform:uppercase;color:#2dd4bf}
+ code{background:#161618;border:1px solid #26262b;border-radius:4px;padding:.15em .45em}
+</style>
+<main>
+ <h1>Console not built</h1>
+ <p>This binary was compiled without the web console. Build it and recompile:</p>
+ <p><code>make ui &amp;&amp; make build</code></p>
+ <p>The API is running and fully usable at <code>/api/v1</code>.</p>
+</main>
+`
 
 func spa(root http.FileSystem) http.Handler {
 	fileServer := http.FileServer(root)
