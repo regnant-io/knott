@@ -1,215 +1,312 @@
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { Zap, Brain, User, GitBranch, Wrench, Bot, Split, CheckCircle, XCircle, Repeat, Code2, Sliders, Filter as FilterIcon, Clock, GitMerge } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { NODE_BY_TYPE, NO_INPUT_TYPES, NO_OUTPUT_TYPES, CAN_FAIL_TYPES } from '../../designer/nodeCatalog.js';
 
-function WFNode({ data, selected, typeClass, icon: Icon, typeLabel, color, detail }) {
+/**
+ * A node on the canvas.
+ *
+ * Two affordances matter for how quickly a workflow gets built:
+ *
+ *  - The **+ button on the output handle**. Click it and the picker opens with
+ *    the new node already destined to be connected and positioned. That is the
+ *    whole build loop; dragging from a palette and then drawing an edge is the
+ *    same work in three steps instead of one.
+ *
+ *  - The **error output**. Steps that can fail get a second, red handle wired to
+ *    config.on_error, so "if this fails, do that" is something you draw rather
+ *    than a node id typed into a text field.
+ */
+function NodeShell({
+  id, data, selected, type,
+  detail, statusSlot, children,
+}) {
+  const spec = NODE_BY_TYPE[type] || {};
+  const Icon = spec.icon;
   const disabled = data.disabled;
+  const hasInput = !NO_INPUT_TYPES.has(type);
+  const hasOutput = !NO_OUTPUT_TYPES.has(type);
+  const hasErrorOutput = CAN_FAIL_TYPES.has(type);
+  const run = data.__run; // injected by the designer while showing a run
+
   return (
-    <div className={`wf-node ${typeClass} ${selected ? 'selected' : ''}`} style={disabled ? { opacity: 0.45 } : undefined}>
-      <Handle type="target" position={Position.Left} />
+    <div
+      className={[
+        'wf-node', `node-${type}`,
+        selected ? 'selected' : '',
+        disabled ? 'is-disabled' : '',
+        run ? `run-${run.status}` : '',
+      ].filter(Boolean).join(' ')}
+    >
+      {hasInput && <Handle type="target" position={Position.Left} />}
+
       <div className="wf-node-header">
-        <Icon size={11} />
-        {typeLabel}{disabled ? ' (off)' : ''}
+        {Icon && <Icon size={11} />}
+        {spec.label || type}
+        {disabled && <span className="wf-node-off">off</span>}
+        {statusSlot}
       </div>
+
       <div className="wf-node-body">
         <div className="wf-node-name">{data.name || data.id}</div>
         {detail && <div className="wf-node-detail">{detail}</div>}
+        {children}
       </div>
-      <Handle type="source" position={Position.Right} />
+
+      {data.notes && <div className="wf-node-note" title={data.notes}>{data.notes}</div>}
+
+      {hasOutput && (
+        <>
+          <Handle type="source" position={Position.Right} id="main" />
+          <button
+            type="button"
+            className="wf-node-add"
+            title="Add the next step"
+            aria-label="Add the next step"
+            onClick={e => {
+              e.stopPropagation();
+              data.__onAppend?.(id, 'main');
+            }}
+          >
+            <Plus size={11} />
+          </button>
+        </>
+      )}
+
+      {hasErrorOutput && (
+        <>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="error"
+            className="handle-error"
+            style={{ top: 'auto', bottom: 10 }}
+          />
+          <button
+            type="button"
+            className="wf-node-add is-error"
+            title="Add a step for when this fails"
+            aria-label="Add a step for when this fails"
+            onClick={e => {
+              e.stopPropagation();
+              data.__onAppend?.(id, 'error');
+            }}
+          >
+            <Plus size={11} />
+          </button>
+          <span className="wf-node-error-label">on error</span>
+        </>
+      )}
     </div>
   );
 }
 
-export function TriggerNode({ data, selected }) {
-  return (
-    <div className={`wf-node node-trigger ${selected ? 'selected' : ''}`}>
-      <div className="wf-node-header"><Zap size={11} />Trigger</div>
-      <div className="wf-node-body">
-        <div className="wf-node-name">{data.name || 'API Trigger'}</div>
-        <div className="wf-node-detail">{data.config?.type || 'api'}</div>
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
+/** The badge showing what this node did in the run being viewed. */
+function RunBadge({ run }) {
+  if (!run) return null;
+  if (run.status === 'failed') {
+    return <span className="wf-node-run failed" title={run.error}><AlertTriangle size={9} /></span>;
+  }
+  if (run.status === 'running') return <span className="wf-node-run running" />;
+  if (run.status === 'waiting') return <span className="wf-node-run waiting" />;
+  return <span className="wf-node-run done"><CheckCircle size={9} /></span>;
 }
 
-export function AIDecisionNode({ data, selected }) {
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-ai_decision" icon={Brain} typeLabel="AI Decision"
-      detail={data.config?.task ? `Task: ${data.config.task}` : 'Configure task spec'}
+/** Builds a node component whose only variation is the one-line detail text. */
+function node(type, detailFor) {
+  const Component = ({ id, data, selected }) => (
+    <NodeShell
+      id={id} data={data} selected={selected} type={type}
+      detail={detailFor(data)}
+      statusSlot={<RunBadge run={data.__run} />}
     />
   );
+  Component.displayName = `${type}Node`;
+  return Component;
 }
 
-export function HumanTaskNode({ data, selected }) {
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-human_task" icon={User} typeLabel="Human Task"
-      detail={data.config?.title || 'Awaiting human review'}
-    />
-  );
-}
+const TriggerNode = node('trigger', d => {
+  const kind = d.config?.type || 'api';
+  const labels = {
+    api: 'Manual or API call', webhook: 'Inbound webhook',
+    schedule: 'On a schedule', poll: 'Polls a source',
+  };
+  return labels[kind] || kind;
+});
 
-export function ConditionNode({ data, selected }) {
-  const caseCount = data.cases?.length || 0;
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-condition" icon={GitBranch} typeLabel="Condition"
-      detail={`${caseCount} case${caseCount !== 1 ? 's' : ''} + default`}
-    />
-  );
-}
+const AIDecisionNode = node('ai_decision', d =>
+  d.config?.task ? d.config.task.replace(/_/g, ' ') : 'Pick a task spec');
 
-export function ToolCallNode({ data, selected }) {
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-tool_call" icon={Wrench} typeLabel="Tool Call"
-      detail={data.config?.connector_id ? `→ ${data.config.connector_id}` : 'Configure connector'}
-    />
-  );
-}
+const HumanTaskNode = node('human_task', d =>
+  d.config?.title || 'Waiting for a person');
 
-export function AgentCallNode({ data, selected }) {
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-agent_call" icon={Bot} typeLabel="Agent Call"
-      detail={data.config?.agent_id || 'Select agent'}
-    />
-  );
-}
+/**
+ * A condition gets one output per branch, plus a default.
+ *
+ * With a single output there was no way to say which branch an edge belonged
+ * to, so an edge drawn from a condition was silently dropped when the workflow
+ * was saved. One labelled handle per case makes the routing something you draw
+ * and something that persists.
+ */
+function ConditionNode({ id, data, selected }) {
+  const spec = NODE_BY_TYPE.condition;
+  const Icon = spec.icon;
+  const cases = data.cases || [];
+  const rows = [
+    ...cases.map((c, i) => ({
+      handle: `case-${i}`,
+      label: c.condition ? truncate(c.condition, 28) : `Branch ${i + 1}`,
+    })),
+    { handle: 'default', label: 'Otherwise', muted: true },
+  ];
 
-export function ParallelNode({ data, selected }) {
   return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-parallel" icon={Split} typeLabel="Parallel"
-      detail={`${data.branches?.length || 2} branches`}
-    />
-  );
-}
-
-export function LoopNode({ data, selected }) {
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-loop" icon={Repeat} typeLabel="Loop"
-      detail={data.config?.items ? 'for each item' : 'Configure items list'}
-    />
-  );
-}
-
-export function CodeNode({ data, selected }) {
-  const n = data.config?.assignments ? Object.keys(data.config.assignments).length : 0;
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-code" icon={Code2} typeLabel="Code"
-      detail={n ? `${n} expression${n !== 1 ? 's' : ''}` : 'Compute fields'}
-    />
-  );
-}
-
-export function SetNode({ data, selected }) {
-  const n = data.config?.fields ? Object.keys(data.config.fields).length : 0;
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-set" icon={Sliders} typeLabel="Set Fields"
-      detail={n ? `${n} field${n !== 1 ? 's' : ''}` : 'Define fields'}
-    />
-  );
-}
-
-export function FilterNode({ data, selected }) {
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-filter" icon={FilterIcon} typeLabel="Filter"
-      detail={data.config?.condition || 'Set a condition'}
-    />
-  );
-}
-
-export function WaitNode({ data, selected }) {
-  const mode = data.config?.mode || 'duration';
-  const detail = mode === 'until' ? `until ${data.config?.until || '…'}` : `${data.config?.seconds || '?'} ${data.config?.unit || 'seconds'}`;
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-wait" icon={Clock} typeLabel="Wait"
-      detail={detail}
-    />
-  );
-}
-
-export function MergeNode({ data, selected }) {
-  const n = data.config?.sources?.length || 0;
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-merge" icon={GitMerge} typeLabel="Merge"
-      detail={n ? `${n} source${n !== 1 ? 's' : ''}` : 'Select sources'}
-    />
-  );
-}
-
-export function TransformNode({ data, selected }) {
-  return (
-    <WFNode data={data} selected={selected}
-      typeClass="node-transform" icon={Sliders} typeLabel="Transform"
-      detail="Map outputs"
-    />
-  );
-}
-
-export function EndNode({ data, selected }) {
-  const isApproved = data.outcome === 'APPROVED';
-  const isRejected = data.outcome === 'REJECTED';
-  const Icon = isApproved ? CheckCircle : isRejected ? XCircle : CheckCircle;
-  return (
-    <div className={`wf-node node-end ${selected ? 'selected' : ''}`}
-         style={isRejected ? { '--green': 'var(--red)', '--green-dim': 'var(--red-dim)' } : {}}>
+    <div
+      className={`wf-node node-condition has-branches ${selected ? 'selected' : ''} ${data.disabled ? 'is-disabled' : ''} ${data.__run ? `run-${data.__run.status}` : ''}`}
+    >
       <Handle type="target" position={Position.Left} />
-      <div className="wf-node-header"><Icon size={11} />End</div>
+      <div className="wf-node-header">
+        <Icon size={11} />
+        Condition
+        {data.disabled && <span className="wf-node-off">off</span>}
+        <RunBadge run={data.__run} />
+      </div>
+      <div className="wf-node-body">
+        <div className="wf-node-name">{data.name || data.id}</div>
+      </div>
+      <div className="wf-branches">
+        {rows.map((row, i) => (
+          <div key={row.handle} className={`wf-branch ${row.muted ? 'muted' : ''}`}>
+            <span className="wf-branch-label">{row.label}</span>
+            <button
+              type="button"
+              className="wf-branch-add"
+              title={`Add the step for ${row.label}`}
+              aria-label={`Add the step for ${row.label}`}
+              onClick={e => { e.stopPropagation(); data.__onAppend?.(id, row.handle); }}
+            >
+              <Plus size={10} />
+            </button>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id={row.handle}
+              style={{ top: `${branchHandleTop(i, rows.length)}%` }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Branch handles sit on the right edge, one per row. The rows render inside the
+// node, so the handle offset is derived from the row's index rather than laid
+// out by flow.
+function branchHandleTop(index, total) {
+  const bandStart = 58; // below the header and name
+  const band = 42;
+  return bandStart + (band * (index + 0.5)) / total;
+}
+
+function truncate(s, n) {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+}
+
+const ToolCallNode = node('tool_call', d => {
+  if (!d.config?.connector_id) return 'Pick a connector';
+  const action = d.config.action ? ` · ${d.config.action.replace(/_/g, ' ')}` : '';
+  return `${d.config.connector_id}${action}`;
+});
+
+const SubWorkflowNode = node('sub_workflow', d =>
+  d.config?.workflow_id ? `→ ${String(d.config.workflow_id).slice(0, 18)}` : 'Pick a workflow');
+
+const AgentCallNode = node('agent_call', d => d.config?.agent_id || 'Pick an agent');
+
+const ParallelNode = node('parallel', d => {
+  const n = d.branches?.length || d.config?.branches?.length || 0;
+  return n ? `${n} branches` : 'Add branches';
+});
+
+const LoopNode = node('loop', d =>
+  d.config?.items ? `for each ${d.config.items}` : 'Pick a list to loop over');
+
+const CodeNode = node('code', d => {
+  const n = d.config?.assignments ? Object.keys(d.config.assignments).length : 0;
+  return n ? `${n} expression${n === 1 ? '' : 's'}` : 'Add an expression';
+});
+
+const SetNode = node('set', d => {
+  const fields = d.config?.fields ? Object.keys(d.config.fields) : [];
+  if (!fields.length) return 'Add a field';
+  return fields.slice(0, 3).join(', ') + (fields.length > 3 ? `, +${fields.length - 3}` : '');
+});
+
+const FilterNode = node('filter', d => d.config?.condition || 'Add a condition');
+
+const WaitNode = node('wait', d => {
+  const mode = d.config?.mode || 'duration';
+  if (mode === 'until') return `until ${d.config?.until || '…'}`;
+  return `${d.config?.seconds ?? '?'} ${d.config?.unit || 'seconds'}`;
+});
+
+const MergeNode = node('merge', d => {
+  const n = d.config?.sources?.length || 0;
+  return n ? `${n} source${n === 1 ? '' : 's'}` : 'Pick the branches to merge';
+});
+
+const TransformNode = node('transform', () => 'Reshape output');
+
+function EndNode({ id, data, selected }) {
+  const outcome = data.outcome;
+  const rejected = outcome === 'REJECTED' || outcome === 'DENIED';
+  return (
+    <div
+      className={`wf-node node-end ${selected ? 'selected' : ''} ${rejected ? 'is-negative' : ''}`}
+    >
+      <Handle type="target" position={Position.Left} />
+      <div className="wf-node-header">
+        {rejected ? <XCircle size={11} /> : <CheckCircle size={11} />}
+        End
+        <RunBadge run={data.__run} />
+      </div>
       <div className="wf-node-body">
         <div className="wf-node-name">{data.name || 'End'}</div>
-        {data.outcome && (
-          <div className="wf-node-detail">
-            <span className={`badge badge-${isApproved ? 'green' : isRejected ? 'red' : 'muted'}`} style={{ fontSize: 10, padding: '1px 6px' }}>
-              {data.outcome}
-            </span>
-          </div>
-        )}
+        {outcome && <div className="wf-node-detail">{outcome}</div>}
       </div>
+    </div>
+  );
+}
+
+/** A canvas annotation. Never executed, never connected. */
+function NoteNode({ data, selected }) {
+  return (
+    <div className={`wf-note ${selected ? 'selected' : ''}`}>
+      {data.notes || data.name || 'Double-click the note to write something'}
     </div>
   );
 }
 
 export const NODE_TYPES = {
-  trigger:    TriggerNode,
+  trigger: TriggerNode,
   ai_decision: AIDecisionNode,
   human_task: HumanTaskNode,
-  condition:  ConditionNode,
-  tool_call:  ToolCallNode,
+  condition: ConditionNode,
+  tool_call: ToolCallNode,
+  sub_workflow: SubWorkflowNode,
   agent_call: AgentCallNode,
-  parallel:   ParallelNode,
-  loop:       LoopNode,
-  code:       CodeNode,
-  set:        SetNode,
-  filter:     FilterNode,
-  wait:       WaitNode,
-  merge:      MergeNode,
-  transform:  TransformNode,
-  end:        EndNode,
+  parallel: ParallelNode,
+  loop: LoopNode,
+  code: CodeNode,
+  set: SetNode,
+  filter: FilterNode,
+  wait: WaitNode,
+  merge: MergeNode,
+  transform: TransformNode,
+  end: EndNode,
+  note: NoteNode,
 };
 
-export const PALETTE_NODES = [
-  { type: 'trigger',    label: 'Trigger',     color: 'var(--amber)',  icon: Zap },
-  { type: 'ai_decision',label: 'AI Decision', color: 'var(--violet)', icon: Brain },
-  { type: 'human_task', label: 'Human Task',  color: 'var(--blue)',   icon: User },
-  { type: 'condition',  label: 'Condition',   color: 'var(--yellow)', icon: GitBranch },
-  { type: 'filter',     label: 'Filter',      color: 'var(--yellow)', icon: FilterIcon },
-  { type: 'loop',       label: 'Loop',        color: 'var(--indigo)', icon: Repeat },
-  { type: 'set',        label: 'Set Fields',  color: 'var(--teal)',   icon: Sliders },
-  { type: 'code',       label: 'Code',        color: 'var(--teal)',   icon: Code2 },
-  { type: 'tool_call',  label: 'Tool Call',   color: 'var(--teal)',   icon: Wrench },
-  { type: 'agent_call', label: 'Agent Call',  color: 'var(--pink)',   icon: Bot },
-  { type: 'wait',       label: 'Wait',        color: 'var(--blue)',   icon: Clock },
-  { type: 'parallel',   label: 'Parallel',    color: 'var(--indigo)', icon: Split },
-  { type: 'merge',      label: 'Merge',       color: 'var(--indigo)', icon: GitMerge },
-  { type: 'end',        label: 'End',         color: 'var(--green)',  icon: CheckCircle },
-];
+// Kept for the palette rail, which lists the catalogue in canvas order.
+export { NODE_CATALOG as PALETTE_NODES } from '../../designer/nodeCatalog.js';

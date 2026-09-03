@@ -1,387 +1,28 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ReactFlow, {
-  addEdge, useNodesState, useEdgesState,
-  Background, Controls, MiniMap,
-  BackgroundVariant, MarkerType,
-} from 'reactflow';
+import React, { useState, useEffect } from 'react';
+import { Check, CheckSquare, KeyRound, X } from 'lucide-react';
 import {
-  Save, Play, CheckCircle, Code2, ArrowLeft, AlertTriangle,
-  Brain, Zap, User, GitBranch, Wrench, Bot, CheckSquare, X,
-  KeyRound, Check,
-} from 'lucide-react';
-import { workflows as wfApi, runs as runsApi, connectors as connectorsApi, agents as agentsApi, taskSpecs as taskSpecsApi, triggers as triggersApi, credentials as credsApi } from '../lib/api.js';
-import { NODE_TYPES, PALETTE_NODES } from '../components/nodes/index.jsx';
-import { useToast, StatusBadge } from '../components/Layout.jsx';
-import { resolveTemplate, hasTemplate, sampleContext } from '../lib/expr.js';
+  connectors as connectorsApi,
+  credentials as credsApi,
+  triggers as triggersApi,
+} from '../lib/api.js';
+import { useToast } from '../components/Layout.jsx';
+import { resolveTemplate, hasTemplate } from '../lib/expr.js';
+import { CAN_FAIL_TYPES } from '../designer/nodeCatalog.js';
+import DesignerShell from './WorkflowDesignerShell.jsx';
 
-let nodeId = 1000;
-const uid = () => `node_${++nodeId}`;
-
-function defToFlow(def) {
-  if (!def?.steps) return { nodes: [], edges: [] };
-  const nodes = def.steps.map(s => ({
-    id: s.id,
-    type: s.type,
-    position: s.position || { x: 100, y: 100 },
-    data: { ...s },
-  }));
-  const edges = [];
-  def.steps.forEach(s => {
-    if (s.next) edges.push({ id: `e-${s.id}-${s.next}`, source: s.id, target: s.next, markerEnd: { type: MarkerType.ArrowClosed } });
-    (s.cases || []).forEach((c, i) => {
-      if (c.next) edges.push({ id: `e-${s.id}-case${i}-${c.next}`, source: s.id, target: c.next, label: c.condition?.slice(0, 30) + (c.condition?.length > 30 ? '…' : ''), markerEnd: { type: MarkerType.ArrowClosed } });
-    });
-    if (s.default && !s.next) edges.push({ id: `e-${s.id}-default`, source: s.id, target: s.default, label: 'default', markerEnd: { type: MarkerType.ArrowClosed } });
-  });
-  return { nodes, edges };
+/**
+ * The workflow designer.
+ *
+ * The canvas — adding steps, wiring them, undo, layout — lives in
+ * WorkflowDesignerShell. This file holds the properties panel: the per-node
+ * configuration forms, which are the bulk of the surface area and change for
+ * entirely different reasons than the canvas does.
+ */
+export default function WorkflowDesigner(props) {
+  return <DesignerShell {...props} NodePropsEditor={NodePropsEditor} />;
 }
 
-function flowToDef(nodes, edges, trigger) {
-  const stepMap = {};
-  nodes.forEach(n => { stepMap[n.id] = { ...n.data, id: n.id, type: n.type, position: n.position }; });
-  edges.forEach(e => {
-    const step = stepMap[e.source];
-    if (!step) return;
-    if (!e.label || e.label === 'default') {
-      if (step.type === 'condition' && !e.label) return;
-      if (step.type !== 'condition') step.next = e.target;
-    }
-  });
-  return { trigger: trigger || { type: 'api' }, steps: Object.values(stepMap) };
-}
-
-export default function WorkflowDesigner({ workflowId, onBack }) {
-  const [wf, setWf]             = useState(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selected, setSelected] = useState(null);
-  const [showYAML, setShowYAML] = useState(false);
-  const [saving, setSaving]     = useState(false);
-  const [validErrs, setValidErrs] = useState([]);
-  const [showRunModal, setShowRunModal] = useState(false);
-  const [loadError, setLoadError] = useState(null);
-  const [loading, setLoading] = useState(!!workflowId);
-  const [runInput, setRunInput] = useState('{\n  \n}');
-  const [connectorOpts, setConnectorOpts] = useState([]);
-  const [agentOpts, setAgentOpts] = useState([]);
-  const [taskSpecOpts, setTaskSpecOpts] = useState([]);
-  // Test context for live expression preview: the JSON the author expects as
-  // trigger input. Persisted per-workflow in localStorage so it survives reloads.
-  const [testInput, setTestInput] = useState('{\n  \n}');
-  const canvasRef = useRef(null);
-  const { toast } = useToast();
-
-  // Build the preview context from the test input + step stubs for this graph.
-  const previewCtx = React.useMemo(() => {
-    const def = flowToDef(nodes, edges, wf?.definition?.trigger);
-    const ctx = sampleContext(def);
-    try { ctx.input = JSON.parse(testInput); } catch { /* keep empty input on bad JSON */ }
-    return ctx;
-  }, [testInput, nodes, edges, wf]);
-
-  // Load installed connectors + registered agents + AI task specs so node config
-  // is driven by what the operator has actually set up (not a hard-coded list).
-  useEffect(() => {
-    connectorsApi.list()
-      .then(r => setConnectorOpts((r.data || []).filter(c => c.installed)))
-      .catch(() => setConnectorOpts([]));
-    agentsApi.list()
-      .then(r => setAgentOpts(r.data || []))
-      .catch(() => setAgentOpts([]));
-    taskSpecsApi.list()
-      .then(r => setTaskSpecOpts(r.data || []))
-      .catch(() => setTaskSpecOpts([]));
-  }, []);
-
-  const loadWorkflow = useCallback(() => {
-    if (!workflowId) {
-      setWf({ name: 'Untitled Workflow', status: 'draft', definition: { trigger: { type: 'api' }, steps: [] } });
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setLoadError(null);
-    wfApi.get(workflowId).then(w => {
-      setWf(w);
-      let def;
-      try {
-        def = typeof w.definition === 'string' ? JSON.parse(w.definition) : w.definition;
-      } catch (parseErr) {
-        // Corrupt/invalid definition: recover with an empty canvas rather than crash.
-        toast('Workflow definition was invalid — starting from an empty canvas', 'warning');
-        def = { trigger: { type: 'api' }, steps: [] };
-      }
-      const { nodes: n, edges: e } = defToFlow(def || { steps: [] });
-      setNodes(n); setEdges(e);
-      setLoading(false);
-    }).catch(e => {
-      setLoadError(e.message || 'Failed to load workflow');
-      setLoading(false);
-    });
-  }, [workflowId]);
-
-  useEffect(() => { loadWorkflow(); }, [loadWorkflow]);
-
-  const onConnect = useCallback((params) => {
-    setEdges(es => addEdge({ ...params, markerEnd: { type: MarkerType.ArrowClosed } }, es));
-  }, []);
-
-  const onNodeClick = useCallback((_, node) => setSelected(node), []);
-  const onPaneClick = useCallback(() => setSelected(null), []);
-
-  const onDragOver = useCallback(e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
-
-  const onDrop = useCallback(e => {
-    e.preventDefault();
-    const type = e.dataTransfer.getData('nodeType');
-    if (!type) return;
-    const bounds = canvasRef.current?.getBoundingClientRect();
-    const position = {
-      x: e.clientX - (bounds?.left || 0) - 90,
-      y: e.clientY - (bounds?.top || 0) - 30,
-    };
-    const id = uid();
-    const newNode = {
-      id, type, position,
-      data: { id, type, name: type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), config: {}, inputs: {} },
-    };
-    setNodes(ns => [...ns, newNode]);
-    setSelected(newNode);
-  }, []);
-
-  function updateSelectedData(patch) {
-    if (!selected) return;
-    const updated = { ...selected, data: { ...selected.data, ...patch } };
-    setSelected(updated);
-    setNodes(ns => ns.map(n => n.id === selected.id ? updated : n));
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const def = flowToDef(nodes, edges, wf?.definition?.trigger);
-      const body = { name: wf?.name, description: wf?.description, status: wf?.status || 'draft', definition: def, tags: wf?.tags || [] };
-      let saved;
-      if (workflowId) {
-        saved = await wfApi.update(workflowId, body);
-      } else if (wf?.id) {
-        // Already created once in this session — update instead of duplicating.
-        saved = await wfApi.update(wf.id, body);
-      } else {
-        saved = await wfApi.create(body);
-      }
-      setWf(saved);
-      toast('Workflow saved', 'success');
-      return saved;
-    } catch (e) {
-      toast('Save failed', 'error', e.message);
-      return null;
-    } finally { setSaving(false); }
-  }
-
-  async function handleValidate() {
-    try {
-      const def = flowToDef(nodes, edges, wf?.definition?.trigger);
-      const res = await wfApi.validate(workflowId || 'new', def);
-      setValidErrs(res.errors || []);
-      if (res.valid) toast('Workflow is valid ✓', 'success');
-      else toast(`${res.errors.length} validation error(s)`, 'warning');
-    } catch (e) { toast('Validation error', 'error', e.message); }
-  }
-
-  async function handleRun() {
-    let inputData;
-    try { inputData = JSON.parse(runInput); } catch { toast('Invalid JSON input', 'error'); return; }
-    const saved = await handleSave();
-    const id = saved?.id || workflowId || wf?.id;
-    if (!id) { toast('Save the workflow before running', 'warning'); return; }
-    try {
-      const r = await runsApi.create({ workflow_id: id, input_data: inputData });
-      toast(`Run started`, 'success', `ID: ${r.id.slice(0, 8)}…`);
-      setShowRunModal(false);
-    } catch (e) { toast('Run failed', 'error', e.message); }
-  }
-
-  const yamlLike = JSON.stringify(flowToDef(nodes, edges, wf?.definition?.trigger), null, 2);
-
-  // Recovery state: workflow failed to load (network/registry down or bad id).
-  if (loadError) {
-    return (
-      <div className="designer-shell">
-        <div className="designer-toolbar">
-          <button className="btn btn-ghost btn-sm" onClick={onBack}><ArrowLeft size={13} /> Back</button>
-        </div>
-        <div className="empty-state" style={{ flex: 1, justifyContent: 'center' }}>
-          <AlertTriangle size={40} color="var(--red)" />
-          <h3>Couldn't load this workflow</h3>
-          <p>{loadError}</p>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn btn-secondary" onClick={onBack}>Back to Registry</button>
-            <button className="btn btn-primary" onClick={loadWorkflow}>Retry</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="designer-shell">
-        <div className="designer-toolbar">
-          <button className="btn btn-ghost btn-sm" onClick={onBack}><ArrowLeft size={13} /> Back</button>
-        </div>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14 }}>
-          <div className="spinner spinner-lg" />
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading workflow…</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="designer-shell">
-      {/* Toolbar */}
-      <div className="designer-toolbar">
-        <button className="btn btn-ghost btn-sm" onClick={onBack}><ArrowLeft size={13} /> Back</button>
-        <div className="divider" style={{ width: 1, height: 20, margin: '0 4px' }} />
-        <input
-          className="input" style={{ width: 240, padding: '5px 10px', fontSize: 14, fontWeight: 600 }}
-          value={wf?.name || ''}
-          onChange={e => setWf(w => ({ ...w, name: e.target.value }))}
-          placeholder="Workflow name…"
-        />
-        <select className="select" style={{ width: 100, padding: '5px 28px 5px 8px', fontSize: 12 }}
-          value={wf?.status || 'draft'} onChange={e => setWf(w => ({ ...w, status: e.target.value }))}>
-          <option value="draft">Draft</option>
-          <option value="active">Active</option>
-          <option value="deprecated">Deprecated</option>
-        </select>
-        <div style={{ flex: 1 }} />
-        {validErrs.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--yellow)' }}>
-            <AlertTriangle size={13} /> {validErrs.length} error(s)
-          </div>
-        )}
-        <button className="btn btn-ghost btn-sm" onClick={() => setShowYAML(s => !s)}>
-          <Code2 size={13} /> {showYAML ? 'Canvas' : 'JSON'}
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={handleValidate}><CheckCircle size={13} />Validate</button>
-        <button className="btn btn-secondary btn-sm" onClick={handleSave} disabled={saving}>
-          {saving ? <span className="spinner-sm" /> : <Save size={13} />} Save
-        </button>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowRunModal(true)}>
-          <Play size={13} /> Run
-        </button>
-      </div>
-
-      <div className="designer-body">
-        {/* Palette */}
-        <div className="designer-palette">
-          <div className="palette-title">Node Types</div>
-          {PALETTE_NODES.map(p => {
-            const Icon = p.icon;
-            return (
-              <div key={p.type} className="palette-node"
-                draggable onDragStart={e => e.dataTransfer.setData('nodeType', p.type)}>
-                <div className="palette-node-dot" style={{ background: p.color }} />
-                <Icon size={13} color={p.color} />
-                {p.label}
-              </div>
-            );
-          })}
-          <div style={{ marginTop: 16, padding: '0 6px' }}>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              Drag nodes onto the canvas. Connect by dragging from node handles.
-            </div>
-          </div>
-        </div>
-
-        {/* Canvas or JSON view */}
-        {showYAML ? (
-          <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
-            <div className="card-label" style={{ marginBottom: 10 }}>Workflow Definition (JSON)</div>
-            <div className="code-block">{yamlLike}</div>
-          </div>
-        ) : (
-          <div className="designer-canvas" ref={canvasRef}>
-            <ReactFlow
-              nodes={nodes.map(n => ({ ...n, selected: selected?.id === n.id }))}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodeClick={onNodeClick}
-              onPaneClick={onPaneClick}
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              nodeTypes={NODE_TYPES}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
-              defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border-active)', strokeWidth: 2 } }}
-              edgesFocusable={false}
-              deleteKeyCode="Delete"
-              style={{ background: 'var(--bg)' }}
-            >
-              <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--border-dim)" />
-              <Controls />
-              <MiniMap
-                nodeColor={n => {
-                  const colors = { trigger: '#f97316', ai_decision: '#7c3aed', human_task: '#3b82f6', condition: '#f59e0b', tool_call: '#14b8a6', agent_call: '#ec4899', end: '#10b981' };
-                  return colors[n.type] || '#4a4a68';
-                }}
-                maskColor="rgba(7,7,14,0.7)"
-              />
-            </ReactFlow>
-            {nodes.length === 0 && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', gap: 10 }}>
-                <div style={{ fontSize: 48, opacity: 0.15 }}>✦</div>
-                <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Drag nodes from the palette to start designing</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Properties Panel */}
-        <div className="designer-props">
-          <div className="props-header">
-            {selected ? `${selected.type.replace(/_/g, ' ').toUpperCase()} PROPERTIES` : 'PROPERTIES'}
-          </div>
-          <div className="props-body">
-            {!selected ? (
-              <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', marginTop: 40 }}>
-                Click a node to edit its properties
-              </div>
-            ) : (
-              <NodePropsEditor node={selected} onChange={updateSelectedData} connectorOpts={connectorOpts} agentOpts={agentOpts} taskSpecOpts={taskSpecOpts} previewCtx={previewCtx} testInput={testInput} setTestInput={setTestInput} workflowId={workflowId} />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Run modal */}
-      {showRunModal && (
-        <div className="modal-overlay" onClick={() => setShowRunModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div><div className="modal-title">Run Workflow</div><div className="modal-sub">{wf?.name}</div></div>
-              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowRunModal(false)}>✕</button>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Input Payload (JSON)</label>
-              <textarea className="textarea" rows={8} value={runInput} onChange={e => setRunInput(e.target.value)} />
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowRunModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleRun}><Play size={13} />Start Run</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], taskSpecOpts = [], previewCtx = {}, testInput = '{}', setTestInput, workflowId }) {
+function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], taskSpecOpts = [], previewCtx = {}, testInput = '{}', setTestInput, workflowId, nodes = [] }) {
   const d = node.data;
 
   // Built-in fallback list used only if the AI engine is unreachable, so the
@@ -514,26 +155,48 @@ function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], t
       {node.type === 'condition' && (
         <>
           <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Routing Cases</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Branches</div>
+          <div className="form-hint" style={{ marginTop: -4 }}>
+            The run takes the first branch whose expression is true. Each branch has its
+            own output on the canvas — drag from it, or click its <strong>+</strong>, to
+            say where it goes.
+          </div>
           {(d.cases || []).map((c, i) => (
-            <div key={i} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 6 }}>
-              <div className="form-label" style={{ marginBottom: 4 }}>Case {i + 1}</div>
-              <input className="input" style={{ marginBottom: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}
-                value={c.condition} placeholder="Expression…"
-                onChange={e => { const cases = [...(d.cases || [])]; cases[i] = { ...cases[i], condition: e.target.value }; onChange({ cases }); }} />
-              <input className="input" style={{ fontSize: 11 }}
-                value={c.next} placeholder="next node id"
-                onChange={e => { const cases = [...(d.cases || [])]; cases[i] = { ...cases[i], next: e.target.value }; onChange({ cases }); }} />
+            <div key={i} className="branch-editor">
+              <div className="branch-editor-head">
+                <span className="form-label" style={{ margin: 0 }}>Branch {i + 1}</span>
+                <span className={`badge ${c.next ? 'badge-green' : 'badge-muted'}`} style={{ fontSize: 9 }}>
+                  {c.next ? `→ ${nodeLabel(nodes, c.next)}` : 'not connected'}
+                </span>
+                <button
+                  className="btn btn-ghost btn-icon btn-sm"
+                  title={`Remove branch ${i + 1}`}
+                  aria-label={`Remove branch ${i + 1}`}
+                  onClick={() => onChange({ cases: (d.cases || []).filter((_, j) => j !== i) })}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <input
+                className="input"
+                style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                value={c.condition}
+                placeholder="input.amount > 1000"
+                onChange={e => {
+                  const cases = [...(d.cases || [])];
+                  cases[i] = { ...cases[i], condition: e.target.value };
+                  onChange({ cases });
+                }}
+              />
             </div>
           ))}
           <button className="btn btn-ghost btn-sm" style={{ width: '100%' }}
             onClick={() => onChange({ cases: [...(d.cases || []), { condition: '', next: '' }] })}>
-            + Add Case
+            + Add a branch
           </button>
-          <div className="form-group" style={{ marginBottom: 0, marginTop: 8 }}>
-            <label className="form-label">Default (fallback)</label>
-            <input className="input" value={d.default || ''} placeholder="next node id"
-              onChange={e => onChange({ default: e.target.value })} />
+          <div className="form-hint" style={{ marginTop: 8 }}>
+            Anything that matches no branch takes the <strong>Otherwise</strong> output
+            {d.default ? <> — currently <strong>{nodeLabel(nodes, d.default)}</strong>.</> : ', which is not connected yet.'}
           </div>
         </>
       )}
@@ -713,11 +376,6 @@ function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], t
               </>
             )}
           </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">On Error → Node ID (optional)</label>
-            <input className="input" value={d.config?.on_error || ''} placeholder="fallback node id"
-              onChange={e => onChange({ config: { ...(d.config || {}), on_error: e.target.value } })} />
-          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
               <label className="form-label">Timeout (s)</label>
@@ -743,15 +401,8 @@ function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], t
       )}
 
       <div className="divider" />
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Next Node ID</label>
-        <input className="input" value={d.next || ''} placeholder="node id (or use edges)"
-          onChange={e => onChange({ next: e.target.value })} />
-        <div className="form-hint">You can also connect nodes visually using the handles</div>
-      </div>
-
-      {['ai_decision', 'tool_call', 'agent_call', 'transform'].includes(node.type) && (
-        <ExecutionPolicyEditor d={d} onChange={onChange} nodeType={node.type} />
+      {CAN_FAIL_TYPES.has(node.type) && (
+        <ExecutionPolicyEditor d={d} onChange={onChange} nodeType={node.type} nodes={nodes} />
       )}
     </div>
   );
@@ -760,7 +411,13 @@ function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], t
 // Per-node reliability controls: retries, backoff, timeout, continue-on-error.
 // These map directly to the engine's nodePolicy. Network-bound nodes default to
 // 2 retries / 45s timeout server-side; leaving fields blank uses those defaults.
-function ExecutionPolicyEditor({ d, onChange, nodeType }) {
+/** The display name of a node id, for showing what a branch is wired to. */
+function nodeLabel(nodes, id) {
+  const n = (nodes || []).find(x => x.id === id);
+  return n?.data?.name || id;
+}
+
+function ExecutionPolicyEditor({ d, onChange, nodeType, nodes }) {
   const cfg = d.config || {};
   const set = (k, v) => onChange({ config: { ...cfg, [k]: v } });
   const defaultRetries = ['ai_decision', 'tool_call', 'agent_call'].includes(nodeType) ? 2 : 0;
@@ -789,12 +446,29 @@ function ExecutionPolicyEditor({ d, onChange, nodeType }) {
           value={cfg.timeout ?? defaultTimeout}
           onChange={e => set('timeout', parseFloat(e.target.value) || 0)} />
       </div>
+      <div className="form-group" style={{ marginBottom: 0 }}>
+        <label className="form-label">On failure, go to</label>
+        <select className="select" value={cfg.on_error || ''}
+          onChange={e => set('on_error', e.target.value)}>
+          <option value="">Fail the run</option>
+          {(nodes || [])
+            .filter(n => n.id !== d.id && n.type !== 'note')
+            .map(n => <option key={n.id} value={n.id}>{n.data?.name || n.id}</option>)}
+        </select>
+        <div className="form-hint">
+          The step's error output. Drawing a line from the red handle on the canvas
+          sets this too. The failure is available to that branch as <code>error</code>.
+        </div>
+      </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
         <input type="checkbox" checked={!!cfg.continue_on_error}
           onChange={e => set('continue_on_error', e.target.checked)} />
-        Continue workflow if this node fails
+        Carry on down the normal path if this step fails
       </label>
-      <div className="form-hint">Retries apply to transient failures (network, provider). Backoff is linear per attempt.</div>
+      <div className="form-hint">
+        Retries cover transient failures — network blips, a provider rate-limiting you.
+        Delays double each attempt with a little jitter, so replicas do not retry in lockstep.
+      </div>
     </>
   );
 }
@@ -1530,49 +1204,6 @@ const CONNECTOR_SCHEMA = {
 };
 
 // Best-effort mapping from an installed connector record to a schema key.
-function connectorKeyFor(c) {
-  const n = (c.name || '').toLowerCase();
-  if (n.includes('webhook') || n.includes('http')) return 'webhook';
-  if (n.includes('slack')) return 'slack';
-  if (n.includes('telegram')) return 'telegram';
-  if (n.includes('discord')) return 'discord';
-  if (n.includes('github')) return 'github';
-  if (n.includes('jira')) return 'jira';
-  if (n.includes('airtable')) return 'airtable';
-  if (n.includes('notion')) return 'notion';
-  if (n.includes('hubspot')) return 'hubspot';
-  if (n.includes('calendar')) return 'google_calendar';
-  if (n.includes('google') || n.includes('sheet')) return 'google_sheets';
-  if (n.includes('teams')) return 'teams';
-  if (n.includes('stripe')) return 'stripe';
-  if (n.includes('database') || n.includes('sql') || n.includes('postgres')) return 'database';
-  if (n.includes('sendgrid') || n.includes('email')) return 'sendgrid';
-  if (n.includes('twilio') || n.includes('sms')) return 'twilio';
-  if (n.includes('linear')) return 'linear';
-  if (n.includes('trello')) return 'trello';
-  if (n.includes('asana')) return 'asana';
-  if (n.includes('clickup')) return 'clickup';
-  if (n.includes('pagerduty')) return 'pagerduty';
-  if (n.includes('mattermost')) return 'mattermost';
-  if (n.includes('zendesk')) return 'zendesk';
-  if (n.includes('shopify')) return 'shopify';
-  if (n.includes('mailchimp')) return 'mailchimp';
-  if (n.includes('openai') || n.includes('gpt')) return 'openai';
-  if (n.includes('pushover')) return 'pushover';
-  if (n.includes('graphql')) return 'graphql';
-  if (n.includes('gitlab')) return 'gitlab';
-  if (n.includes('monday')) return 'monday';
-  if (n.includes('freshdesk')) return 'freshdesk';
-  if (n.includes('intercom')) return 'intercom';
-  if (n.includes('outlook') || n.includes('graph')) return 'ms_graph';
-  if (n.includes('whatsapp')) return 'whatsapp';
-  if (n.includes('coda')) return 'coda';
-  if (n.includes('close')) return 'close';
-  if (n.includes('calendly')) return 'calendly';
-  if (n.includes('servicenow')) return 'servicenow';
-  return null;
-}
-
 // Resolve the active field list for a connector schema + selected operation.
 function fieldsForOperation(schema, action) {
   if (!schema) return [];
@@ -1694,9 +1325,11 @@ function ToolCallEditor({ d, onChange, connectorOpts, previewCtx }) {
   const cfg = d.config || {};
   // Build the selectable connector list: installed connectors that we can execute,
   // falling back to the full executable set if none are installed yet.
+  // The registry returns each connector's stable slug, which is what the
+  // executor dispatches on — no need to guess it from the display name.
   const installable = (connectorOpts || [])
-    .map(c => ({ key: connectorKeyFor(c), name: c.name }))
-    .filter(c => c.key);
+    .map(c => ({ key: c.slug, name: c.name, ready: c.credentials_ready }))
+    .filter(c => c.key && CONNECTOR_SCHEMA[c.key]);
   const available = installable.length
     ? installable
     : Object.values(CONNECTOR_SCHEMA).map(s => ({ key: s.key, name: s.label }));
@@ -1763,12 +1396,6 @@ function ToolCallEditor({ d, onChange, connectorOpts, previewCtx }) {
         <input className="input" value={cfg.output_path || ''} placeholder="e.g. response.data.0.id"
           onChange={e => setField('output_path', e.target.value)} />
         <div className="form-hint">Extract a sub-value from the response. Downstream: <code style={{ fontFamily: 'var(--font-mono)' }}>{'{{ steps.' + (d.id || 'node') + '.output.value }}'}</code></div>
-      </div>
-
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">On Error → Node ID (optional)</label>
-        <input className="input" value={cfg.on_error || ''} placeholder="fallback node id"
-          onChange={e => setField('on_error', e.target.value)} />
       </div>
 
       {schema && schema.creds && schema.creds.length > 0 && (
