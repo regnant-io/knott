@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/regnant/knott/internal/execution/engine/decide"
 )
 
 // ─── Workflow Definition Types ────────────────────────────────────────────────
@@ -98,6 +100,9 @@ type Executor struct {
 	// It is consulted before environment variables, enabling UI-managed
 	// credentials. Returns (value, true) if a stored credential exists.
 	SecretLookup func(name string) (string, bool)
+	// Decider answers ai_decision nodes when the Python decision service is not
+	// reachable, which is the normal case for a downloaded binary.
+	Decider *decide.Engine
 	// SubRunner starts and observes child runs for sub_workflow nodes. It is nil
 	// in deployments that do not host the run store (the node then fails with a
 	// clear message rather than silently doing nothing).
@@ -269,6 +274,33 @@ func (e *Executor) executeAIDecision(runID string, node *WorkflowStep, ctx map[s
 	// client budget, so give this call a generous timeout and let the resilient
 	// poster retry transient 5xx / network blips with backoff.
 	result, err := e.postJSONResilient(e.Services.AIDecisionURL+"/internal/v1/decisions", payload, 150*time.Second)
+	if err != nil && e.Decider != nil {
+		// The Python decision service is an optional sidecar, and a downloaded
+		// binary usually runs without it. Rather than fail the node, decide
+		// in-process: the built-in engine calls the same providers and falls
+		// back to the same rules, so a workflow behaves the same either way.
+		local, lerr := e.Decider.Decide(decide.Request{
+			RunID: runID, NodeID: node.ID, Task: task, Inputs: resolvedInputs,
+			ModelProfile: modelProfile, ConfidenceThreshold: confidenceThreshold,
+			SystemPrompt: str(payload["system_prompt"]),
+			Instructions: str(payload["instructions"]),
+			MaxTokens:    intOr(payload["max_tokens"], 0),
+			Temperature:  floatPtr(payload["temperature"]),
+		})
+		if lerr == nil {
+			result, err = map[string]any{
+				"output":      local.Output,
+				"confidence":  local.Confidence,
+				"reasoning":   local.Reasoning,
+				"model_id":    local.ModelID,
+				"tokens_used": local.TokensUsed,
+				"latency_ms":  local.LatencyMs,
+				"routing":     local.Routing,
+			}, nil
+		} else {
+			err = fmt.Errorf("%w (built-in engine: %v)", err, lerr)
+		}
+	}
 	if err != nil {
 		// If AI engine is unavailable, check for fallback
 		fallback, _ := config["fallback"].(string)
@@ -2601,6 +2633,26 @@ func (e *Executor) connectorBasic(name, method, target, user, pass string, body 
 		out[k] = v
 	}
 	return out, nil
+}
+
+// intOr reads a JSON number as an int, returning fallback when it is absent.
+func intOr(v any, fallback int) int {
+	if f, ok := v.(float64); ok {
+		return int(f)
+	}
+	if i, ok := v.(int); ok {
+		return i
+	}
+	return fallback
+}
+
+// floatPtr returns a pointer to a JSON number, or nil when absent — the
+// distinction matters: an unset temperature must not become 0.
+func floatPtr(v any) *float64 {
+	if f, ok := v.(float64); ok {
+		return &f
+	}
+	return nil
 }
 
 func envOr(key, fallback string) string {

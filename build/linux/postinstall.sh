@@ -1,4 +1,8 @@
 #!/bin/sh
+
+# Copyright 2026 Regnant
+# SPDX-License-Identifier: Apache-2.0
+
 # Create the unprivileged account the service runs as, and its state directory.
 # The service is not started: KNOTT should not begin listening until an operator
 # has set API_KEYS.

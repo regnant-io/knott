@@ -68,10 +68,7 @@ to run without installing.
 # Docker
 docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/regnant/knott
 
-# Homebrew
-brew install regnant/tap/knott
-
-# From source (Go 1.25+, Node 18+)
+# From source (Go 1.25+, Node 18+ — Python is optional)
 git clone https://github.com/regnant/knott && cd knott
 make ui && make run
 ```
@@ -140,10 +137,16 @@ not retry in lockstep.
 restart resumes where it left off without re-firing a side effect that already
 happened. A distributed lease means exactly one replica executes a given run.
 
-**AI, wherever you want it.** Anthropic Claude, a local Ollama model, or a
-deterministic rule-based simulation. Switch provider and model from the Settings
-page — no restart, no editing files on the server. Set a confidence threshold
-per step and low-confidence decisions escalate to a person automatically.
+**AI, wherever you want it.** Anthropic Claude, a local Ollama model, or
+deterministic rules. The decision engine is compiled into the binary — set
+`ANTHROPIC_API_KEY` or `OLLAMA_BASE_URL` and it calls that provider; set neither
+and it decides by rule, conservatively, escalating anything it cannot clear. A
+provider that goes down does not stop a run: the rules answer, and the audit log
+records that they did. Set a confidence threshold per step and low-confidence
+decisions go to a person automatically.
+
+An optional Python sidecar adds workflow generation from a plain-English prompt.
+KNOTT runs without it and without Python installed at all.
 
 ---
 

@@ -98,6 +98,13 @@ The usual pattern is an **AI Decision** with a confidence threshold, escalating
 to a person below it: the model handles the clear cases, a person handles the
 rest, and every decision of both kinds is recorded.
 
+With no AI provider configured, decisions are made by rule instead — the same
+task specs, deterministic thresholds, and a bias towards escalating anything the
+rules cannot clear. That is also what answers when a configured provider is
+down, so an outage at your model vendor slows a workflow down rather than
+stopping it. The audit log records `simulation` as the model for those, so a
+rule-based decision is never mistaken for a model's judgement.
+
 ---
 
 ## Reusing work

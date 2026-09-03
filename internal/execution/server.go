@@ -4,6 +4,7 @@
 package execution
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -27,6 +28,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/regnant/knott/internal/execution/engine"
+	"github.com/regnant/knott/internal/execution/engine/decide"
 	"github.com/regnant/knott/internal/execution/store"
 	"github.com/regnant/knott/internal/ui"
 )
@@ -1227,6 +1229,51 @@ func directCompleteTask(w http.ResponseWriter, r *http.Request) {
 // The console renders one card per connector from this, with its credential
 // fields inline — so an operator never has to match a connector against a
 // separate wall of secret names to work out what is missing.
+// taskSpecsHandler proxies to the AI service, falling back to the built-in
+// task catalogue when it does not answer.
+func taskSpecsHandler(proxy http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rec := &captureWriter{header: http.Header{}}
+		proxy.ServeHTTP(rec, r)
+		if rec.status > 0 && rec.status < 400 && rec.body.Len() > 0 {
+			for k, vs := range rec.header {
+				for _, v := range vs {
+					w.Header().Add(k, v)
+				}
+			}
+			w.WriteHeader(rec.status)
+			w.Write(rec.body.Bytes())
+			return
+		}
+		specs := decide.Specs()
+		out := make([]map[string]any, 0, len(specs))
+		for _, s := range specs {
+			out = append(out, map[string]any{
+				"id": s.ID, "name": s.Name, "description": s.Description,
+			})
+		}
+		writeJSON(w, 200, map[string]any{"data": out, "total": len(out), "source": "built-in"})
+	}
+}
+
+// captureWriter buffers a handler's response so it can be discarded in favour of
+// a fallback. Responses here are a short list of task descriptions, so holding
+// one in memory costs nothing.
+type captureWriter struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+}
+
+func (c *captureWriter) Header() http.Header { return c.header }
+func (c *captureWriter) WriteHeader(s int)   { c.status = s }
+func (c *captureWriter) Write(b []byte) (int, error) {
+	if c.status == 0 {
+		c.status = 200
+	}
+	return c.body.Write(b)
+}
+
 func listConnectors(w http.ResponseWriter, r *http.Request) {
 	conns, err := db.ListConnectors()
 	if err != nil {
@@ -1912,6 +1959,19 @@ func Run() error {
 	executor.SignCallback = callbackSignature
 	// Sub-workflow nodes start child runs through the run store directly.
 	executor.SubRunner = subRunner{}
+	// Decide in-process when the optional Python service is not running.
+	executor.Decider = decide.New(decide.Config{
+		AnthropicKey:  os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicBase: os.Getenv("ANTHROPIC_BASE_URL"),
+		OllamaBaseURL: os.Getenv("OLLAMA_BASE_URL"),
+		OllamaModel:   getEnv("OLLAMA_MODEL", "llama3.1:latest"),
+		Provider:      os.Getenv("AI_PROVIDER"),
+	})
+	if executor.Decider.Available() {
+		log.Printf("[Engine] Built-in decision engine ready (model-backed)")
+	} else {
+		log.Printf("[Engine] Built-in decision engine ready (rule-based — set ANTHROPIC_API_KEY or OLLAMA_BASE_URL for model-backed decisions)")
+	}
 
 	// Resume any runs that were mid-flight before a restart so executions are durable.
 	go func() {
@@ -2032,8 +2092,12 @@ func Run() error {
 		r.Post("/task-complete/{run_id}/{node_id}", taskCompleteCallback)
 		r.Post("/tasks/{task_id}/complete", directCompleteTask)
 		// Proxy AI-engine endpoints the SPA needs (task specs + health for Settings).
-		r.Handle("/task-specs", aiProxy)
-		r.Handle("/task-specs/*", aiProxy)
+		// Task specs come from the AI service when it is running, and from the
+		// built-in catalogue when it is not — otherwise a binary without Python
+		// offers the designer a stale hard-coded list that no longer matches
+		// what the engine can actually decide.
+		r.Handle("/task-specs", taskSpecsHandler(aiProxy))
+		r.Handle("/task-specs/*", taskSpecsHandler(aiProxy))
 		r.Handle("/health", aiProxy)
 		// Runtime AI provider configuration (Settings page): get/update config,
 		// test connectivity, and list locally-installed Ollama models.

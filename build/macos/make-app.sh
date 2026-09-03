@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Copyright 2026 Regnant
+# SPDX-License-Identifier: Apache-2.0
+
 #
 # Assemble KNOTT.app and, when hdiutil is available, a .dmg to ship it in.
 #
