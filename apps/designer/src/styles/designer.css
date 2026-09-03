@@ -434,3 +434,55 @@ kbd {
   margin-bottom: 6px;
 }
 .branch-editor-head .badge { margin-left: auto; }
+
+/* ── Run overlay ────────────────────────────────────────────────────────────*/
+.run-strip {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: calc(100% - 40px);
+  padding: 5px 6px 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-active);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  font-size: 11.5px;
+}
+.run-strip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+  animation: knott-pulse 1.2s ease-in-out infinite;
+}
+.run-strip.is-completed .run-strip-dot { background: var(--green); animation: none; }
+.run-strip.is-failed .run-strip-dot    { background: var(--red);   animation: none; }
+.run-strip.is-cancelled .run-strip-dot { background: var(--text-muted); animation: none; }
+.run-strip.is-failed { border-color: var(--red); }
+
+.run-strip-status {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+.run-strip-meta { color: var(--text-muted); white-space: nowrap; }
+.run-strip-error {
+  color: var(--red);
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-strip-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.btn.is-on { color: var(--accent); background: var(--accent-dim); }

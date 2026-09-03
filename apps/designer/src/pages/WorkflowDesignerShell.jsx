@@ -10,6 +10,7 @@ import ReactFlow, {
 import {
   Save, Play, CheckCircle, Code2, ArrowLeft, AlertTriangle, Plus,
   Undo2, Redo2, LayoutGrid, Keyboard, Copy, Trash2, X, Search,
+  Activity, StickyNote,
 } from 'lucide-react';
 import {
   workflows as wfApi, runs as runsApi, connectors as connectorsApi,
@@ -22,6 +23,7 @@ import {
 import NodePicker from '../designer/NodePicker.jsx';
 import { autoLayout, positionAfter } from '../designer/autoLayout.js';
 import { useGraphHistory } from '../designer/useGraphHistory.js';
+import { useRunOverlay } from '../designer/useRunOverlay.js';
 import { useToast } from '../components/Layout.jsx';
 import { sampleContext } from '../lib/expr.js';
 
@@ -156,6 +158,8 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
   const [testInput, setTestInput] = useState('{\n  \n}');
   const [picker, setPicker] = useState(null); // { from, handle } | { at: {x,y} } | null
   const [paletteQuery, setPaletteQuery] = useState('');
+
+  const overlay = useRunOverlay(workflowId);
 
   const canvasRef = useRef(null);
   const clipboard = useRef(null);
@@ -305,8 +309,12 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
   const decorated = useMemo(() => nodes.map(n => ({
     ...n,
     selected: n.id === selectedId,
-    data: { ...n.data, __onAppend: openPickerFor },
-  })), [nodes, selectedId, openPickerFor]);
+    data: {
+      ...n.data,
+      __onAppend: openPickerFor,
+      __run: overlay.byNode?.[n.id],
+    },
+  })), [nodes, selectedId, openPickerFor, overlay.byNode]);
 
   const onDrop = useCallback(e => {
     e.preventDefault();
@@ -511,8 +519,9 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
     if (!id) { toast('Save the workflow before running it', 'warning'); return; }
     try {
       const r = await runsApi.create({ workflow_id: id, input_data: inputData });
-      toast('Run started', 'success', `ID ${r.id.slice(0, 8)}…`);
+      toast('Run started', 'success', 'Watch it on the canvas');
       setShowRunModal(false);
+      overlay.watch(r.id);
     } catch (e) {
       toast('Could not start the run', 'error', e.message);
     }
@@ -606,6 +615,17 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
             <AlertTriangle size={13} /> {validErrs.length} problem{validErrs.length === 1 ? '' : 's'}
           </button>
         )}
+        <button
+          className={`btn btn-ghost btn-icon btn-sm ${overlay.active ? 'is-on' : ''}`}
+          onClick={async () => {
+            if (overlay.active) { overlay.stop(); return; }
+            if (!(await overlay.watchLatest())) toast('This workflow has not run yet', 'info');
+          }}
+          title={overlay.active ? 'Stop showing the run' : 'Show the last run on the canvas'}
+          aria-label="Show the last run"
+        >
+          <Activity size={14} />
+        </button>
         <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowShortcuts(true)}
           title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
           <Keyboard size={14} />
@@ -670,6 +690,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
           </div>
         ) : (
           <div className="designer-canvas" ref={canvasRef}>
+            {overlay.active && <RunStrip overlay={overlay} nodes={nodes} />}
             <ReactFlow
               nodes={decorated}
               edges={edges}
@@ -805,6 +826,33 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** A summary of the run being shown, and a way to stop showing it. */
+function RunStrip({ overlay, nodes }) {
+  const run = overlay.run;
+  const states = overlay.byNode || {};
+  const failed = Object.entries(states).find(([, s]) => s.status === 'failed');
+  const failedName = failed && (nodes.find(n => n.id === failed[0])?.data?.name || failed[0]);
+  const done = Object.values(states).filter(s => s.status === 'done').length;
+
+  return (
+    <div className={`run-strip ${run?.status ? `is-${run.status.toLowerCase()}` : ''}`}>
+      <span className="run-strip-dot" />
+      <span className="run-strip-status">{run?.status || 'Loading…'}</span>
+      {run?.outcome && <span className="badge badge-muted">{run.outcome}</span>}
+      <span className="run-strip-meta">
+        {done} step{done === 1 ? '' : 's'} completed
+        {failed && <> · failed at <strong>{failedName}</strong></>}
+      </span>
+      {failed && <span className="run-strip-error" title={failed[1].error}>{failed[1].error}</span>}
+      <div style={{ flex: 1 }} />
+      {run?.id && <code className="run-strip-id">{run.id.slice(0, 8)}</code>}
+      <button className="btn btn-ghost btn-icon btn-sm" onClick={overlay.stop} aria-label="Stop showing this run">
+        <X size={13} />
+      </button>
     </div>
   );
 }

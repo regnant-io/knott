@@ -239,7 +239,7 @@ function CreateAgentModal({ onClose, onCreated }) {
 }
 
 // ─── Settings.jsx ─────────────────────────────────────────────────────────────
-import { Settings as SettingsIcon, Key, Server, Info, Cpu, CheckCircle2, XCircle as XCircleIcon, RefreshCw as Refresh, Sun, Moon, Monitor, Globe } from 'lucide-react';
+import { Settings as SettingsIcon, Key, Server, Info, Cpu, CheckCircle2, XCircle as XCircleIcon, RefreshCw as Refresh, Sun, Moon, Monitor, Globe, Cloud } from 'lucide-react';
 import { stats as statsApi, aiConfig as aiConfigApi } from '../lib/api.js';
 
 export function Settings({ theme = 'system', onSetTheme }) {
