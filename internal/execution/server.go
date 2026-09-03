@@ -1,4 +1,4 @@
-package main
+package execution
 
 import (
 	"crypto/hmac"
@@ -22,8 +22,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/kw-sagittarii/execution-engine/engine"
-	"github.com/kw-sagittarii/execution-engine/store"
+	"github.com/regnant/knott/internal/execution/engine"
+	"github.com/regnant/knott/internal/execution/store"
+	"github.com/regnant/knott/internal/ui"
 )
 
 var (
@@ -1759,7 +1760,9 @@ func newProxy(target string) http.Handler {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-func main() {
+// Run starts the Execution Engine (orchestrator, API front door and UI host)
+// and blocks until it stops.
+func Run() error {
 	port := getEnv2("ENGINE_PORT", "PORT", "8002")
 	dbPath := getEnv2("ENGINE_DB", "DB_PATH", filepath.Join("..", "..", "data", "runs.db"))
 
@@ -1801,7 +1804,7 @@ func main() {
 	var err error
 	db, err = store.NewDB(dbPath)
 	if err != nil {
-		log.Fatalf("failed to init db: %v", err)
+		return fmt.Errorf("execution-engine: open database: %w", err)
 	}
 	defer db.Close()
 
@@ -1957,19 +1960,14 @@ func main() {
 	// (webhooks, schedulers, other apps) rather than only manual UI runs.
 	r.Post("/api/v1/hooks/{workflow_id}", triggerWebhook)
 
-	// Serve built React frontend (for production)
-	frontendPath := getEnv("FRONTEND_PATH", filepath.Join("..", "..", "apps", "designer", "dist"))
-	if _, err := os.Stat(frontendPath); err == nil {
-		fs := http.FileServer(http.Dir(frontendPath))
-		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
-			// SPA fallback — serve index.html for non-asset routes
-			if _, err := os.Stat(filepath.Join(frontendPath, req.URL.Path)); os.IsNotExist(err) {
-				http.ServeFile(w, req, filepath.Join(frontendPath, "index.html"))
-				return
-			}
-			fs.ServeHTTP(w, req)
-		})
-		log.Printf("[Engine] Serving frontend from %s", frontendPath)
+	// Serve the web console. The build is compiled into the binary, so a release
+	// is one self-contained executable; FRONTEND_PATH still overrides it with a
+	// directory on disk for fast local iteration.
+	if h, source := ui.Handler(getEnv("FRONTEND_PATH", "")); h != nil {
+		r.Get("/*", h.ServeHTTP)
+		log.Printf("[Engine] Serving console (%s)", source)
+	} else {
+		log.Printf("[Engine] ⚠  No web console in this build — API only")
 	}
 
 	log.Printf("╔══════════════════════════════════════╗")
@@ -1981,7 +1979,7 @@ func main() {
 	log.Printf("╚══════════════════════════════════════╝")
 	log.Printf("[Engine] Instance %s — run lease TTL %s (horizontal scaling ready)", instanceID, leaseTTL)
 
-	log.Fatal(http.ListenAndServe(getEnv("ENGINE_BIND_HOST", "")+":"+port, r))
+	return http.ListenAndServe(getEnv("ENGINE_BIND_HOST", "")+":"+port, r)
 }
 
 var _ = fmt.Sprintf

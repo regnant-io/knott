@@ -1,4 +1,4 @@
-package main
+package agents
 
 import (
 	"database/sql"
@@ -253,13 +253,14 @@ func getEnv2(primary, secondary, fallback string) string {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-func main() {
+// Run starts the Agent Integration service and blocks until it stops.
+func Run() error {
 	port := getEnv2("AGENT_PORT", "PORT", "8005")
 	dbPath := getEnv2("AGENT_DB", "DB_PATH", filepath.Join("..", "..", "data", "agents.db"))
 	os.MkdirAll(filepath.Dir(dbPath), 0755)
 
 	if err := initDB(dbPath); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("agent-integration: open database: %w", err)
 	}
 	seedAgents()
 
@@ -288,7 +289,7 @@ func main() {
 	log.Printf("║   Port: %-5s                        ║", port)
 	log.Printf("╚══════════════════════════════════════╝")
 
-	log.Fatal(http.ListenAndServe(getEnv("BIND_HOST", "")+":"+port, r))
+	return http.ListenAndServe(getEnv("AGENT_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))+":"+port, r)
 }
 
 var _ = fmt.Sprintf

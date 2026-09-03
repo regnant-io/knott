@@ -1,4 +1,4 @@
-package main
+package execution
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kw-sagittarii/execution-engine/engine"
-	"github.com/kw-sagittarii/execution-engine/store"
+	"github.com/regnant/knott/internal/execution/engine"
+	"github.com/regnant/knott/internal/execution/store"
 )
 
 // ─── Trigger reconciliation ────────────────────────────────────────────────────

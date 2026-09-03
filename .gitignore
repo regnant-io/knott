@@ -30,3 +30,8 @@ __pycache__/
 Thumbs.db
 *.swp
 .idea/
+
+# ─── Embedded console build (produced by `make ui`) ───────────────────────────
+/internal/ui/dist/assets/
+/internal/ui/dist/index.html
+!/internal/ui/dist/

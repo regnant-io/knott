@@ -1,4 +1,4 @@
-package main
+package humantask
 
 import (
 	"bytes"
@@ -469,15 +469,16 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-func main() {
+// Run starts the Human Task service and blocks until it stops.
+func Run() error {
 	port := getEnv2("TASK_PORT", "PORT", "8004")
 	dbPath := getEnv2("TASK_DB", "DB_PATH", filepath.Join("..", "..", "data", "tasks.db"))
 
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		log.Fatalf("failed to create data dir: %v", err)
+		return fmt.Errorf("human-task: create data dir: %w", err)
 	}
 	if err := initDB(dbPath); err != nil {
-		log.Fatalf("failed to init db: %v", err)
+		return fmt.Errorf("human-task: open database: %w", err)
 	}
 
 	// SLA enforcement: flag + notify overdue tasks.
@@ -509,7 +510,7 @@ func main() {
 	log.Printf("║   Port: %-5s  DB: %-16s  ║", port, filepath.Base(dbPath))
 	log.Printf("╚══════════════════════════════════════╝")
 
-	log.Fatal(http.ListenAndServe(getEnv("BIND_HOST", "")+":"+port, r))
+	return http.ListenAndServe(getEnv("HUMAN_TASK_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))+":"+port, r)
 }
 
 func getEnv(key, fallback string) string {

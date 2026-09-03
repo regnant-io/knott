@@ -1,4 +1,4 @@
-module github.com/kw-sagittarii/execution-engine
+module github.com/regnant/knott
 
 go 1.25.0
 

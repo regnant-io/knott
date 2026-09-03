@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kw-sagittarii/workflow-registry/store"
+	"github.com/regnant/knott/internal/registry/store"
 )
 
 type Handler struct {

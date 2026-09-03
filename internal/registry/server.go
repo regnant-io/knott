@@ -1,4 +1,4 @@
-package main
+package registry
 
 import (
 	"encoding/json"
@@ -11,21 +11,24 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/kw-sagittarii/workflow-registry/handlers"
-	"github.com/kw-sagittarii/workflow-registry/store"
+	"github.com/regnant/knott/internal/registry/handlers"
+	"github.com/regnant/knott/internal/registry/store"
 )
 
-func main() {
+// Run starts the Workflow Registry service and blocks until it stops.
+// It is called both by the standalone cmd/knott-registry binary and by the
+// all-in-one knott binary, which runs every service in a single process.
+func Run() error {
 	port := getEnv2("REGISTRY_PORT", "PORT", "8001")
 	dbPath := getEnv2("REGISTRY_DB", "DB_PATH", filepath.Join("..", "..", "data", "workflows.db"))
 
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		log.Fatalf("failed to create data dir: %v", err)
+		return fmt.Errorf("registry: create data dir: %w", err)
 	}
 
 	db, err := store.NewDB(dbPath)
 	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
+		return fmt.Errorf("registry: open database: %w", err)
 	}
 	defer db.Close()
 
@@ -64,10 +67,8 @@ func main() {
 	log.Printf("║   DB:   %-28s ║", dbPath)
 	log.Printf("╚══════════════════════════════════════╝")
 
-	bindHost := getEnv("BIND_HOST", "")
-	if err := http.ListenAndServe(bindHost+":"+port, r); err != nil {
-		log.Fatal(err)
-	}
+	bindHost := getEnv("REGISTRY_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))
+	return http.ListenAndServe(bindHost+":"+port, r)
 }
 
 func healthHandler(service, port string) http.HandlerFunc {
@@ -101,6 +102,3 @@ func getEnv2(primary, secondary, fallback string) string {
 	}
 	return fallback
 }
-
-// Ensure the module path is correctly imported
-var _ = fmt.Sprintf
