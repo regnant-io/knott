@@ -216,33 +216,6 @@ code, pre, .mono {
   margin-bottom: 6px;
 }
 
-.brand-star {
-  width: 32px;
-  height: 32px;
-  background: var(--brand-primary);
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: white;
-  flex-shrink: 0;
-}
-
-.brand-name {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-}
-
-.brand-sub {
-  font-size: 10px;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin-left: 42px;
-}
 
 .sidebar-nav {
   flex: 1;
@@ -1498,7 +1471,7 @@ tbody tr:last-child td {
     min-width: 60px;
   }
   
-  .brand-name, .brand-sub, .nav-section-label {
+  .nav-section-label {
     display: none;
   }
   
@@ -1917,13 +1890,6 @@ table td, table th { border-color: var(--border-secondary); }
 /* ── Sidebar brand — refined mark ───────────────────────────────────────────*/
 .sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border-secondary); }
 .sidebar-brand { border-bottom: 1px solid var(--border-secondary); }
-.brand-star {
-  background: linear-gradient(135deg, var(--brand-primary), var(--violet));
-  border-radius: 8px;
-  font-size: 17px;
-  box-shadow: var(--shadow-sm);
-}
-.brand-name { font-weight: 700; letter-spacing: -0.02em; }
 .nav-section-label { font-size: 10px; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
 .nav-badge { background: var(--brand-primary); color: #fff; border-radius: 999px; font-weight: 600; }
 
@@ -1946,7 +1912,7 @@ table td, table th { border-color: var(--border-secondary); }
 /* ── Responsiveness — graceful down to tablet/phone ─────────────────────────*/
 @media (max-width: 1024px) {
   .sidebar { width: 64px; min-width: 64px; }
-  .brand-name, .brand-sub, .nav-section-label { display: none; }
+  .nav-section-label { display: none; }
   .nav-item span:not(.nav-badge) { display: none; }
   .nav-item { justify-content: center; }
 }
@@ -1984,10 +1950,6 @@ table td, table th { border-color: var(--border-secondary); }
     --amber-dim: rgba(45,212,191,0.15);
   }
 }
-
-/* Brand mark — calm teal→emerald gradient instead of indigo/violet. */
-.brand-star { background: linear-gradient(135deg, #0d9488, #0ea5a0) !important; }
-[data-theme="dark"] .brand-star { background: linear-gradient(135deg, #14b8a6, #2dd4bf) !important; }
 
 /* Primary buttons / focus rings follow the teal accent. */
 .btn-primary { background: var(--accent); border-color: var(--accent); }

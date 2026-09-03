@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { KnottMark } from '../components/Brand.jsx';
 import { Lock, LogIn } from 'lucide-react';
 
 // Lightweight token gate for single-tenant self-hosted deployments. When the
@@ -32,7 +33,7 @@ export default function Login({ onAuthed }) {
     }}>
       <form onSubmit={submit} className="card" style={{ width: 380, padding: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div className="brand-star" style={{ width: 40, height: 40, fontSize: 20 }}>⊗</div>
+          <KnottMark size={40} style={{ color: 'var(--brand-primary)' }} title="KNOTT" />
           <div>
             <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.01em' }}>KNOTT</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sovereign Workflow Platform</div>

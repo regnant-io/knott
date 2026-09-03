@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { KnottLogo } from './Brand.jsx';
 import {
   CheckCircle, XCircle, Info, AlertTriangle, X, Sun, Moon, Monitor, LogOut,
 } from 'lucide-react';
@@ -108,11 +109,7 @@ export function Layout({ children, page, onNav, pendingTaskCount = 0, theme, onT
     <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
       <nav className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-logo">
-            <div className="brand-star">⊗</div>
-            <span className="brand-name">KNOTT</span>
-          </div>
-          <div className="brand-sub">Sovereign Workflow Platform</div>
+          <KnottLogo size={26} subtitle="Sovereign Workflow Platform" />
         </div>
 
         <div className="sidebar-nav">

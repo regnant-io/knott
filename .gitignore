@@ -35,3 +35,6 @@ Thumbs.db
 /internal/ui/dist/assets/
 /internal/ui/dist/index.html
 !/internal/ui/dist/
+
+# ─── Local scratch ────────────────────────────────────────────────────────────
+/.scratch/
