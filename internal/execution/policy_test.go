@@ -108,3 +108,34 @@ func TestNodeExists(t *testing.T) {
 		t.Error("a node not in the definition must not be reported as present")
 	}
 }
+
+func TestConcurrencyCeilingIsBounded(t *testing.T) {
+	// A burst of webhooks must queue, not spawn a goroutine per run until the
+	// process runs out of memory.
+	n := MaxConcurrentRuns()
+	if n <= 0 {
+		t.Fatalf("the ceiling must be positive, got %d", n)
+	}
+	if n > 512 {
+		t.Errorf("the default ceiling is too high to bound memory: %d", n)
+	}
+	if QueuedRuns() != 0 {
+		t.Errorf("no runs are in flight, so nothing should be queued; got %d", QueuedRuns())
+	}
+}
+
+func TestResolveMaxConcurrentRunsHonoursTheEnvironment(t *testing.T) {
+	t.Setenv("MAX_CONCURRENT_RUNS", "7")
+	if got := resolveMaxConcurrentRuns(); got != 7 {
+		t.Errorf("got %d want 7", got)
+	}
+	// A nonsense value falls back rather than disabling execution entirely.
+	t.Setenv("MAX_CONCURRENT_RUNS", "not-a-number")
+	if got := resolveMaxConcurrentRuns(); got < 32 {
+		t.Errorf("an unparseable value should fall back to the default, got %d", got)
+	}
+	t.Setenv("MAX_CONCURRENT_RUNS", "0")
+	if got := resolveMaxConcurrentRuns(); got < 32 {
+		t.Errorf("zero would stall every run; expected the default, got %d", got)
+	}
+}

@@ -971,6 +971,14 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 		wl(fmt.Sprintf("knott_connectors_need_credentials %d", needs))
 	}
 
+	wl("# HELP knott_runs_queued Runs waiting for an execution slot.")
+	wl("# TYPE knott_runs_queued gauge")
+	wl(fmt.Sprintf("knott_runs_queued %d", QueuedRuns()))
+
+	wl("# HELP knott_runs_max_concurrent Configured ceiling on simultaneous runs.")
+	wl("# TYPE knott_runs_max_concurrent gauge")
+	wl(fmt.Sprintf("knott_runs_max_concurrent %d", MaxConcurrentRuns()))
+
 	wl("# HELP knott_build_info Static build/instance info.")
 	wl("# TYPE knott_build_info gauge")
 	wl(fmt.Sprintf("knott_build_info{instance=%q} 1", instanceID))
@@ -2131,7 +2139,7 @@ func Run() error {
 	log.Printf("║   AI:       %-28s ║", aiDecisionURL)
 	log.Printf("║   Tasks:    %-28s ║", humanTaskURL)
 	log.Printf("╚══════════════════════════════════════╝")
-	log.Printf("[Engine] Instance %s — run lease TTL %s (horizontal scaling ready)", instanceID, leaseTTL)
+	log.Printf("[Engine] Instance %s — run lease TTL %s, up to %d runs at once", instanceID, leaseTTL, MaxConcurrentRuns())
 
 	return http.ListenAndServe(getEnv("ENGINE_BIND_HOST", "")+":"+port, r)
 }

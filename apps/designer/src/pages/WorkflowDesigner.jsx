@@ -41,6 +41,31 @@ function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], t
   ];
   const specs = taskSpecOpts.length ? taskSpecOpts : FALLBACK_SPECS;
 
+  // A note is an annotation, not a step: it has no id to reference, no routing
+  // and no reliability settings, so it gets its own panel rather than the
+  // generic one with every field disabled.
+  if (node.type === 'note') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">Note</label>
+          <textarea
+            className="textarea"
+            rows={8}
+            autoFocus
+            value={d.notes || ''}
+            placeholder="Why this part of the workflow works the way it does — the thing the next person will wonder about."
+            onChange={e => onChange({ notes: e.target.value })}
+          />
+          <div className="form-hint">
+            Notes live on the canvas only. They are never executed and never reach
+            a connector.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="form-group" style={{ marginBottom: 0 }}>

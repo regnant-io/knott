@@ -264,6 +264,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
       },
     };
     if (type === 'condition') node.data.cases = [{ condition: '', next: '' }];
+    if (type === 'note') node.data.notes = '';
 
     change(() => {
       setNodes(ns => [...ns, node]);
