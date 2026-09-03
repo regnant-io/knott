@@ -7,7 +7,8 @@ import Runs from './pages/Runs.jsx';
 import Schedules from './pages/Schedules.jsx';
 import Observability from './pages/Observability.jsx';
 import TaskInbox from './pages/TaskInbox.jsx';
-import { AIDecisions, Agents, Connectors, Settings } from './pages/secondary.jsx';
+import { AIDecisions, Agents, Settings } from './pages/secondary.jsx';
+import Connectors from './pages/Connectors.jsx';
 import Login from './pages/Login.jsx';
 import { tasks as tasksApi, stats as statsApi, checkAuth } from './lib/api.js';
 

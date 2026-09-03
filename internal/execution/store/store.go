@@ -57,7 +57,10 @@ type AIDecision struct {
 }
 
 type Connector struct {
-	ID             string          `json:"id"`
+	ID string `json:"id"`
+	// Slug is the stable identifier a workflow definition stores and the
+	// executor dispatches on. Renaming a connector never changes it.
+	Slug           string          `json:"slug"`
 	Name           string          `json:"name"`
 	Category       string          `json:"category"`
 	Description    string          `json:"description"`
@@ -146,6 +149,7 @@ func (s *DB) migrate() error {
 
 		CREATE TABLE IF NOT EXISTS connectors (
 			id TEXT PRIMARY KEY,
+			slug TEXT NOT NULL DEFAULT '',
 			name TEXT NOT NULL,
 			category TEXT,
 			description TEXT DEFAULT '',
@@ -192,95 +196,70 @@ func (s *DB) migrate() error {
 	return s.migrateTriggers()
 }
 
+// SeedConnectors reconciles the connectors table with the shipped catalog.
+//
+// It is additive and idempotent: new catalog entries are inserted, presentation
+// metadata (name, description, category, icon, credential keys) is refreshed so
+// upgrades correct copy and add newly required secrets, and the operator's own
+// state — whether a connector is enabled — is never touched. Rows from older
+// versions are matched by name and backfilled with their slug.
 func (s *DB) SeedConnectors() {
-	// Check if connectors already exist
-	var count int
-	s.db.QueryRow("SELECT COUNT(*) FROM connectors").Scan(&count)
-	if count > 0 {
-		// Already seeded once — but additively insert any connectors added in
-		// later versions so upgrades pick up new integrations without wiping the
-		// operator's installed/credential state.
-		s.upsertMissingConnectors()
-		return
-	}
-	
-	// Seed AVAILABLE connectors (not installed by default in production)
-	var n int
-	s.db.QueryRow("SELECT COUNT(*) FROM connectors").Scan(&n)
-	if n > 0 {
-		return
-	}
-	for _, c := range connectorCatalog() {
-		s.db.Exec(`INSERT INTO connectors (id,name,category,description,icon,installed,credential_keys) VALUES (?,?,?,?,?,?,?)`,
-			uuid.New().String(), c.name, c.cat, c.desc, c.icon, c.installed, c.creds)
-	}
-}
+	catalog := Catalog()
 
-type connectorSeed struct {
-	name, cat, desc, icon string
-	installed             int
-	creds                 string
-}
-
-// connectorCatalog is the full list of connectors KNOTT ships with. It is the
-// single source of truth for both first-run seeding and additive upgrades.
-func connectorCatalog() []connectorSeed {
-	return []connectorSeed{
-		{"Salesforce CRM", "CRM", "Connect to Salesforce for contact and opportunity management", "cloud", 0, `["client_id","client_secret","instance_url"]`},
-		{"SendGrid Email", "Communication", "Send transactional emails via SendGrid", "mail", 1, `["SENDGRID_API_KEY"]`},
-		{"Slack", "Communication", "Post messages and notifications to Slack channels", "message-square", 1, `["SLACK_WEBHOOK_URL","SLACK_BOT_TOKEN"]`},
-		{"Telegram", "Communication", "Send messages and alerts via a Telegram bot", "message-square", 1, `["TELEGRAM_BOT_TOKEN"]`},
-		{"Discord", "Communication", "Post messages to Discord via incoming webhook", "message-square", 1, `["DISCORD_WEBHOOK_URL"]`},
-		{"GitHub", "Developer", "Create issues, comment, and close issues on GitHub", "layers", 1, `["GITHUB_TOKEN"]`},
-		{"Jira", "Ticketing", "Create and comment on Jira issues", "layers", 1, `["JIRA_EMAIL","JIRA_API_TOKEN","JIRA_BASE_URL"]`},
-		{"Airtable", "Database", "Create, update, and list records in Airtable", "database", 1, `["AIRTABLE_TOKEN"]`},
-		{"Notion", "Productivity", "Create pages in Notion databases", "layers", 1, `["NOTION_TOKEN"]`},
-		{"HubSpot CRM", "CRM", "Create contacts and deals in HubSpot", "users", 1, `["HUBSPOT_TOKEN"]`},
-		{"Google Sheets", "Productivity", "Append and read rows in Google Sheets", "layers", 1, `["GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REFRESH_TOKEN"]`},
-		{"Google Calendar", "Productivity", "Create calendar events", "layers", 1, `["GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REFRESH_TOKEN"]`},
-		{"Microsoft Teams", "Communication", "Post messages to Teams via incoming webhook", "message-square", 1, `["TEAMS_WEBHOOK_URL"]`},
-		{"Database (SQL)", "Database", "Run SQL queries against SQLite/Postgres/MySQL", "database", 1, `["DATABASE_DSN"]`},
-		{"AWS S3", "Storage", "Read and write files to Amazon S3", "archive", 0, `["access_key_id","secret_access_key","region","bucket"]`},
-		{"Stripe", "Payment", "Create customers and charges via Stripe", "credit-card", 1, `["STRIPE_SECRET_KEY"]`},
-		{"Twilio SMS", "Communication", "Send SMS notifications via Twilio", "smartphone", 1, `["TWILIO_ACCOUNT_SID","TWILIO_AUTH_TOKEN","TWILIO_FROM_NUMBER"]`},
-		{"Linear", "Developer", "Create issues in Linear", "layers", 1, `["LINEAR_API_KEY"]`},
-		{"Trello", "Productivity", "Create cards on Trello boards", "layers", 1, `["TRELLO_KEY","TRELLO_TOKEN"]`},
-		{"Asana", "Productivity", "Create tasks in Asana projects", "layers", 1, `["ASANA_TOKEN"]`},
-		{"ClickUp", "Productivity", "Create tasks in ClickUp lists", "layers", 1, `["CLICKUP_TOKEN"]`},
-		{"PagerDuty", "Operations", "Trigger incidents via the Events API", "zap", 1, `["PAGERDUTY_ROUTING_KEY"]`},
-		{"Mattermost", "Communication", "Post messages via Mattermost webhook", "message-square", 1, `["MATTERMOST_WEBHOOK_URL"]`},
-		{"Zendesk", "Ticketing", "Create support tickets in Zendesk", "layers", 1, `["ZENDESK_EMAIL","ZENDESK_API_TOKEN","ZENDESK_BASE_URL"]`},
-		{"Shopify", "E-commerce", "List products and create customers in Shopify", "credit-card", 1, `["SHOPIFY_ACCESS_TOKEN","SHOPIFY_STORE_URL"]`},
-		{"Mailchimp", "Marketing", "Add members to a Mailchimp audience", "mail", 1, `["MAILCHIMP_API_KEY"]`},
-		{"OpenAI", "AI", "Generate text via OpenAI chat completions", "cpu", 1, `["OPENAI_API_KEY"]`},
-		{"Pushover", "Communication", "Send push notifications via Pushover", "smartphone", 1, `["PUSHOVER_TOKEN","PUSHOVER_USER"]`},
-		{"GraphQL", "Custom", "Call any GraphQL API endpoint", "zap", 1, `[]`},
-		{"GitLab", "Developer", "Create issues in GitLab", "layers", 1, `["GITLAB_TOKEN"]`},
-		{"Monday.com", "Productivity", "Create items on Monday boards", "layers", 1, `["MONDAY_TOKEN"]`},
-		{"Freshdesk", "Ticketing", "Create support tickets in Freshdesk", "layers", 1, `["FRESHDESK_API_KEY","FRESHDESK_BASE_URL"]`},
-		{"Intercom", "CRM", "Create contacts in Intercom", "users", 1, `["INTERCOM_TOKEN"]`},
-		{"Microsoft Outlook", "Communication", "Send email via Microsoft Graph", "mail", 1, `["MS_GRAPH_TOKEN"]`},
-		{"WhatsApp", "Communication", "Send WhatsApp messages via the Cloud API", "message-square", 1, `["WHATSAPP_TOKEN","WHATSAPP_PHONE_ID"]`},
-		{"Coda", "Productivity", "Insert rows into Coda tables", "database", 1, `["CODA_TOKEN"]`},
-		{"Close CRM", "CRM", "Create leads in Close", "users", 1, `["CLOSE_API_KEY"]`},
-		{"Calendly", "Productivity", "Read Calendly account data", "layers", 1, `["CALENDLY_TOKEN"]`},
-		{"ServiceNow", "Operations", "Create incidents in ServiceNow", "zap", 1, `["SERVICENOW_USER","SERVICENOW_PASSWORD","SERVICENOW_BASE_URL"]`},
-		{"Webhook (HTTP)", "Custom", "Call any HTTP endpoint — REST, GraphQL, or webhooks", "zap", 1, `[]`},
+	// Backfill slugs on rows written before the column existed.
+	for _, e := range catalog {
+		s.db.Exec(`UPDATE connectors SET slug=? WHERE slug='' AND lower(name)=lower(?)`, e.Slug, e.Name)
 	}
-}
+	// Older releases shipped a handful of connectors under different names, and
+	// two that were never executable. Map or drop them rather than leaving rows
+	// no workflow can dispatch to.
+	for name, slug := range map[string]string{
+		"Database (SQL)":    "database",
+		"Webhook (HTTP)":    "webhook",
+		"HubSpot CRM":       "hubspot",
+		"Microsoft Outlook": "ms_graph",
+		"SQL Database":      "database",
+	} {
+		s.db.Exec(`UPDATE connectors SET slug=? WHERE slug='' AND lower(name)=lower(?)`, slug, name)
+	}
+	s.db.Exec(`DELETE FROM connectors WHERE slug='' AND name IN ('Salesforce CRM','AWS S3')`)
 
-// upsertMissingConnectors additively inserts any catalog connectors not already
-// present (matched by name), so version upgrades surface new integrations
-// without disturbing existing rows or their installed/credential state.
-func (s *DB) upsertMissingConnectors() {
-	for _, c := range connectorCatalog() {
-		var exists int
-		s.db.QueryRow("SELECT COUNT(*) FROM connectors WHERE name=?", c.name).Scan(&exists)
-		if exists == 0 {
-			s.db.Exec(`INSERT INTO connectors (id,name,category,description,icon,installed,credential_keys) VALUES (?,?,?,?,?,?,?)`,
-				uuid.New().String(), c.name, c.cat, c.desc, c.icon, c.installed, c.creds)
+	for _, e := range catalog {
+		keys, _ := json.Marshal(credentialKeyNames(e))
+		var existing int
+		s.db.QueryRow(`SELECT COUNT(*) FROM connectors WHERE slug=?`, e.Slug).Scan(&existing)
+		if existing == 0 {
+			enabled := 0
+			if e.Enabled {
+				enabled = 1
+			}
+			s.db.Exec(`INSERT INTO connectors (id,slug,name,category,description,icon,installed,credential_keys)
+			           VALUES (?,?,?,?,?,?,?,?)`,
+				uuid.New().String(), e.Slug, e.Name, e.Category, e.Description, e.Icon, enabled, string(keys))
+			continue
 		}
+		// Refresh presentation only — `installed` belongs to the operator.
+		s.db.Exec(`UPDATE connectors SET name=?, category=?, description=?, icon=?, credential_keys=? WHERE slug=?`,
+			e.Name, e.Category, e.Description, e.Icon, string(keys), e.Slug)
 	}
+	// Collapse duplicates left by name-matched rows from earlier versions,
+	// keeping whichever row the operator had enabled.
+	s.db.Exec(`DELETE FROM connectors WHERE rowid NOT IN (
+	             SELECT min(rowid) FROM connectors GROUP BY slug ORDER BY installed DESC)
+	           AND slug <> ''`)
+}
+
+// credentialKeyNames lists a catalog entry's credential names for the legacy
+// credential_keys column, which older API consumers still read.
+func credentialKeyNames(e CatalogEntry) []string {
+	out := make([]string, 0, len(e.Credentials))
+	for _, c := range e.Credentials {
+		if c.Optional {
+			continue
+		}
+		out = append(out, c.Name)
+	}
+	return out
 }
 
 func (s *DB) SeedHistoricalRuns(workflowIDs []string) {
@@ -476,7 +455,7 @@ func (s *DB) ListDecisions(runID string, limit int) ([]*AIDecision, error) {
 // ─── Connectors ───────────────────────────────────────────────────────────────
 
 func (s *DB) ListConnectors() ([]*Connector, error) {
-	rows, err := s.db.Query(`SELECT id,name,category,description,icon,status,installed,config,credential_keys,created_at FROM connectors ORDER BY category,name`)
+	rows, err := s.db.Query(`SELECT id,slug,name,category,description,icon,status,installed,config,credential_keys,created_at FROM connectors ORDER BY category,name`)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +465,7 @@ func (s *DB) ListConnectors() ([]*Connector, error) {
 		c := &Connector{}
 		var cfg, creds, ts string
 		var inst int
-		if err := rows.Scan(&c.ID, &c.Name, &c.Category, &c.Description, &c.Icon, &c.Status, &inst, &cfg, &creds, &ts); err != nil {
+		if err := rows.Scan(&c.ID, &c.Slug, &c.Name, &c.Category, &c.Description, &c.Icon, &c.Status, &inst, &cfg, &creds, &ts); err != nil {
 			continue
 		}
 		c.Installed = inst == 1

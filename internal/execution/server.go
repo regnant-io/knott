@@ -868,15 +868,9 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	if conns, err := db.ListConnectors(); err == nil {
 		creds, _ := db.ListCredentials()
 		ready, needs := 0, 0
+		catalog := store.CatalogBySlug()
 		for _, c := range conns {
-			allOK := true
-			for _, entry := range c.CredentialKeys {
-				if !credentialEntrySatisfied(entry, creds) {
-					allOK = false
-					break
-				}
-			}
-			if allOK {
+			if connectorReady(catalog[c.Slug], creds) {
 				ready++
 			} else {
 				needs++
@@ -1142,69 +1136,69 @@ func directCompleteTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, result)
 }
 
+// listConnectors returns the connector registry with, for each connector, the
+// exact credentials it needs and whether each one is configured.
+//
+// The console renders one card per connector from this, with its credential
+// fields inline — so an operator never has to match a connector against a
+// separate wall of secret names to work out what is missing.
 func listConnectors(w http.ResponseWriter, r *http.Request) {
 	conns, err := db.ListConnectors()
 	if err != nil {
 		writeError(w, 500, "QUERY_FAILED", err.Error())
 		return
 	}
-	if conns == nil {
-		conns = []*store.Connector{}
-	}
-	// Enrich each connector with credential readiness so the UI (and builder) can
-	// show "ready / needs credentials" and which specific secrets are missing.
 	creds, _ := db.ListCredentials()
+	catalog := store.CatalogBySlug()
+
 	out := make([]map[string]any, 0, len(conns))
 	for _, c := range conns {
-		// credential_keys may include hints like "GOOGLE_REFRESH_TOKEN (or GOOGLE_ACCESS_TOKEN)".
-		// We treat a key satisfied if ANY token mentioned in the entry is configured.
-		var missing []string
-		ready := true
-		for _, entry := range c.CredentialKeys {
-			if !credentialEntrySatisfied(entry, creds) {
-				ready = false
-				missing = append(missing, entry)
+		entry, known := catalog[c.Slug]
+
+		// Alternatives form a group that any one member satisfies, so Slack is
+		// ready with a webhook URL *or* a bot token.
+		satisfied := map[string]bool{}
+		for _, spec := range entry.Credentials {
+			if secretConfigured(creds, spec.Name) {
+				satisfied[credentialGroup(spec)] = true
 			}
 		}
-		// Connectors with no required keys (e.g. HTTP/GraphQL) are always ready.
-		if len(c.CredentialKeys) == 0 {
-			ready = true
+
+		fields := make([]map[string]any, 0, len(entry.Credentials))
+		missing := []string{}
+		for _, spec := range entry.Credentials {
+			source := ""
+			if _, stored := credSet(creds, spec.Name); stored {
+				source = "stored"
+			} else if os.Getenv(spec.Name) != "" {
+				source = "env"
+			}
+			// An alternative is only "missing" while nothing in its group is set.
+			required := !spec.Optional || (spec.AltOf != "" && !satisfied[spec.AltOf])
+			if required && source == "" {
+				missing = append(missing, spec.Name)
+			}
+			fields = append(fields, map[string]any{
+				"name": spec.Name, "label": spec.Label, "help": spec.Help,
+				"secret": spec.Secret, "optional": spec.Optional, "alt_of": spec.AltOf,
+				"placeholder": spec.Placeholder,
+				"configured":  source != "", "source": source,
+			})
 		}
+
 		out = append(out, map[string]any{
-			"id": c.ID, "name": c.Name, "category": c.Category, "description": c.Description,
-			"icon": c.Icon, "status": c.Status, "installed": c.Installed,
-			"credential_keys": c.CredentialKeys, "created_at": c.CreatedAt,
-			"credentials_ready":   ready,
+			"id": c.ID, "slug": c.Slug, "name": c.Name, "category": c.Category,
+			"description": c.Description, "icon": c.Icon, "status": c.Status,
+			"installed": c.Installed, "created_at": c.CreatedAt,
+			"docs_url":            entry.DocsURL,
+			"executable":          known,
+			"credentials":         fields,
+			"credential_keys":     c.CredentialKeys,
+			"credentials_ready":   connectorReady(entry, creds),
 			"missing_credentials": missing,
 		})
 	}
 	writeJSON(w, 200, map[string]any{"data": out, "total": len(out)})
-}
-
-// credentialEntrySatisfied checks a credential_keys entry, which may name
-// alternatives like "GOOGLE_REFRESH_TOKEN (or GOOGLE_ACCESS_TOKEN)". Any one
-// configured (stored or env) satisfies the requirement.
-func credentialEntrySatisfied(entry string, creds []*store.Credential) bool {
-	for _, tok := range extractSecretNames(entry) {
-		if secretConfigured(creds, tok) {
-			return true
-		}
-	}
-	return false
-}
-
-// extractSecretNames pulls UPPER_SNAKE_CASE token names out of a credential_keys
-// entry, ignoring prose like "(or ...)".
-func extractSecretNames(entry string) []string {
-	var names []string
-	for _, field := range strings.FieldsFunc(entry, func(r rune) bool {
-		return !(r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_')
-	}) {
-		if len(field) >= 3 && strings.ContainsRune(field, '_') {
-			names = append(names, field)
-		}
-	}
-	return names
 }
 
 func updateConnector(w http.ResponseWriter, r *http.Request) {
@@ -1248,29 +1242,38 @@ func credSet(creds []*store.Credential, name string) (*store.Credential, bool) {
 	return nil, false
 }
 
-// knownSecretKeys are the connector/agent secret names the UI offers by default.
-var knownSecretKeys = []string{
-	"SLACK_WEBHOOK_URL", "SLACK_BOT_TOKEN",
-	"SENDGRID_API_KEY", "SENDGRID_FROM",
-	"TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER",
-	"TELEGRAM_BOT_TOKEN", "DISCORD_WEBHOOK_URL",
-	"GITHUB_TOKEN", "AIRTABLE_TOKEN", "NOTION_TOKEN", "HUBSPOT_TOKEN",
-	"JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_BASE_URL",
-	"GOOGLE_ACCESS_TOKEN", "DATABASE_DSN",
-	"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN",
-	"TEAMS_WEBHOOK_URL", "STRIPE_SECRET_KEY",
-	// Broadened connector coverage
-	"LINEAR_API_KEY", "TRELLO_KEY", "TRELLO_TOKEN", "ASANA_TOKEN", "CLICKUP_TOKEN",
-	"PAGERDUTY_ROUTING_KEY", "MATTERMOST_WEBHOOK_URL",
-	"ZENDESK_EMAIL", "ZENDESK_API_TOKEN", "ZENDESK_BASE_URL",
-	"SHOPIFY_ACCESS_TOKEN", "SHOPIFY_STORE_URL",
-	"MAILCHIMP_API_KEY", "OPENAI_API_KEY",
-	"PUSHOVER_TOKEN", "PUSHOVER_USER",
-	// Connector coverage wave 2
-	"GITLAB_TOKEN", "MONDAY_TOKEN",
-	"FRESHDESK_API_KEY", "FRESHDESK_BASE_URL", "INTERCOM_TOKEN", "MS_GRAPH_TOKEN",
-	"WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID", "CODA_TOKEN", "CLOSE_API_KEY",
-	"CALENDLY_TOKEN", "SERVICENOW_USER", "SERVICENOW_PASSWORD", "SERVICENOW_BASE_URL",
+// knownSecretKeys are the secret names the API will accept and report on. They
+// come from the connector catalog, so adding a connector extends the set with
+// no second list to keep in sync.
+var knownSecretKeys = store.KnownSecretNames()
+
+// connectorReady reports whether every credential a connector requires is
+// configured. Alternatives (a Slack webhook URL *or* a bot token) form a group
+// that any one member satisfies.
+func connectorReady(entry store.CatalogEntry, creds []*store.Credential) bool {
+	satisfied := map[string]bool{}
+	for _, spec := range entry.Credentials {
+		if secretConfigured(creds, spec.Name) {
+			satisfied[credentialGroup(spec)] = true
+		}
+	}
+	for _, spec := range entry.Credentials {
+		if spec.Optional && spec.AltOf == "" {
+			continue
+		}
+		if !satisfied[credentialGroup(spec)] {
+			return false
+		}
+	}
+	return true
+}
+
+// credentialGroup names the alternatives set a credential belongs to.
+func credentialGroup(spec store.CredentialSpec) string {
+	if spec.AltOf != "" {
+		return spec.AltOf
+	}
+	return spec.Name
 }
 
 // secretConfigured reports whether a named secret is satisfied either by a
