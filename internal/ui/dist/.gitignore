@@ -1,0 +1,4 @@
+# The built console is copied here by `make ui`; only this file is tracked
+# so that go:embed always has a directory to read.
+*
+!.gitignore
