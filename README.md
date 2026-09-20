@@ -9,7 +9,7 @@
 Design workflows visually, run them durably, put a human in the loop where it
 matters, and keep an audit trail of every decision — from one binary you own.
 
-[![CI](https://github.com/regnant/knott/actions/workflows/ci.yml/badge.svg)](https://github.com/regnant/knott/actions/workflows/ci.yml)
+[![CI](https://github.com/regnant-io/knott/actions/workflows/ci.yml/badge.svg)](https://github.com/regnant/knott/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev)
 
@@ -43,7 +43,7 @@ It is a single binary. No cluster, no message broker, no managed service.
 **macOS**
 
 Download the `.dmg` from
-[Releases](https://github.com/regnant/knott/releases),
+[Releases](https://github.com/regnant-io/knott/releases),
 drag KNOTT to Applications.
 
 </td><td width="33%">
@@ -51,7 +51,7 @@ drag KNOTT to Applications.
 **Windows**
 
 Download the `.msi` from
-[Releases](https://github.com/regnant/knott/releases)
+[Releases](https://github.com/regnant-io/knott/releases)
 and run it.
 
 </td><td width="33%">
@@ -66,10 +66,10 @@ to run without installing.
 
 ```bash
 # Docker
-docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/regnant/knott
+docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/regnant-io/knott
 
 # From source (Go 1.25+, Node 18+ — Python is optional)
-git clone https://github.com/regnant/knott && cd knott
+git clone https://github.com/regnant-io/knott && cd knott
 make ui && make run
 ```
 
@@ -165,7 +165,7 @@ credentials it needs — each with a line telling you where to find the value �
 and a button that makes a real call to check them. Credentials are encrypted at
 rest and never shown again once saved.
 
-Missing one? [Ask for it](https://github.com/regnant/knott/issues/new?template=connector.yml),
+Missing one? [Ask for it](https://github.com/-io/knott/issues/new?template=connector.yml),
 or add it — CONTRIBUTING.md has a walkthrough.
 
 ---
