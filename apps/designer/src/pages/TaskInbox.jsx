@@ -60,23 +60,23 @@ export default function TaskInbox() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">Human Task Inbox</div>
+          <h1 className="page-title">Human review</h1>
           <div className="page-subtitle">{pending} pending · {list.length} total</div>
         </div>
         <div className="page-actions">
           <div className="tab-strip" style={{ border: 'none', borderRadius: 8, background: 'var(--bg-elevated)', padding: 3 }}>
             {['PENDING', 'COMPLETED', ''].map(s => (
-              <div key={s} className={`tab-item ${filter === s ? 'active' : ''}`} style={{ borderBottom: 'none', padding: '6px 14px', borderRadius: 6, background: filter === s ? 'var(--bg-card)' : 'transparent', fontSize: 12 }}
+              <button type="button" aria-pressed={filter === s} key={s} className={`tab-item ${filter === s ? 'active' : ''}`} style={{ borderBottom: 'none', padding: '6px 14px', borderRadius: 6, background: filter === s ? 'var(--bg-card)' : 'transparent', fontSize: 12 }}
                 onClick={() => { setFilter(s); setSelected(null); }}>
-                {s || 'All'}
-              </div>
+                {s === 'PENDING' ? 'Pending' : s === 'COMPLETED' ? 'Completed' : 'All'}
+              </button>
             ))}
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={load}><RefreshCw size={13} /></button>
+          <button className="btn btn-ghost btn-sm" aria-label="Refresh tasks" onClick={load}><RefreshCw size={13} /></button>
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="operations-split">
         {/* Task list */}
         <div style={{ width: 380, borderRight: '1px solid var(--border)', overflow: 'auto', flexShrink: 0 }}>
           {loading ? (
@@ -123,7 +123,7 @@ function TaskCard({ task, active, onClick }) {
   const isOverdue = task.due_at && new Date(task.due_at) < new Date() && task.status === 'PENDING';
 
   return (
-    <div className={`task-card ${active ? 'selected' : ''}`} onClick={onClick}>
+    <button type="button" className={`task-card ${active ? 'selected' : ''}`} onClick={onClick}>
       <div className="task-card-header">
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="task-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -161,7 +161,7 @@ function TaskCard({ task, active, onClick }) {
           <span>{task.assigned_roles[0]}{task.assigned_roles.length > 1 ? ` +${task.assigned_roles.length - 1}` : ''}</span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 

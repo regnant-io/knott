@@ -21,6 +21,7 @@ import {
   NODE_CATALOG, NODE_BY_TYPE, NODE_GROUPS, defaultNodeName,
 } from '../designer/nodeCatalog.js';
 import NodePicker from '../designer/NodePicker.jsx';
+import PaletteItem from '../designer/PaletteItem.jsx';
 import { autoLayout, positionAfter } from '../designer/autoLayout.js';
 import { useGraphHistory } from '../designer/useGraphHistory.js';
 import { useRunOverlay } from '../designer/useRunOverlay.js';
@@ -158,6 +159,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
   const [testInput, setTestInput] = useState('{\n  \n}');
   const [picker, setPicker] = useState(null); // { from, handle } | { at: {x,y} } | null
   const [paletteQuery, setPaletteQuery] = useState('');
+  const [paletteDragging, setPaletteDragging] = useState(false);
 
   const overlay = useRunOverlay(workflowId);
 
@@ -317,13 +319,17 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
     },
   })), [nodes, selectedId, openPickerFor, overlay.byNode]);
 
-  const onDrop = useCallback(e => {
-    e.preventDefault();
-    const type = e.dataTransfer.getData('nodeType');
-    if (!type) return;
-    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+  const placeNode = useCallback((type, point) => {
+    if (!NODE_BY_TYPE[type]) return;
+    const position = screenToFlowPosition(point);
     addNode(type, { position: { x: position.x - 90, y: position.y - 30 } });
   }, [addNode, screenToFlowPosition]);
+
+  const onDrop = useCallback(e => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('application/reactflow') || e.dataTransfer.getData('nodeType');
+    placeNode(type, { x: e.clientX, y: e.clientY });
+  }, [placeNode]);
 
   const onPaneDoubleClick = useCallback(e => {
     const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
@@ -609,6 +615,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
           <LayoutGrid size={14} />
         </button>
 
+        <button className="btn btn-secondary btn-sm studio-add" onClick={() => setPicker(selectedId ? { from: selectedId, handle: 'main' } : { at: null })}><Plus size={13} />Add step</button>
         <div style={{ flex: 1 }} />
 
         {dirty && <span className="toolbar-dirty">Unsaved</span>}
@@ -663,22 +670,8 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
           {paletteGroups.map(([group, items]) => (
             <div key={group} className="palette-group">
               <div className="palette-title">{group}</div>
-              {items.map(p => {
-                const Icon = p.icon;
-                return (
-                  <div
-                    key={p.type}
-                    className="palette-node"
-                    draggable
-                    title={p.summary}
-                    onDragStart={e => e.dataTransfer.setData('nodeType', p.type)}
-                    onDoubleClick={() => addNode(p.type)}
-                  >
-                    <Icon size={13} style={{ color: p.color }} />
-                    {p.label}
-                  </div>
-                );
-              })}
+              {items.map(p => <PaletteItem key={p.type} spec={p} canvasRef={canvasRef}
+                onPlace={placeNode} onAdd={addNode} onDragging={setPaletteDragging} />)}
             </div>
           ))}
           <p className="palette-hint">
@@ -694,7 +687,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
             </pre>
           </div>
         ) : (
-          <div className="designer-canvas" ref={canvasRef}>
+          <div className={`designer-canvas ${paletteDragging ? 'accepting-drop' : ''}`} ref={canvasRef}>
             {overlay.active && <RunStrip overlay={overlay} nodes={nodes} />}
             {findings && (findings.errors.length > 0 || findings.warnings.length > 0) && (
               <FindingsPanel findings={findings} onClose={() => setFindings(null)} />
@@ -756,7 +749,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
           </div>
         )}
 
-        <div className="designer-props">
+        <div className={`designer-props ${selected ? 'has-selection' : ''}`}>
           <div className="props-header">
             {selected
               ? (NODE_BY_TYPE[selected.type]?.label || selected.type).toUpperCase()

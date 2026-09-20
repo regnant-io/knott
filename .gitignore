@@ -34,3 +34,4 @@ Thumbs.db
 # ─── Local scratch ────────────────────────────────────────────────────────────
 /.scratch/
 /dist/
+app-window/

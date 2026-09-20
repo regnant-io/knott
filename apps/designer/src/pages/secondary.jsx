@@ -28,18 +28,18 @@ export function AIDecisions() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">AI Decision Log</div>
+          <h1 className="page-title">Decision log</h1>
           <div className="page-subtitle">{list.length} decisions recorded</div>
         </div>
         <div className="page-actions">
           <div className="search-box">
             <Search size={13} />
-            <input placeholder="Search by task, run ID…" value={search} onChange={e => setSearch(e.target.value)} />
+            <input aria-label="Search by task, run ID…" placeholder="Search by task, run ID…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="operations-split">
         {/* List */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {loading ? (
@@ -68,7 +68,7 @@ export function AIDecisions() {
                   const dec = output.decision || '—';
                   const decColor = dec === 'APPROVE' ? 'var(--green)' : dec === 'REJECT' ? 'var(--red)' : dec === 'ESCALATE' ? 'var(--yellow)' : 'var(--text-secondary)';
                   return (
-                    <tr key={d.id} style={{ cursor: 'pointer', background: selected?.id === d.id ? 'var(--amber-dim)' : '' }} onClick={() => setSelected(selected?.id === d.id ? null : d)}>
+                    <tr key={d.id} tabIndex={0} aria-label={`Decision ${d.task_spec || d.id}`} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(selected?.id === d.id ? null : d); } }} style={{ cursor: 'pointer', background: selected?.id === d.id ? 'var(--brand-light)' : '' }} onClick={() => setSelected(selected?.id === d.id ? null : d)}>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                         {d.created_at ? format(new Date(d.created_at), 'MMM d HH:mm:ss') : '—'}
                       </td>
@@ -160,7 +160,7 @@ export function Agents() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">Agent Registry</div>
+          <h1 className="page-title">Agent Registry</h1>
           <div className="page-subtitle">{list.length} agents registered</div>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={14} />Register Agent</button>
@@ -258,7 +258,7 @@ export function Settings({ theme = 'system', onSetTheme }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
-        <div><div className="page-title">Platform Settings</div><div className="page-subtitle">AI providers, appearance, integrations and system status</div></div>
+        <div><h1 className="page-title">Platform Settings</h1><div className="page-subtitle">AI providers, appearance, integrations and system status</div></div>
       </div>
       <div className="page-content">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, maxWidth: 980 }}>
