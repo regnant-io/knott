@@ -65,7 +65,7 @@ export default function Schedules() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">Schedules</div>
+          <h1 className="page-title">Schedules</h1>
           <div className="page-subtitle">{active} active · {list.length} total · triggers run workflows automatically</div>
         </div>
         <div className="page-actions">

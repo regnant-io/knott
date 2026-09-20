@@ -115,7 +115,7 @@ export default function Connectors() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">Connectors</div>
+          <h1 className="page-title">Connectors</h1>
           <div className="page-subtitle">
             {enabledCount} enabled of {list.length}
             {needsSetup > 0 && <> · <span style={{ color: 'var(--yellow)' }}>{needsSetup} awaiting credentials</span></>}

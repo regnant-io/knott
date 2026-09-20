@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Play, Pencil, Trash2, Tag, Clock, GitBranch, Search, Sparkles, Wand2, Bot, AlertTriangle } from 'lucide-react';
+import { Plus, Play, Pencil, Trash2, Tag, Clock, GitBranch, Search, Sparkles, Wand2, Bot, AlertTriangle, Workflow, ArrowUpRight } from 'lucide-react';
 import { workflows as wfApi, runs as runsApi, examples as examplesApi, aiGenerate } from '../lib/api.js';
 import { StatusBadge, useToast } from '../components/Layout.jsx';
 import { format } from 'date-fns';
@@ -67,14 +67,11 @@ export default function Workflows({ onNav, onDesign }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">Workflow Registry</div>
-          <div className="page-subtitle">{list.length} workflows registered</div>
+          <h1 className="page-title">Workflows</h1>
+          <div className="page-subtitle">Design, deploy, and manage your automation portfolio.</div>
         </div>
         <div className="page-actions">
-          <div className="search-box">
-            <Search size={13} />
-            <input placeholder="Search workflows…" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+
           <button className="btn btn-secondary" onClick={handleSeedExamples} disabled={seeding} title="Add ready-made example workflows (skips any already present)">
             {seeding ? <span className="spinner-sm" /> : <Sparkles size={14} />} Examples
           </button>
@@ -88,6 +85,7 @@ export default function Workflows({ onNav, onDesign }) {
       </div>
 
       <div className="page-content">
+        <div className="registry-toolbar"><div className="registry-summary">All workflows <strong>{list.length}</strong></div><div className="search-box"><Search size={14} /><input aria-label="Search workflows" placeholder="Search workflows…" value={search} onChange={e => setSearch(e.target.value)} /></div></div>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 96, borderRadius: 12 }} />)}
@@ -109,7 +107,7 @@ export default function Workflows({ onNav, onDesign }) {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="workflow-grid">
             {filtered.map(wf => (
               <WorkflowCard key={wf.id} wf={wf}
                 onEdit={() => onDesign(wf.id)}
@@ -166,38 +164,14 @@ function WorkflowCard({ wf, onEdit, onRun, onDelete }) {
   const stepCount = def.steps?.length || 0;
 
   return (
-    <div className="card" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', padding: '16px 20px' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>{wf.name}</span>
-          <StatusBadge status={wf.status} />
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>
-            v{wf.current_version}
-          </span>
-        </div>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.5 }}>
-          {wf.description || 'No description'}
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <GitBranch size={11} /> {stepCount} steps
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={11} /> {wf.updated_at ? format(new Date(wf.updated_at), 'MMM d, yyyy') : '—'}
-          </span>
-          {tags.map(t => (
-            <span key={t} style={{ fontSize: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 8px', color: 'var(--text-muted)' }}>
-              {t}
-            </span>
-          ))}
-        </div>
+    <article className="card workflow-card">
+      <div className="workflow-card-body">
+        <div className="workflow-card-top"><span className="workflow-card-icon"><Workflow size={19} /></span><span className="mono" style={{ fontSize: 10, color: 'var(--text-muted)' }}>v{wf.current_version}</span><StatusBadge status={wf.status} /></div>
+        <h2>{wf.name}</h2><p>{wf.description || 'Add a description in the designer to give your team context.'}</p>
+        <div className="workflow-card-meta"><span><GitBranch size={12} />{stepCount} steps</span><span><Clock size={12} />Updated {wf.updated_at ? format(new Date(wf.updated_at), 'MMM d, yyyy') : '—'}</span></div>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
-        <button className="btn btn-success btn-sm" onClick={onRun}><Play size={12} />Run</button>
-        <button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={12} />Edit</button>
-        <button className="btn btn-ghost btn-icon btn-sm" onClick={onDelete}><Trash2 size={13} /></button>
-      </div>
-    </div>
+      <div className="workflow-card-footer"><div className="workflow-tags">{tags.map(t => <span key={t}>{t}</span>)}</div><button className="btn btn-ghost btn-icon btn-sm" aria-label={`Archive ${wf.name}`} onClick={onDelete}><Trash2 size={13} /></button><button className="btn btn-secondary btn-sm" onClick={onEdit}>Open<ArrowUpRight size={12} /></button><button className="btn btn-primary btn-sm" onClick={onRun}><Play size={11} />Run</button></div>
+    </article>
   );
 }
 

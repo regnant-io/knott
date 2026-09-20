@@ -3,32 +3,12 @@
 # Copyright 2026 Regnant
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate every KNOTT brand asset from one source of truth: the geometry.
+"""Generate the KNOTT switch mark and every app icon from one geometry source.
 
-The KNOTT mark is a trefoil — the simplest knot that cannot be untied — from the
-standard parametrisation
-
-    x = sin t + 2 sin 2t
-    y = cos t - 2 cos 2t
-    z = -sin 3t
-
-The strand is broken wherever z places it *under* the strand crossing above it,
-so the over/under weave is mathematically true rather than eyeballed. Everything
-downstream (SVG, React component, favicon, platform icons) is derived from those
-samples, which is why the mark is identical at every size and in every format.
-
-Outputs:
-    brand/knott-mark.svg              monoline mark, inherits currentColor
-    brand/knott-icon.svg              app tile, brand ground + white mark
-    brand/icons/knott-<n>.png         raster tiles, 16-1024 px
-    brand/icons/knott.ico             Windows icon
-    brand/icons/knott.icns            macOS icon
-    apps/designer/public/favicon.svg  browser tab mark
-    apps/designer/src/components/Brand.jsx  React mark + lockup
-
-Standard library only — no build dependency for a brand refresh.
-
-Usage:  python tools/brand/generate.py
+Three angular strokes form an asymmetric K with an open crossing. The vertical
+return represents a durable path; the diagonals represent branching execution.
+Run `python tools/brand/generate.py` to regenerate SVG, React, PNG, ICO and ICNS.
+No external imaging dependencies are required.
 """
 
 from __future__ import annotations
@@ -44,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # ─── Brand constants ──────────────────────────────────────────────────────────
 
-BRAND = (0x0D, 0x94, 0x88)  # KNOTT teal, matches --brand-primary in light theme
+BRAND = (0x23, 0x69, 0x4A)  # KNOTT emerald, matches --brand-primary in light theme
 BOX = 24.0                  # SVG user units; every coordinate lives in 0..24
 STROKE = 2.4                # mark stroke width at BOX scale
 GAP = 1.8                   # crossing gap: wide enough to read the weave at 20 px
@@ -53,53 +33,13 @@ PAD = 2.2                   # optical padding inside the box
 
 # ─── Geometry ─────────────────────────────────────────────────────────────────
 
-def sample_trefoil(n: int = 2400, gap: float = GAP, pad: float = PAD, box: float = BOX):
-    """Return the visible strand runs of the trefoil, fitted to a box x box square.
-
-    Each run is a list of (x, y) points; the breaks between runs are the places
-    the strand passes underneath itself.
-    """
-    ts = [2 * math.pi * i / n for i in range(n)]
-    pts = [(math.sin(t) + 2 * math.sin(2 * t),
-            math.cos(t) - 2 * math.cos(2 * t),
-            -math.sin(3 * t)) for t in ts]
-
-    xs = [p[0] for p in pts]
-    ys = [p[1] for p in pts]
-    span = max(max(xs) - min(xs), max(ys) - min(ys))
-    scale = (box - 2 * pad) / span
-    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    fitted = [((x - cx) * scale + box / 2, (y - cy) * scale + box / 2, z)
-              for x, y, z in pts]
-
-    # A sample is hidden when some non-adjacent sample sits within `gap` of it
-    # with a greater z — that is, the strand there passes over this one.
-    hidden = [False] * n
-    neighbourhood = n // 12
-    for i in range(n):
-        xi, yi, zi = fitted[i]
-        for j in range(n):
-            if min(abs(i - j), n - abs(i - j)) < neighbourhood:
-                continue
-            xj, yj, zj = fitted[j]
-            if zj <= zi:
-                continue
-            if (xi - xj) ** 2 + (yi - yj) ** 2 < gap * gap:
-                hidden[i] = True
-                break
-
-    runs, run = [], []
-    for i in range(n + 1):
-        k = i % n
-        if not hidden[k] and i < n:
-            run.append((fitted[k][0], fitted[k][1]))
-        else:
-            if len(run) > 2:
-                runs.append(run)
-            run = []
-    if len(run) > 2:
-        runs.append(run)
-    return runs
+def mark_geometry():
+    """Open switch: an angular K with a deliberate break at the crossing."""
+    return [
+        [(4, 4), (4, 20), (9, 20), (9, 14), (19, 4)],
+        [(4, 9), (9, 9), (11, 11)],
+        [(15, 15), (20, 20)],
+    ]
 
 
 def resample(run, spacing: float = 1.5):
@@ -265,8 +205,8 @@ def write(path: Path, content, binary=False):
 
 def main() -> int:
     print("KNOTT brand assets")
-    runs = sample_trefoil()
-    paths = [to_bezier(resample(r)) for r in runs]
+    runs = mark_geometry()
+    paths = ["M" + " L".join(f"{x} {y}" for x, y in run) for run in runs]
     body = "".join(f'\n  <path d="{d}"/>' for d in paths)
 
     write(ROOT / "brand" / "knott-mark.svg",
@@ -276,7 +216,7 @@ def main() -> int:
 
     tile = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="512" height="512"\n'
             f'     role="img" aria-label="KNOTT">\n'
-            f'  <rect width="24" height="24" rx="5.4" fill="#0D9488"/>\n'
+            f'  <rect width="24" height="24" rx="5.4" fill="#23694A"/>\n'
             f'  <g fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round"\n'
             f'     transform="translate(12 12) scale(0.84) translate(-12 -12)">{body}\n  </g>\n</svg>\n')
     write(ROOT / "brand" / "knott-icon.svg", tile)
@@ -305,19 +245,9 @@ def render_component(paths) -> str:
     return f"""import React from 'react';
 
 /**
- * The KNOTT mark is a trefoil — the simplest knot that cannot be untied — and a
- * fair picture of what the product does: one strand that crosses itself and
- * holds.
- *
- * The geometry comes from the standard parametrisation
- *
- *   x = sin t + 2 sin 2t,  y = cos t − 2 cos 2t,  z = −sin 3t
- *
- * with the strand broken wherever z puts it under the crossing above it, so the
- * over/under weave is mathematically true rather than drawn by eye.
- *
- * Do not hand-edit the path data — regenerate every brand asset at once with
- * `npm run brand` (tools/brand/generate.py).
+ * KNOTT's open switch mark: an angular K built from branching paths, with
+ * a deliberate break at the crossing. Generated from tools/brand/generate.py.
+ * Regenerate every brand asset with `npm run brand`.
  */
 export const MARK_PATHS = [
 {listed}
@@ -355,9 +285,9 @@ export function KnottLogo({{ size = 26, wordSize = 15, subtitle, tone = 'brand' 
         title="KNOTT"
         style={{{{ color: tone === 'brand' ? 'var(--brand-primary)' : 'currentColor', flexShrink: 0 }}}}
       />
-      <div style={{{{ minWidth: 0 }}}}>
+      <div className="brand-wordmark" style={{{{ minWidth: 0 }}}}>
         <div style={{{{
-          fontSize: wordSize, fontWeight: 600, letterSpacing: '0.18em',
+          fontSize: wordSize, fontWeight: 600, letterSpacing: '0.12em',
           color: 'var(--text-primary)', lineHeight: 1.1,
         }}}}>
           KNOTT

@@ -1,67 +1,115 @@
 // Copyright 2026 Regnant
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from 'react';
-import { KnottMark } from '../components/Brand.jsx';
-import { Lock, LogIn } from 'lucide-react';
+import React, { useState } from "react";
+import { KnottMark } from "../components/Brand.jsx";
+import { Lock, LogIn } from "lucide-react";
 
 // Lightweight token gate for single-tenant self-hosted deployments. When the
 // backend requires an API token (API_TOKEN set), the SPA collects it here and
 // stores it in localStorage; the API client attaches it as X-API-Key.
 export default function Login({ onAuthed }) {
-  const [token, setToken] = useState('');
-  const [error, setError] = useState('');
+  const [token, setToken] = useState("");
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
-    if (!token.trim()) { setError('Enter your access token'); return; }
-    setBusy(true); setError('');
+    if (!token.trim()) {
+      setError("Enter your access token");
+      return;
+    }
+    setBusy(true);
+    setError("");
     try {
-      const res = await fetch('/api/v1/stats', { headers: { 'X-API-Key': token.trim() } });
-      if (res.status === 401) { setError('Invalid token. Check API_TOKEN on the server.'); setBusy(false); return; }
-      if (!res.ok) { setError(`Server error (${res.status})`); setBusy(false); return; }
-      localStorage.setItem('knott-token', token.trim());
+      const res = await fetch("/api/v1/stats", {
+        headers: { "X-API-Key": token.trim() },
+      });
+      if (res.status === 401) {
+        setError(
+          "Invalid token. Check your token with your instance administrator.",
+        );
+        setBusy(false);
+        return;
+      }
+      if (!res.ok) {
+        setError(`Server error (${res.status})`);
+        setBusy(false);
+        return;
+      }
+      localStorage.setItem("knott-token", token.trim());
       onAuthed();
     } catch (err) {
-      setError('Could not reach the server.');
+      setError("Could not reach the server.");
       setBusy(false);
     }
   }
 
   return (
-    <div style={{
-      height: '100vh', width: '100%', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: 'var(--bg-secondary)',
-    }}>
-      <form onSubmit={submit} className="card" style={{ width: 380, padding: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <KnottMark size={40} style={{ color: 'var(--brand-primary)' }} title="KNOTT" />
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.01em' }}>KNOTT</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sovereign Workflow Platform</div>
+    <div className="login-shell">
+      <section className="login-story">
+        <div className="login-wordmark">
+          <KnottMark size={34} />
+          KNOTT<span>WORKFLOW PLATFORM</span>
+        </div>
+        <div>
+          <p className="eyebrow">BUILT FOR YOUR INFRASTRUCTURE</p>
+          <h1>
+            Complex operations.
+            <br />
+            Complete control.
+          </h1>
+          <p>
+            Connect systems, orchestrate workflows, and keep people at the heart
+            of every critical decision.
+          </p>
+          <div className="login-flow">
+            <span>Trigger</span>
+            <span>Decide</span>
+            <span>Review</span>
+            <span>Execute</span>
           </div>
         </div>
-
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Lock size={13} /> This instance requires an access token.
-        </div>
-
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Access Token</label>
-          <input className="input" type="password" autoFocus value={token}
-            onChange={e => setToken(e.target.value)} placeholder="Paste your API token" />
-        </div>
-
-        {error && <div style={{ fontSize: 12, color: 'var(--red)' }}>{error}</div>}
-
-        <button className="btn btn-primary" type="submit" disabled={busy} style={{ justifyContent: 'center' }}>
-          {busy ? <span className="spinner-sm" /> : <LogIn size={14} />} Sign In
-        </button>
-        <div className="form-hint" style={{ textAlign: 'center' }}>
-          The token is the <code className="mono">API_TOKEN</code> configured on the server.
-        </div>
-      </form>
+        <small>YOUR WORKFLOWS. YOUR DATA. YOUR CONTROL.</small>
+      </section>
+      <div className="login-main">
+        <form onSubmit={submit} className="login-form">
+          <span className="login-lock">
+            <Lock size={22} />
+          </span>
+          <h2>Welcome to your workspace</h2>
+          <p>Enter your access token to connect to this KNOTT instance.</p>
+          <div className="form-group">
+            <label className="form-label" htmlFor="access-token">
+              Access token
+            </label>
+            <input
+              id="access-token"
+              className="input"
+              type="password"
+              autoFocus
+              autoComplete="current-password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Enter your API token"
+              aria-invalid={!!error}
+              aria-describedby={error ? "login-error" : undefined}
+            />
+          </div>
+          {error && (
+            <div id="login-error" role="alert" className="error-banner">
+              {error}
+            </div>
+          )}
+          <button className="btn btn-primary" type="submit" disabled={busy}>
+            {busy ? <span className="spinner-sm" /> : <LogIn size={14} />}
+            Connect to workspace
+          </button>
+          <div className="form-hint">
+            Use the access token provided by your instance administrator.
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

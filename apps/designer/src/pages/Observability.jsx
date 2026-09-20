@@ -31,7 +31,7 @@ export default function Observability() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">Observability</div>
+          <h1 className="page-title">Observability</h1>
           <div className="page-subtitle">Failures, retries, and node health across all runs</div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={load}><RefreshCw size={13} />Refresh</button>

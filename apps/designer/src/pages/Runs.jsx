@@ -121,13 +121,13 @@ export default function Runs() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="page-header">
         <div>
-          <div className="page-title">Run Monitor</div>
+          <h1 className="page-title">Executions</h1>
           <div className="page-subtitle">{activeCount} active · {failedCount} failed · {list.length} total</div>
         </div>
         <div className="page-actions">
           <div className="search-box">
             <Search size={13} />
-            <input placeholder="Search runs…" value={search} onChange={e => setSearch(e.target.value)} />
+            <input aria-label="Search runs…" placeholder="Search runs…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <select className="select" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
@@ -142,7 +142,7 @@ export default function Runs() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="operations-split">
         {/* Run list */}
         <div style={{ width: 440, borderRight: '1px solid var(--border)', overflow: 'auto', flexShrink: 0 }}>
           {loading ? (
@@ -186,10 +186,10 @@ function RunRow({ run, active, onClick, onCancel }) {
     : run.started_at && ACTIVE_STATUSES.includes(run.status) ? 'running…' : '—';
 
   return (
-    <div onClick={onClick} style={{
+    <div role="button" tabIndex={0} aria-label={`Inspect ${run.workflow_name || run.id}`} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(); } }} onClick={onClick} style={{
       padding: '12px 14px', borderRadius: 10,
-      background: active ? 'var(--amber-dim)' : 'var(--bg-card)',
-      border: `1px solid ${active ? 'var(--amber)' : 'var(--border)'}`,
+      background: active ? 'var(--brand-light)' : 'var(--bg-card)',
+      border: `1px solid ${active ? 'var(--brand-primary)' : 'var(--border)'}`,
       cursor: 'pointer', transition: 'all 0.15s',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -289,7 +289,7 @@ function RunDetail({ run, events, decisions, onCancel, onReplay }) {
             display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13, fontWeight: 600,
             background: 'none', border: 'none', cursor: 'pointer',
             color: tab === t.id ? 'var(--text)' : 'var(--text-muted)',
-            borderBottom: `2px solid ${tab === t.id ? 'var(--amber)' : 'transparent'}`, marginBottom: -1,
+            borderBottom: `2px solid ${tab === t.id ? 'var(--brand-primary)' : 'transparent'}`, marginBottom: -1,
           }}>
             <t.icon size={14} /> {t.label}
             {t.count != null && t.count > 0 && (
@@ -353,7 +353,7 @@ function NodeCard({ node }) {
         {node.actor && node.actor !== 'system' && (
           <span style={{ fontSize: 10, color: node.actor === 'ai' ? 'var(--violet)' : 'var(--blue)' }}>{node.actor}</span>
         )}
-        {node.retries > 0 && <span style={{ fontSize: 10, color: 'var(--amber)' }}>↻ {node.retries} retr{node.retries > 1 ? 'ies' : 'y'}</span>}
+        {node.retries > 0 && <span style={{ fontSize: 10, color: 'var(--brand-primary)' }}>↻ {node.retries} retr{node.retries > 1 ? 'ies' : 'y'}</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {dur && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{dur}</span>}
           {hasOutput && <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : '', transition: '0.2s', color: 'var(--text-muted)' }} />}
@@ -386,7 +386,7 @@ function DecisionCard({ d }) {
   const [open, setOpen] = useState(false);
   const output = safeParse(d.output_snapshot, {});
   const pct = Math.round((d.confidence || 0) * 100);
-  const confColor = pct >= 85 ? 'var(--green)' : pct >= 60 ? 'var(--amber)' : 'var(--red)';
+  const confColor = pct >= 85 ? 'var(--green)' : pct >= 60 ? 'var(--brand-primary)' : 'var(--red)';
 
   return (
     <div className="card" style={{ padding: '14px 16px' }}>

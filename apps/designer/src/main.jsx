@@ -7,6 +7,7 @@ import App from './App.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import './index.css';
 import './styles/designer.css';
+import './styles/console.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
