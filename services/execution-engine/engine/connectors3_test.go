@@ -69,8 +69,8 @@ func TestGoogleSheetsRefreshFlow(t *testing.T) {
 		"GOOGLE_REFRESH_TOKEN": "rtoken",
 	})
 	_, err := e.callConnector("google_sheets", "append_row", map[string]any{
-		"base_url":  srv.URL,
-		"token_url": srv.URL + "/token",
+		"base_url":       srv.URL,
+		"token_url":      srv.URL + "/token",
 		"spreadsheet_id": "s1", "range": "Sheet1!A1", "values": `["a","b"]`,
 	})
 	if err != nil {

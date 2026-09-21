@@ -14,12 +14,14 @@ import (
 // an operator adds the matching driver and sets driver=postgres|mysql.
 //
 // Actions:
-//   query (default): returns rows ([]map) for SELECTs
-//   exec:            returns rows_affected for INSERT/UPDATE/DELETE
+//
+//	query (default): returns rows ([]map) for SELECTs
+//	exec:            returns rows_affected for INSERT/UPDATE/DELETE
 //
 // Inputs:
-//   sql (required), driver (default sqlite), dsn (or DATABASE_DSN credential),
-//   params (list — positional query parameters)
+//
+//	sql (required), driver (default sqlite), dsn (or DATABASE_DSN credential),
+//	params (list — positional query parameters)
 func (e *Executor) callDatabase(connectorID, action string, in map[string]any) (map[string]any, error) {
 	driver := strings.ToLower(firstNonEmpty(str(in["driver"]), connectorID))
 	switch driver {

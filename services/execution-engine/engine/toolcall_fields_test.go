@@ -8,7 +8,7 @@ import (
 // TestToolCallConnectorFieldNames verifies a tool_call node executes regardless
 // of whether the definition uses the UI's field names ("connector_id"/"action")
 // or the AI generator / template field names ("connector"/"operation"). This is
-// the regression guard for the "connector '' is not configured" bug.
+// the regression guard for the "connector ” is not configured" bug.
 func TestToolCallConnectorFieldNames(t *testing.T) {
 	cases := []struct {
 		name   string

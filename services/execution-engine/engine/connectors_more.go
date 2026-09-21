@@ -12,7 +12,8 @@ import (
 // self-hosted instances. They are dispatched from callConnector in executor.go.
 
 // Linear (GraphQL issue tracker). Secret: LINEAR_API_KEY.
-//   create_issue (default): team_id, title, description
+//
+//	create_issue (default): team_id, title, description
 func (e *Executor) callLinear(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("LINEAR_API_KEY"))
 	if token == "" {
@@ -52,7 +53,8 @@ func (e *Executor) callLinear(action string, in map[string]any) (map[string]any,
 }
 
 // Trello. Secrets: TRELLO_KEY + TRELLO_TOKEN (query-param auth).
-//   create_card (default): list_id, name, desc
+//
+//	create_card (default): list_id, name, desc
 func (e *Executor) callTrello(action string, in map[string]any) (map[string]any, error) {
 	key := firstNonEmpty(str(in["key"]), e.secret("TRELLO_KEY"))
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("TRELLO_TOKEN"))
@@ -85,7 +87,8 @@ func (e *Executor) callTrello(action string, in map[string]any) (map[string]any,
 }
 
 // Asana. Secret: ASANA_TOKEN (PAT).
-//   create_task (default): project_id, name, notes
+//
+//	create_task (default): project_id, name, notes
 func (e *Executor) callAsana(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("ASANA_TOKEN"))
 	if token == "" {
@@ -122,7 +125,8 @@ func (e *Executor) callAsana(action string, in map[string]any) (map[string]any, 
 }
 
 // ClickUp. Secret: CLICKUP_TOKEN.
-//   create_task (default): list_id, name, description
+//
+//	create_task (default): list_id, name, description
 func (e *Executor) callClickUp(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("CLICKUP_TOKEN"))
 	if token == "" {
@@ -156,7 +160,8 @@ func (e *Executor) callClickUp(action string, in map[string]any) (map[string]any
 }
 
 // PagerDuty Events API v2 (trigger an incident). Secret: PAGERDUTY_ROUTING_KEY.
-//   trigger (default): summary, source, severity (critical|error|warning|info)
+//
+//	trigger (default): summary, source, severity (critical|error|warning|info)
 func (e *Executor) callPagerDuty(action string, in map[string]any) (map[string]any, error) {
 	routingKey := firstNonEmpty(e.resolveSecretRef(in["routing_key"]), e.secret("PAGERDUTY_ROUTING_KEY"))
 	if routingKey == "" {
@@ -210,7 +215,8 @@ func (e *Executor) callMattermost(action string, in map[string]any) (map[string]
 
 // Zendesk: create a support ticket. Secrets: ZENDESK_EMAIL + ZENDESK_API_TOKEN.
 // Requires base_url (your subdomain, e.g. https://acme.zendesk.com).
-//   create_ticket (default): subject, comment (body), priority
+//
+//	create_ticket (default): subject, comment (body), priority
 func (e *Executor) callZendesk(action string, in map[string]any) (map[string]any, error) {
 	email := firstNonEmpty(str(in["email"]), e.secret("ZENDESK_EMAIL"))
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("ZENDESK_API_TOKEN"))
@@ -247,7 +253,8 @@ func (e *Executor) callZendesk(action string, in map[string]any) (map[string]any
 }
 
 // Shopify Admin API. Secret: SHOPIFY_ACCESS_TOKEN. Requires base_url (store URL).
-//   create_order_note / list_products (default): list_products
+//
+//	create_order_note / list_products (default): list_products
 func (e *Executor) callShopify(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("SHOPIFY_ACCESS_TOKEN"))
 	site := firstNonEmpty(str(in["base_url"]), e.secret("SHOPIFY_STORE_URL"))
@@ -287,7 +294,8 @@ func (e *Executor) callShopify(action string, in map[string]any) (map[string]any
 
 // Mailchimp Marketing: add/subscribe a member to an audience. Secret: MAILCHIMP_API_KEY.
 // The API key embeds the datacenter suffix (e.g. -us21); we parse it for the base URL.
-//   add_member (default): list_id, email, status (subscribed|pending)
+//
+//	add_member (default): list_id, email, status (subscribed|pending)
 func (e *Executor) callMailchimp(action string, in map[string]any) (map[string]any, error) {
 	key := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("MAILCHIMP_API_KEY"))
 	if key == "" {
@@ -327,7 +335,8 @@ func (e *Executor) callMailchimp(action string, in map[string]any) (map[string]a
 
 // OpenAI Chat Completions (a cloud LLM connector for text generation inside a
 // workflow). Secret: OPENAI_API_KEY.
-//   chat (default): prompt (or messages), model, system
+//
+//	chat (default): prompt (or messages), model, system
 func (e *Executor) callOpenAI(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("OPENAI_API_KEY"))
 	if token == "" {
@@ -395,7 +404,8 @@ func (e *Executor) callPushover(action string, in map[string]any) (map[string]an
 }
 
 // GraphQL: call any GraphQL endpoint. Generic, like the HTTP connector but for GraphQL.
-//   query (default): url, query, variables, auth_token (optional bearer)
+//
+//	query (default): url, query, variables, auth_token (optional bearer)
 func (e *Executor) callGraphQL(action string, in map[string]any) (map[string]any, error) {
 	endpoint := firstNonEmpty(str(in["url"]), str(in["endpoint"]))
 	query := str(in["query"])
@@ -424,7 +434,8 @@ func url_QueryEscape(s string) string {
 // ─── Connector coverage — wave 2 ───────────────────────────────────────────────
 
 // GitLab. Secret: GITLAB_TOKEN. base_url defaults to gitlab.com.
-//   create_issue (default): project_id, title, description
+//
+//	create_issue (default): project_id, title, description
 func (e *Executor) callGitLab(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("GITLAB_TOKEN"))
 	if token == "" {
@@ -456,7 +467,8 @@ func (e *Executor) callGitLab(action string, in map[string]any) (map[string]any,
 }
 
 // Monday.com (GraphQL). Secret: MONDAY_TOKEN.
-//   create_item (default): board_id, item_name
+//
+//	create_item (default): board_id, item_name
 func (e *Executor) callMonday(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("MONDAY_TOKEN"))
 	if token == "" {
@@ -480,7 +492,8 @@ func (e *Executor) callMonday(action string, in map[string]any) (map[string]any,
 }
 
 // Freshdesk. Secret: FRESHDESK_API_KEY. Requires base_url (https://acme.freshdesk.com).
-//   create_ticket (default): subject, description, email, priority(1-4)
+//
+//	create_ticket (default): subject, description, email, priority(1-4)
 func (e *Executor) callFreshdesk(action string, in map[string]any) (map[string]any, error) {
 	key := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("FRESHDESK_API_KEY"))
 	site := firstNonEmpty(str(in["base_url"]), e.secret("FRESHDESK_BASE_URL"))
@@ -516,7 +529,8 @@ func (e *Executor) callFreshdesk(action string, in map[string]any) (map[string]a
 }
 
 // Intercom. Secret: INTERCOM_TOKEN.
-//   create_contact (default): email, name
+//
+//	create_contact (default): email, name
 func (e *Executor) callIntercom(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("INTERCOM_TOKEN"))
 	if token == "" {
@@ -579,7 +593,8 @@ func (e *Executor) callMSGraph(action string, in map[string]any) (map[string]any
 }
 
 // WhatsApp Cloud API (Meta). Secret: WHATSAPP_TOKEN + phone number id (in config).
-//   send_message (default): phone_number_id, to, text
+//
+//	send_message (default): phone_number_id, to, text
 func (e *Executor) callWhatsApp(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("WHATSAPP_TOKEN"))
 	phoneID := firstNonEmpty(str(in["phone_number_id"]), e.secret("WHATSAPP_PHONE_ID"))
@@ -671,7 +686,8 @@ func (e *Executor) callCalendly(action string, in map[string]any) (map[string]an
 }
 
 // ServiceNow. Secrets: SERVICENOW_USER + SERVICENOW_PASSWORD. Requires base_url.
-//   create_incident (default): short_description, description
+//
+//	create_incident (default): short_description, description
 func (e *Executor) callServiceNow(action string, in map[string]any) (map[string]any, error) {
 	user := firstNonEmpty(str(in["user"]), e.secret("SERVICENOW_USER"))
 	pass := firstNonEmpty(e.resolveSecretRef(in["password"]), e.secret("SERVICENOW_PASSWORD"))

@@ -18,16 +18,16 @@ jobs:
     name: Go
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.26.8'
           cache: true
 
       - name: Check formatting
         run: |
-          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          unformatted=$(git ls-files -z -- '*.go' | xargs -0 gofmt -l)
           if [ -n "$unformatted" ]; then
             echo "These files need gofmt:"
             echo "$unformatted"
@@ -51,9 +51,9 @@ jobs:
     name: Console
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -66,6 +66,36 @@ jobs:
         working-directory: apps/designer
 
       - run: npm run build
+        working-directory: apps/designer
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.8'
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/designer/package-lock.json
+
+      - name: Audit Go dependencies
+        run: |
+          for module in . services/agent-integration services/execution-engine services/human-task-service services/workflow-registry; do
+            echo "Auditing $module"
+            (cd "$module" && go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...)
+          done
+
+      - name: Audit console dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm audit --audit-level=moderate
         working-directory: apps/designer
 
   # The binary people download is built on one platform and must run on six.
@@ -85,10 +115,10 @@ jobs:
           - { goos: windows, goarch: amd64 }
           - { goos: windows, goarch: arm64 }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.26.8'
           cache: true
       - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
         env:
@@ -103,11 +133,11 @@ jobs:
     name: End-to-end smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.25', cache: true }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.26.8', cache: true }
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -162,7 +192,7 @@ jobs:
     name: Container image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:

@@ -17,7 +17,7 @@ work you have already finished.
 
 ## Getting set up
 
-You need Go 1.25+ and Node 18+. Python 3.9+ is optional — without it KNOTT falls
+You need Go 1.26.8+ and Node 22+. Python 3.9+ is optional — without it KNOTT falls
 back to deterministic rule-based decisions, which is enough to develop against.
 
 ```bash

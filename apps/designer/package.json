@@ -11,22 +11,22 @@
     "brand": "python ../../tools/brand/generate.py"
   },
   "dependencies": {
+    "date-fns": "^4.1.0",
+    "js-yaml": "^4.1.0",
+    "lucide-react": "^0.453.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "reactflow": "^11.11.4",
-    "recharts": "^2.13.3",
-    "lucide-react": "^0.453.0",
-    "date-fns": "^4.1.0",
-    "js-yaml": "^4.1.0"
+    "recharts": "^2.13.3"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.3",
-    "vite": "^5.4.10",
-    "vitest": "^2.1.8",
-    "jsdom": "^25.0.1",
+    "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
-    "@testing-library/jest-dom": "^6.6.3"
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^25.0.1",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   },
-  "description": "KNOTT web console \u2014 workflow designer, run monitor and operations UI",
+  "description": "KNOTT web console — workflow designer, run monitor and operations UI",
   "license": "Apache-2.0"
 }
