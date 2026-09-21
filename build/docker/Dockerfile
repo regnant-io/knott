@@ -18,7 +18,7 @@ COPY apps/designer/ ./
 RUN npm run build
 
 # ─── Binary ───────────────────────────────────────────────────────────────────
-FROM golang:1.25-bookworm AS build
+FROM golang:1.26.8-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

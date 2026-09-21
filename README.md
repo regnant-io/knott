@@ -68,7 +68,7 @@ to run without installing.
 # Docker
 docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/regnant-io/knott
 
-# From source (Go 1.25+, Node 18+ — Python is optional)
+# From source (Go 1.26.8+, Node 22+ — Python is optional)
 git clone https://github.com/regnant-io/knott && cd knott
 make ui && make run
 ```

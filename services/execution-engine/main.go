@@ -265,7 +265,6 @@ func checkpointedNext(ctx map[string]any, nodeID string) (string, bool) {
 	return s, true
 }
 
-
 // ─── Workflow Execution Loop ──────────────────────────────────────────────────
 
 func processRun(runID string) {
@@ -928,15 +927,15 @@ func getStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, 200, map[string]any{
-		"total_workflows": wfCount,
-		"total_runs":      stats.TotalRuns,
-		"active_runs":     stats.ActiveRuns,
-		"completed_runs":  stats.CompletedRuns,
-		"failed_runs":     stats.FailedRuns,
-		"pending_tasks":   pendingTasks,
-		"total_decisions": stats.TotalDecisions,
-		"avg_confidence":  stats.AvgConfidence,
-		"daily":           stats.Daily,
+		"total_workflows":         wfCount,
+		"total_runs":              stats.TotalRuns,
+		"active_runs":             stats.ActiveRuns,
+		"completed_runs":          stats.CompletedRuns,
+		"failed_runs":             stats.FailedRuns,
+		"pending_tasks":           pendingTasks,
+		"total_decisions":         stats.TotalDecisions,
+		"avg_confidence":          stats.AvgConfidence,
+		"daily":                   stats.Daily,
 		"confidence_distribution": stats.Confidence,
 	})
 }
@@ -1092,10 +1091,10 @@ func taskCompleteCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload struct {
-		TaskID    string         `json:"task_id"`
-		Decision  string         `json:"decision"`
-		Justification string     `json:"justification"`
-		Response  map[string]any `json:"response"`
+		TaskID        string         `json:"task_id"`
+		Decision      string         `json:"decision"`
+		Justification string         `json:"justification"`
+		Response      map[string]any `json:"response"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, 400, "INVALID_REQUEST", err.Error())

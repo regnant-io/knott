@@ -48,7 +48,7 @@ func TestCodeNode(t *testing.T) {
 	ctx := map[string]any{"input": map[string]any{"first": "a", "last": "b", "amount": float64(10)}}
 	node := &WorkflowStep{ID: "c", Type: "code", Next: "n2",
 		Config: map[string]any{"assignments": map[string]any{
-			"full":   "concat(input.first, ' ', input.last)",
+			"full":    "concat(input.first, ' ', input.last)",
 			"doubled": "input.amount * 2",
 			"flag":    "input.amount > 5",
 		}}}

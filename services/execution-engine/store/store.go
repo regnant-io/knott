@@ -31,29 +31,29 @@ type Run struct {
 }
 
 type RunEvent struct {
-	ID        string          `json:"id"`
-	RunID     string          `json:"run_id"`
-	EventType string          `json:"event_type"`
-	NodeID    string          `json:"node_id,omitempty"`
-	Payload   json.RawMessage `json:"payload"`
-	ActorType string          `json:"actor_type"`
-	OccurredAt time.Time      `json:"occurred_at"`
+	ID         string          `json:"id"`
+	RunID      string          `json:"run_id"`
+	EventType  string          `json:"event_type"`
+	NodeID     string          `json:"node_id,omitempty"`
+	Payload    json.RawMessage `json:"payload"`
+	ActorType  string          `json:"actor_type"`
+	OccurredAt time.Time       `json:"occurred_at"`
 }
 
 type AIDecision struct {
-	ID            string          `json:"id"`
-	RunID         string          `json:"run_id"`
-	NodeID        string          `json:"node_id"`
-	TaskSpec      string          `json:"task_spec"`
-	ModelID       string          `json:"model_id"`
-	InputSnapshot json.RawMessage `json:"input_snapshot"`
+	ID             string          `json:"id"`
+	RunID          string          `json:"run_id"`
+	NodeID         string          `json:"node_id"`
+	TaskSpec       string          `json:"task_spec"`
+	ModelID        string          `json:"model_id"`
+	InputSnapshot  json.RawMessage `json:"input_snapshot"`
 	OutputSnapshot json.RawMessage `json:"output_snapshot"`
-	Confidence    float64         `json:"confidence"`
-	Reasoning     string          `json:"reasoning"`
-	Routing       string          `json:"routing"`
-	TokensUsed    int             `json:"tokens_used"`
-	LatencyMs     int             `json:"latency_ms"`
-	CreatedAt     time.Time       `json:"created_at"`
+	Confidence     float64         `json:"confidence"`
+	Reasoning      string          `json:"reasoning"`
+	Routing        string          `json:"routing"`
+	TokensUsed     int             `json:"tokens_used"`
+	LatencyMs      int             `json:"latency_ms"`
+	CreatedAt      time.Time       `json:"created_at"`
 }
 
 type Connector struct {
@@ -75,9 +75,9 @@ type Schedule struct {
 	ID         string          `json:"id"`
 	WorkflowID string          `json:"workflow_id"`
 	Name       string          `json:"name"`
-	Kind       string          `json:"kind"`        // interval | daily | cron
-	Expr       string          `json:"expr"`        // seconds (interval) | HH:MM (daily) | 5-field cron
-	InputData  json.RawMessage `json:"input_data"`  // payload passed to each run
+	Kind       string          `json:"kind"`       // interval | daily | cron
+	Expr       string          `json:"expr"`       // seconds (interval) | HH:MM (daily) | 5-field cron
+	InputData  json.RawMessage `json:"input_data"` // payload passed to each run
 	Active     bool            `json:"active"`
 	LastRunAt  *time.Time      `json:"last_run_at,omitempty"`
 	NextRunAt  *time.Time      `json:"next_run_at,omitempty"`
@@ -203,7 +203,7 @@ func (s *DB) SeedConnectors() {
 		s.upsertMissingConnectors()
 		return
 	}
-	
+
 	// Seed AVAILABLE connectors (not installed by default in production)
 	var n int
 	s.db.QueryRow("SELECT COUNT(*) FROM connectors").Scan(&n)
@@ -674,14 +674,14 @@ func (s *DB) PruneOldRuns(retentionDays int) (int, error) {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 type Stats struct {
-	TotalRuns      int     `json:"total_runs"`
-	ActiveRuns     int     `json:"active_runs"`
-	CompletedRuns  int     `json:"completed_runs"`
-	FailedRuns     int     `json:"failed_runs"`
-	PendingTasks   int     `json:"pending_tasks"`
-	TotalDecisions int     `json:"total_decisions"`
-	AvgConfidence  float64 `json:"avg_confidence"`
-	Daily          []DailyStat `json:"daily"`
+	TotalRuns      int          `json:"total_runs"`
+	ActiveRuns     int          `json:"active_runs"`
+	CompletedRuns  int          `json:"completed_runs"`
+	FailedRuns     int          `json:"failed_runs"`
+	PendingTasks   int          `json:"pending_tasks"`
+	TotalDecisions int          `json:"total_decisions"`
+	AvgConfidence  float64      `json:"avg_confidence"`
+	Daily          []DailyStat  `json:"daily"`
 	Confidence     []ConfBucket `json:"confidence_distribution"`
 }
 
@@ -749,8 +749,8 @@ func (s *DB) GetStats() *Stats {
 // confidenceDistribution buckets recorded AI decision confidences into ranges.
 func (s *DB) confidenceDistribution() []ConfBucket {
 	buckets := []struct {
-		label    string
-		lo, hi   float64
+		label  string
+		lo, hi float64
 	}{
 		{"0–60%", 0, 0.60},
 		{"60–75%", 0.60, 0.75},
@@ -772,18 +772,18 @@ func (s *DB) confidenceDistribution() []ConfBucket {
 // ─── Diagnostics / Observability ──────────────────────────────────────────────
 
 type FailureEvent struct {
-	RunID     string    `json:"run_id"`
-	NodeID    string    `json:"node_id"`
-	EventType string    `json:"event_type"`
-	Error     string    `json:"error"`
+	RunID      string    `json:"run_id"`
+	NodeID     string    `json:"node_id"`
+	EventType  string    `json:"event_type"`
+	Error      string    `json:"error"`
 	OccurredAt time.Time `json:"occurred_at"`
 }
 
 type NodeStat struct {
-	NodeID    string  `json:"node_id"`
-	Completed int     `json:"completed"`
-	Failed    int     `json:"failed"`
-	Retries   int     `json:"retries"`
+	NodeID    string `json:"node_id"`
+	Completed int    `json:"completed"`
+	Failed    int    `json:"failed"`
+	Retries   int    `json:"retries"`
 }
 
 type Diagnostics struct {
