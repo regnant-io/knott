@@ -190,6 +190,9 @@ func (s *DB) migrate() error {
 	if err != nil {
 		return err
 	}
+	if err := s.migrateConnectorSchema(); err != nil {
+		return err
+	}
 	if err := s.migrateCredentials(); err != nil {
 		return err
 	}
@@ -197,6 +200,39 @@ func (s *DB) migrate() error {
 		return err
 	}
 	return s.migrateTriggers()
+}
+
+// migrateConnectorSchema upgrades databases created before connectors had a
+// stable workflow-facing slug. CREATE TABLE IF NOT EXISTS does not alter an
+// existing SQLite table, so without this explicit migration upgraded desktop
+// installs fail every connector query with "no such column: slug".
+func (s *DB) migrateConnectorSchema() error {
+	rows, err := s.db.Query(`PRAGMA table_info(connectors)`)
+	if err != nil {
+		return err
+	}
+	hasSlug := false
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull, pk int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			rows.Close()
+			return err
+		}
+		if name == "slug" {
+			hasSlug = true
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if hasSlug {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE connectors ADD COLUMN slug TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 // SeedConnectors reconciles the connectors table with the shipped catalog.

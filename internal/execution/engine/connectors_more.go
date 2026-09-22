@@ -223,7 +223,7 @@ func (e *Executor) callMattermost(action string, in map[string]any) (map[string]
 func (e *Executor) callZendesk(action string, in map[string]any) (map[string]any, error) {
 	email := firstNonEmpty(str(in["email"]), e.secret("ZENDESK_EMAIL"))
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("ZENDESK_API_TOKEN"))
-	site := firstNonEmpty(str(in["base_url"]), e.secret("ZENDESK_BASE_URL"))
+	site := normalizeBaseURL(firstNonEmpty(str(in["base_url"]), e.secret("ZENDESK_BASE_URL")))
 	if email == "" || token == "" || site == "" {
 		return nil, fmt.Errorf("zendesk requires ZENDESK_EMAIL, ZENDESK_API_TOKEN and a base_url (https://acme.zendesk.com)")
 	}
@@ -260,7 +260,7 @@ func (e *Executor) callZendesk(action string, in map[string]any) (map[string]any
 //	create_order_note / list_products (default): list_products
 func (e *Executor) callShopify(action string, in map[string]any) (map[string]any, error) {
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("SHOPIFY_ACCESS_TOKEN"))
-	site := firstNonEmpty(str(in["base_url"]), e.secret("SHOPIFY_STORE_URL"))
+	site := normalizeBaseURL(firstNonEmpty(str(in["base_url"]), e.secret("SHOPIFY_STORE_URL")))
 	if token == "" || site == "" {
 		return nil, fmt.Errorf("shopify requires SHOPIFY_ACCESS_TOKEN and a base_url (https://your-store.myshopify.com)")
 	}
@@ -499,7 +499,7 @@ func (e *Executor) callMonday(action string, in map[string]any) (map[string]any,
 //	create_ticket (default): subject, description, email, priority(1-4)
 func (e *Executor) callFreshdesk(action string, in map[string]any) (map[string]any, error) {
 	key := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("FRESHDESK_API_KEY"))
-	site := firstNonEmpty(str(in["base_url"]), e.secret("FRESHDESK_BASE_URL"))
+	site := normalizeBaseURL(firstNonEmpty(str(in["base_url"]), e.secret("FRESHDESK_BASE_URL")))
 	if key == "" || site == "" {
 		return nil, fmt.Errorf("freshdesk requires FRESHDESK_API_KEY and a base_url (https://acme.freshdesk.com)")
 	}
@@ -694,7 +694,7 @@ func (e *Executor) callCalendly(action string, in map[string]any) (map[string]an
 func (e *Executor) callServiceNow(action string, in map[string]any) (map[string]any, error) {
 	user := firstNonEmpty(str(in["user"]), e.secret("SERVICENOW_USER"))
 	pass := firstNonEmpty(e.resolveSecretRef(in["password"]), e.secret("SERVICENOW_PASSWORD"))
-	site := firstNonEmpty(str(in["base_url"]), e.secret("SERVICENOW_BASE_URL"))
+	site := normalizeBaseURL(firstNonEmpty(str(in["base_url"]), e.secret("SERVICENOW_BASE_URL")))
 	if user == "" || pass == "" || site == "" {
 		return nil, fmt.Errorf("servicenow requires SERVICENOW_USER, SERVICENOW_PASSWORD and a base_url")
 	}

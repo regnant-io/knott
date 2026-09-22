@@ -568,33 +568,24 @@ func (e *Executor) resolveConnectorInputs(node *WorkflowStep, ctx map[string]any
 		config = map[string]any{}
 	}
 	resolvedInputs := resolveInputsMap(node.Inputs, ctx)
-	passthrough := []string{
-		"to", "from", "subject", "body", "text", "channel", "url", "endpoint",
-		"method", "headers", "query", "payload", "message",
-		"auth_type", "auth_credential", "auth_username", "auth_header",
-		"body_type", "timeout_seconds", "success_codes",
-		// App-connector fields
-		"chat_id", "parse_mode", "bot_token", "token",
-		"repo", "title", "description", "labels",
-		"base_id", "table", "fields",
-		"database_id", "title_property", "filter",
-		// Operations & additional connectors
-		"base_url", "issue_number", "issue_key", "record_id", "max_records", "state",
-		"content", "username", "webhook",
-		"project_key", "summary", "issue_type",
-		"email", "firstname", "lastname", "phone", "company", "properties",
-		"dealname", "amount",
-		"spreadsheet_id", "range", "values",
-		"driver", "dsn", "sql", "params",
-		"client_id", "client_secret", "refresh_token", "token_url",
-		"calendar_id", "start", "end", "currency", "customer", "name",
-		"output_path",
+	// Connector schemas evolve much faster than the engine.  Keeping an allow-list
+	// here meant a field could be visible and saved by the builder yet silently
+	// disappear at execution time (team_id, list_id, prompt, variables, etc.).
+	// Treat all non-routing config values as connector inputs; explicit node.Inputs
+	// still win. This makes catalog additions work without a second engine edit.
+	reserved := map[string]bool{
+		"connector_id": true, "connector": true, "app": true,
+		"action": true, "operation": true, "op": true,
+		"on_error": true, "retry": true, "retries": true,
+		"retry_delay": true, "retry_delay_seconds": true,
+		"continue_on_error": true,
 	}
-	for _, k := range passthrough {
+	for k, v := range config {
+		if reserved[k] {
+			continue
+		}
 		if _, exists := resolvedInputs[k]; !exists {
-			if v, ok := config[k]; ok {
-				resolvedInputs[k] = resolveValue(v, ctx)
-			}
+			resolvedInputs[k] = resolveValue(v, ctx)
 		}
 	}
 	return resolvedInputs
@@ -915,6 +906,15 @@ func (e *Executor) callConnector(connectorID, action string, in map[string]any) 
 	case "servicenow":
 		return e.callServiceNow(action, in)
 
+	// ── Connector coverage wave 3 ─────────────────────────────────────────────
+	case "anthropic", "gemini", "groq", "cohere",
+		"dropbox", "box", "google_drive", "onedrive",
+		"cloudflare", "digitalocean", "datadog", "newrelic", "sentry", "grafana",
+		"elasticsearch", "supabase", "mongodb_atlas", "rabbitmq", "kafka_rest",
+		"zoom", "typeform", "surveymonkey", "wordpress", "woocommerce",
+		"quickbooks", "x_twitter":
+		return e.callWave3Connector(strings.ToLower(connectorID), action, in)
+
 	default:
 		// Generic HTTP connector: if a URL is supplied, call it; otherwise this is
 		// an unconfigured connector and we surface a clear error (no silent fakes).
@@ -1196,7 +1196,7 @@ func (e *Executor) callDiscord(action string, in map[string]any) (map[string]any
 func (e *Executor) callJira(action string, in map[string]any) (map[string]any, error) {
 	email := firstNonEmpty(str(in["email"]), e.secret("JIRA_EMAIL"))
 	token := firstNonEmpty(e.resolveSecretRef(in["token"]), e.secret("JIRA_API_TOKEN"))
-	site := firstNonEmpty(str(in["base_url"]), str(in["site"]), e.secret("JIRA_BASE_URL"))
+	site := normalizeBaseURL(firstNonEmpty(str(in["base_url"]), str(in["site"]), e.secret("JIRA_BASE_URL")))
 	if email == "" || token == "" || site == "" {
 		return nil, fmt.Errorf("jira requires JIRA_EMAIL, JIRA_API_TOKEN and a site base_url (e.g. https://acme.atlassian.net)")
 	}
@@ -2565,6 +2565,17 @@ func defaultAction(action, fallback string) string {
 		return fallback
 	}
 	return strings.ToLower(strings.TrimSpace(action))
+}
+
+// normalizeBaseURL accepts the common credential-page input "acme.example.com"
+// as well as a full URL. Provider base URLs are HTTPS unless explicitly given
+// another scheme (self-hosted development endpoints may use http).
+func normalizeBaseURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw != "" && !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	return strings.TrimRight(raw, "/")
 }
 
 // extractPath navigates a dotted path into a decoded JSON value (maps + arrays),

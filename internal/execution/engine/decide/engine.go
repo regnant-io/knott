@@ -68,6 +68,11 @@ func (e *Engine) Available() bool {
 	return e.provider() != "simulation"
 }
 
+// Provider reports the active backend selected by the current configuration.
+// The embedded health/config endpoints use this so a rule-based engine is
+// reported as available rather than incorrectly labelled offline.
+func (e *Engine) Provider() string { return e.provider() }
+
 // provider resolves which backend to use.
 func (e *Engine) provider() string {
 	switch strings.ToLower(strings.TrimSpace(e.Config.Provider)) {

@@ -1316,6 +1316,106 @@ const CONNECTOR_SCHEMA = {
     { name: 'short_description', label: 'Short Description', placeholder: 'Incident: {{ input.summary }}', required: true },
     { name: 'description', label: 'Description', placeholder: 'Details…', textarea: true },
   ]},
+
+  // ── Expanded connector catalog ────────────────────────────────────────────
+  anthropic: { key: 'anthropic', label: 'Anthropic', creds: ['ANTHROPIC_API_KEY'], fields: [
+    { name: 'model', label: 'Model', placeholder: 'claude-3-5-haiku-latest' },
+    { name: 'system', label: 'System Prompt', textarea: true },
+    { name: 'prompt', label: 'Prompt', placeholder: 'Summarize {{ input.text }}', textarea: true, required: true },
+  ]},
+  gemini: { key: 'gemini', label: 'Google Gemini', creds: ['GEMINI_API_KEY'], fields: [
+    { name: 'model', label: 'Model', placeholder: 'gemini-2.0-flash' },
+    { name: 'prompt', label: 'Prompt', placeholder: 'Analyze {{ input.text }}', textarea: true, required: true },
+  ]},
+  groq: { key: 'groq', label: 'Groq', creds: ['GROQ_API_KEY'], fields: [
+    { name: 'model', label: 'Model', placeholder: 'llama-3.3-70b-versatile' },
+    { name: 'prompt', label: 'Prompt', textarea: true, required: true },
+  ]},
+  cohere: { key: 'cohere', label: 'Cohere', creds: ['COHERE_API_KEY'], fields: [
+    { name: 'model', label: 'Model', placeholder: 'command-r-plus' },
+    { name: 'prompt', label: 'Prompt', textarea: true, required: true },
+  ]},
+  dropbox: { key: 'dropbox', label: 'Dropbox', creds: ['DROPBOX_ACCESS_TOKEN'], fields: [
+    { name: 'path', label: 'Folder Path', placeholder: '/Reports (blank for root)' },
+  ]},
+  box: { key: 'box', label: 'Box', creds: ['BOX_ACCESS_TOKEN'], fields: [
+    { name: 'folder_id', label: 'Folder ID', placeholder: '0' },
+  ]},
+  google_drive: { key: 'google_drive', label: 'Google Drive', creds: ['GOOGLE_ACCESS_TOKEN (or GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_REFRESH_TOKEN)'], fields: [
+    { name: 'query', label: 'Drive Query', placeholder: "mimeType='application/pdf'" },
+  ]},
+  onedrive: { key: 'onedrive', label: 'Microsoft OneDrive', creds: ['MS_GRAPH_TOKEN'], fields: [] },
+  cloudflare: { key: 'cloudflare', label: 'Cloudflare', creds: ['CLOUDFLARE_API_TOKEN'], fields: [] },
+  digitalocean: { key: 'digitalocean', label: 'DigitalOcean', creds: ['DIGITALOCEAN_TOKEN'], fields: [] },
+  datadog: { key: 'datadog', label: 'Datadog', creds: ['DATADOG_API_KEY', 'DATADOG_APP_KEY'], fields: [
+    { name: 'title', label: 'Event Title', placeholder: 'KNOTT event' },
+    { name: 'text', label: 'Event Text', textarea: true, required: true },
+  ]},
+  newrelic: { key: 'newrelic', label: 'New Relic', creds: ['NEW_RELIC_API_KEY'], fields: [
+    { name: 'query', label: 'NerdGraph Query', placeholder: '{ actor { account(id: 1) { name } } }', textarea: true },
+  ]},
+  sentry: { key: 'sentry', label: 'Sentry', creds: ['SENTRY_AUTH_TOKEN'], fields: [] },
+  grafana: { key: 'grafana', label: 'Grafana', creds: ['GRAFANA_URL', 'GRAFANA_TOKEN'], fields: [
+    { name: 'query', label: 'Dashboard Search', placeholder: '{{ input.dashboard }}' },
+  ]},
+  elasticsearch: { key: 'elasticsearch', label: 'Elasticsearch', creds: ['ELASTICSEARCH_URL', 'ELASTICSEARCH_API_KEY'], fields: [
+    { name: 'index', label: 'Index', placeholder: 'logs-*', required: true },
+    { name: 'query', label: 'Query DSL (JSON)', placeholder: '{"query":{"match_all":{}}}', textarea: true },
+  ]},
+  supabase: { key: 'supabase', label: 'Supabase', creds: ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'], operations: [
+    { value: 'select', label: 'Select Rows', fields: [
+      { name: 'table', label: 'Table', placeholder: 'customers', required: true },
+      { name: 'select', label: 'Columns', placeholder: '*' },
+    ]},
+    { value: 'insert', label: 'Insert Row', fields: [
+      { name: 'table', label: 'Table', placeholder: 'customers', required: true },
+      { name: 'record', label: 'Record (JSON)', placeholder: '{"email":"{{ input.email }}"}', textarea: true, required: true },
+    ]},
+  ]},
+  mongodb_atlas: { key: 'mongodb_atlas', label: 'MongoDB Atlas Data API', creds: ['MONGODB_DATA_API_URL', 'MONGODB_DATA_API_KEY'], fields: [
+    { name: 'data_source', label: 'Data Source', placeholder: 'Cluster0', required: true },
+    { name: 'database', label: 'Database', placeholder: 'app', required: true },
+    { name: 'collection', label: 'Collection', placeholder: 'customers', required: true },
+    { name: 'filter', label: 'Filter (JSON)', placeholder: '{"email":"{{ input.email }}"}', textarea: true },
+  ]},
+  rabbitmq: { key: 'rabbitmq', label: 'RabbitMQ', creds: ['RABBITMQ_URL', 'RABBITMQ_USER', 'RABBITMQ_PASSWORD'], fields: [
+    { name: 'vhost', label: 'Virtual Host', placeholder: '/' },
+    { name: 'exchange', label: 'Exchange', placeholder: 'amq.default' },
+    { name: 'routing_key', label: 'Routing Key', placeholder: 'jobs', required: true },
+    { name: 'payload', label: 'Payload', placeholder: '{"id":"{{ input.id }}"}', textarea: true, required: true },
+  ]},
+  kafka_rest: { key: 'kafka_rest', label: 'Kafka REST Proxy', creds: ['KAFKA_REST_URL'], fields: [
+    { name: 'topic', label: 'Topic', placeholder: 'events', required: true },
+    { name: 'key', label: 'Key', placeholder: '{{ input.id }}' },
+    { name: 'value', label: 'Value (JSON)', placeholder: '{"event":"{{ input.event }}"}', textarea: true, required: true },
+  ]},
+  zoom: { key: 'zoom', label: 'Zoom', creds: ['ZOOM_ACCESS_TOKEN'], operations: [
+    { value: 'list_users', label: 'List Users', fields: [] },
+    { value: 'create_meeting', label: 'Create Meeting', fields: [
+      { name: 'user_id', label: 'Host User ID', placeholder: 'me' },
+      { name: 'topic', label: 'Topic', placeholder: '{{ input.title }}', required: true },
+      { name: 'start_time', label: 'Start Time', placeholder: '2026-10-01T10:00:00Z' },
+    ]},
+  ]},
+  typeform: { key: 'typeform', label: 'Typeform', creds: ['TYPEFORM_TOKEN'], fields: [
+    { name: 'form_id', label: 'Form ID (blank lists forms)', placeholder: 'AbCdEf' },
+  ]},
+  surveymonkey: { key: 'surveymonkey', label: 'SurveyMonkey', creds: ['SURVEYMONKEY_TOKEN'], fields: [] },
+  wordpress: { key: 'wordpress', label: 'WordPress', creds: ['WORDPRESS_URL', 'WORDPRESS_USER', 'WORDPRESS_APP_PASSWORD'], operations: [
+    { value: 'list_posts', label: 'List Posts', fields: [] },
+    { value: 'create_post', label: 'Create Post', fields: [
+      { name: 'title', label: 'Title', placeholder: '{{ input.title }}', required: true },
+      { name: 'content', label: 'Content', textarea: true },
+      { name: 'status', label: 'Status', type: 'select', options: ['draft', 'publish', 'private'] },
+    ]},
+  ]},
+  woocommerce: { key: 'woocommerce', label: 'WooCommerce', creds: ['WOOCOMMERCE_URL', 'WOOCOMMERCE_KEY', 'WOOCOMMERCE_SECRET'], fields: [] },
+  quickbooks: { key: 'quickbooks', label: 'QuickBooks Online', creds: ['QUICKBOOKS_ACCESS_TOKEN', 'QUICKBOOKS_REALM_ID'], fields: [
+    { name: 'query', label: 'QuickBooks Query', placeholder: 'select * from Customer maxresults 100', textarea: true },
+  ]},
+  x_twitter: { key: 'x_twitter', label: 'X / Twitter', creds: ['X_BEARER_TOKEN'], fields: [
+    { name: 'query', label: 'Recent Search Query', placeholder: 'from:openai -is:retweet', required: true },
+  ]},
 };
 
 // Best-effort mapping from an installed connector record to a schema key.
@@ -1443,13 +1543,14 @@ function ToolCallEditor({ d, onChange, connectorOpts, previewCtx }) {
   // The registry returns each connector's stable slug, which is what the
   // executor dispatches on — no need to guess it from the display name.
   const installable = (connectorOpts || [])
-    .map(c => ({ key: c.slug, name: c.name, ready: c.credentials_ready }))
+    .map(c => ({ ...c, key: c.slug, name: c.name, ready: c.credentials_ready }))
     .filter(c => c.key && CONNECTOR_SCHEMA[c.key]);
   const available = installable.length
     ? installable
     : Object.values(CONNECTOR_SCHEMA).map(s => ({ key: s.key, name: s.label }));
 
   const schema = CONNECTOR_SCHEMA[cfg.connector_id];
+  const connectorMeta = installable.find(c => c.key === cfg.connector_id);
   const fields = fieldsForOperation(schema, cfg.action);
 
   function setField(name, value) {
@@ -1513,8 +1614,12 @@ function ToolCallEditor({ d, onChange, connectorOpts, previewCtx }) {
         <div className="form-hint">Extract a sub-value from the response. Downstream: <code style={{ fontFamily: 'var(--font-mono)' }}>{'{{ steps.' + (d.id || 'node') + '.output.value }}'}</code></div>
       </div>
 
-      {schema && schema.creds && schema.creds.length > 0 && (
-        <ConnectorCredentialPanel creds={schema.creds} connectorLabel={schema.label} />
+      {schema && ((connectorMeta?.credentials?.length || 0) > 0 || (schema.creds?.length || 0) > 0) && (
+        <ConnectorCredentialPanel
+          creds={connectorMeta?.credentials || schema.creds}
+          connectorLabel={schema.label}
+          ready={connectorMeta?.credentials_ready}
+        />
       )}
       <ConnectorTester cfg={cfg} previewCtx={previewCtx} />
       <div className="form-hint">
@@ -1527,7 +1632,7 @@ function ToolCallEditor({ d, onChange, connectorOpts, previewCtx }) {
 // Shows live credential readiness for the selected connector and lets the user
 // fill missing secrets inline (stored encrypted via the credentials API), so a
 // workflow can be wired end-to-end without leaving the builder.
-function ConnectorCredentialPanel({ creds, connectorLabel }) {
+function ConnectorCredentialPanel({ creds, connectorLabel, ready }) {
   const [status, setStatus] = useState(null); // { name: configured }
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState('');
@@ -1536,8 +1641,18 @@ function ConnectorCredentialPanel({ creds, connectorLabel }) {
   // Each schema cred entry may be a hint like "GOOGLE_REFRESH_TOKEN (or GOOGLE_ACCESS_TOKEN)".
   // Extract the primary UPPER_SNAKE token to manage.
   const keyEntries = creds.map(entry => {
+    if (typeof entry === 'object') {
+      return {
+        entry: entry.name,
+        primary: entry.name,
+        alts: [entry.name],
+        label: entry.label,
+        optional: !!entry.optional,
+        requiredNow: !!entry.required_now,
+      };
+    }
     const m = String(entry).match(/[A-Z0-9_]{3,}/g) || [];
-    return { entry, primary: m[0] || entry, alts: m };
+    return { entry, primary: m[0] || entry, alts: m, requiredNow: true };
   });
 
   async function load() {
@@ -1567,7 +1682,9 @@ function ConnectorCredentialPanel({ creds, connectorLabel }) {
     finally { setSaving(''); }
   }
 
-  const allReady = status && keyEntries.every(({ alts }) => alts.some(k => status[k]));
+  const allReady = status && (ready === true || keyEntries
+    .filter(k => k.requiredNow)
+    .every(({ alts }) => alts.some(k => status[k])));
 
   return (
     <div className="card" style={{ marginTop: 8, padding: '12px 14px', borderColor: allReady ? 'var(--green)' : 'var(--amber)' }}>
@@ -1576,12 +1693,12 @@ function ConnectorCredentialPanel({ creds, connectorLabel }) {
         {allReady ? `${connectorLabel} credentials ready` : `${connectorLabel} needs credentials`}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {keyEntries.map(({ entry, primary, alts }) => {
+        {keyEntries.map(({ entry, primary, alts, label, optional }) => {
           const ok = status && alts.some(k => status[k]);
           return (
             <div key={entry} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <div style={{ flex: '0 0 150px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-                {primary}
+                {label || primary}{optional ? ' (optional)' : ''}
               </div>
               {ok ? (
                 <span className="badge badge-green" style={{ fontSize: 10 }}><Check size={10} /> set</span>
