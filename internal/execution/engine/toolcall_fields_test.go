@@ -42,3 +42,34 @@ func TestToolCallConnectorFieldNames(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveConnectorInputsForwardsCatalogFields(t *testing.T) {
+	e := newTestExecutor(nil)
+	node := &WorkflowStep{
+		Config: map[string]any{
+			"connector_id":      "linear",
+			"action":            "create_issue",
+			"team_id":           "team-123",
+			"short_description": "{{ input.summary }}",
+			"variables":         `{"id":"{{ input.id }}"}`,
+			"on_error":          "fallback",
+			"retry":             3,
+		},
+		Inputs: map[string]any{"team_id": "explicit-team"},
+	}
+	got := e.resolveConnectorInputs(node, map[string]any{"input": map[string]any{"summary": "Disk full", "id": "42"}})
+	if got["team_id"] != "explicit-team" {
+		t.Fatalf("node inputs must override config, got %v", got["team_id"])
+	}
+	if got["short_description"] != "Disk full" {
+		t.Fatalf("new catalog field was not resolved, got %v", got["short_description"])
+	}
+	if got["variables"] != `{"id":"42"}` {
+		t.Fatalf("JSON field template was not resolved, got %v", got["variables"])
+	}
+	for _, reserved := range []string{"connector_id", "action", "on_error", "retry"} {
+		if _, exists := got[reserved]; exists {
+			t.Fatalf("routing field %s leaked into connector inputs", reserved)
+		}
+	}
+}

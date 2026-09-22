@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { defToFlow, flowToDef } from './WorkflowDesignerShell.jsx';
+import { defToFlow, flowToDef, isCanvasDoubleClickTarget } from './WorkflowDesignerShell.jsx';
 
 /**
  * The canvas and the stored definition hold the same graph in two shapes, and
@@ -146,5 +146,23 @@ describe('flowToDef', () => {
       if (step.cases) expect(got.cases).toEqual(step.cases);
       if (step.default) expect(got.default).toBe(step.default);
     }
+  });
+});
+
+describe('canvas double-click guard', () => {
+  it('ignores rapid clicks on the zoom-in control', () => {
+    const controls = document.createElement('div');
+    controls.className = 'react-flow__controls';
+    const plus = document.createElement('button');
+    controls.appendChild(plus);
+    document.body.appendChild(controls);
+    expect(isCanvasDoubleClickTarget(plus)).toBe(false);
+    controls.remove();
+  });
+
+  it('accepts a double-click on the canvas pane', () => {
+    const pane = document.createElement('div');
+    pane.className = 'react-flow__pane';
+    expect(isCanvasDoubleClickTarget(pane)).toBe(true);
   });
 });

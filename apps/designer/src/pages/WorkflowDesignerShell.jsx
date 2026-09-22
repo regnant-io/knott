@@ -36,6 +36,12 @@ const EDGE_STYLE = {
   style: { strokeWidth: 2 },
 };
 
+export function isCanvasDoubleClickTarget(target) {
+  return !target.closest?.(
+    '.react-flow__controls, .react-flow__minimap, .react-flow__node, .react-flow__edge, button, input, textarea, select, a',
+  );
+}
+
 // ─── Definition ⇄ canvas ──────────────────────────────────────────────────────
 //
 // The graph on screen and the definition on disk hold the same information in
@@ -332,6 +338,10 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
   }, [placeNode]);
 
   const onPaneDoubleClick = useCallback(e => {
+    // ReactFlow's generic double-click event also bubbles from its zoom controls.
+    // Rapidly clicking the zoom-in + therefore used to open the "next step"
+    // picker. Only canvas/pane double-clicks are an add-step gesture.
+    if (!isCanvasDoubleClickTarget(e.target)) return;
     const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     setPicker({ at: position });
   }, [screenToFlowPosition]);
@@ -713,7 +723,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor }) {
               proOptions={{ hideAttribution: true }}
             >
               <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="var(--border-dim)" />
-              <Controls showInteractive={false} />
+              <Controls showInteractive={false} onDoubleClick={e => e.stopPropagation()} />
               <MiniMap
                 pannable
                 zoomable

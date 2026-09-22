@@ -1047,6 +1047,7 @@ func getDiagnostics(w http.ResponseWriter, r *http.Request) {
 // designer can show "it works" / "here's why it failed" before saving.
 func testConnector(w http.ResponseWriter, r *http.Request) {
 	var body struct {
+		Mode        string         `json:"mode"`
 		ConnectorID string         `json:"connector_id"`
 		Connector   string         `json:"connector"`
 		Action      string         `json:"action"`
@@ -1083,6 +1084,37 @@ func testConnector(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "VALIDATION_ERROR", "connector_id (or connector) is required")
 		return
 	}
+	// The connector settings page validates authentication only. It must never
+	// execute the connector's default business action with an empty payload.
+	if strings.EqualFold(body.Mode, "connection") {
+		start := time.Now()
+		out, err := executor.TestConnection(connectorID)
+		latency := time.Since(start).Milliseconds()
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error(), "latency_ms": latency})
+			return
+		}
+		if response, ok := out["response"].(map[string]any); ok {
+			if apiOK, exists := response["ok"].(bool); exists && !apiOK {
+				message := firstNonEmptyString(response["error"], "Provider rejected the credentials")
+				writeJSON(w, 200, map[string]any{"ok": false, "error": message, "latency_ms": latency})
+				return
+			}
+			if errs, exists := response["errors"]; exists && errs != nil {
+				writeJSON(w, 200, map[string]any{"ok": false, "error": fmt.Sprintf("Provider returned errors: %v", errs), "latency_ms": latency})
+				return
+			}
+		}
+		result := map[string]any{"ok": true, "output": out, "latency_ms": latency}
+		if v, ok := out["validated"]; ok {
+			result["validated"] = v
+		}
+		if v, ok := out["detail"]; ok {
+			result["detail"] = v
+		}
+		writeJSON(w, 200, result)
+		return
+	}
 	// Build a minimal context so templates referencing input resolve.
 	ctx := map[string]any{"input": body.SampleInput}
 	node := &engine.WorkflowStep{
@@ -1107,6 +1139,13 @@ func testConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "output": out, "latency_ms": latency})
+}
+
+func firstNonEmptyString(v any, fallback string) string {
+	if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+		return s
+	}
+	return fallback
 }
 
 // listPollTriggers returns the derived polling-trigger cache for monitoring.
@@ -1264,6 +1303,167 @@ func taskSpecsHandler(proxy http.Handler) http.HandlerFunc {
 	}
 }
 
+// embeddedAIHandler prefers the optional Python AI service and falls back to
+// the in-process decision engine. Desktop distributions therefore retain a
+// working health/config surface even when Python is not installed.
+func embeddedAIHandler(proxy http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		rec := &captureWriter{header: http.Header{}}
+		proxy.ServeHTTP(rec, r)
+		if rec.status > 0 && rec.status < 400 {
+			for k, vs := range rec.header {
+				for _, v := range vs {
+					w.Header().Add(k, v)
+				}
+			}
+			w.WriteHeader(rec.status)
+			w.Write(rec.body.Bytes())
+			return
+		}
+
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		path := r.URL.Path
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/health"):
+			provider := "simulation"
+			if executor != nil && executor.Decider != nil {
+				provider = executor.Decider.Provider()
+			}
+			writeJSON(w, 200, map[string]any{"status": "ok", "service": "ai-decision-engine", "mode": "embedded", "ai_provider": provider})
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/config"):
+			writeJSON(w, 200, embeddedAIConfig())
+		case r.Method == http.MethodPut && strings.HasSuffix(path, "/config"):
+			var patch map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+				writeError(w, 400, "INVALID_REQUEST", err.Error())
+				return
+			}
+			updateEmbeddedAIConfig(patch)
+			writeJSON(w, 200, embeddedAIConfig())
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/config/test"):
+			var patch map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&patch)
+			writeJSON(w, 200, testEmbeddedAIConfig(patch))
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/ollama/models"):
+			writeJSON(w, 200, embeddedOllamaModels())
+		default:
+			writeError(w, 503, "AI_FEATURE_UNAVAILABLE", "This AI feature requires the optional Python engine; embedded workflow decisions remain online")
+		}
+	}
+}
+
+func embeddedAIConfig() map[string]any {
+	provider, ollamaURL, ollamaModel, anthropic := "auto", "http://localhost:11434", "llama3.1:latest", false
+	active := "simulation"
+	if executor != nil && executor.Decider != nil {
+		cfg := executor.Decider.Config
+		if cfg.Provider != "" {
+			provider = cfg.Provider
+		}
+		if cfg.OllamaBaseURL != "" {
+			ollamaURL = cfg.OllamaBaseURL
+		}
+		if cfg.OllamaModel != "" {
+			ollamaModel = cfg.OllamaModel
+		}
+		anthropic = cfg.AnthropicKey != ""
+		active = executor.Decider.Provider()
+	}
+	return map[string]any{"provider": provider, "active_provider": active, "anthropic_configured": anthropic,
+		"ollama_base_url": ollamaURL, "ollama_model": ollamaModel, "embedded": true}
+}
+
+func updateEmbeddedAIConfig(patch map[string]any) {
+	if executor == nil || executor.Decider == nil {
+		return
+	}
+	cfg := executor.Decider.Config
+	if v := strings.TrimSpace(fmt.Sprint(patch["provider"])); v != "" && v != "<nil>" {
+		cfg.Provider = v
+		_ = db.SetCredential("AI_PROVIDER", v)
+	}
+	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_base_url"])); v != "" && v != "<nil>" {
+		cfg.OllamaBaseURL = v
+		_ = db.SetCredential("OLLAMA_BASE_URL", v)
+	}
+	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_model"])); v != "" && v != "<nil>" {
+		cfg.OllamaModel = v
+		_ = db.SetCredential("OLLAMA_MODEL", v)
+	}
+	if v := strings.TrimSpace(fmt.Sprint(patch["anthropic_api_key"])); v != "" && v != "<nil>" {
+		cfg.AnthropicKey = v
+		_ = db.SetCredential("ANTHROPIC_API_KEY", v)
+	}
+	executor.Decider.Config = cfg
+}
+
+func testEmbeddedAIConfig(patch map[string]any) map[string]any {
+	if executor == nil || executor.Decider == nil {
+		return map[string]any{"ok": false, "detail": "Embedded decision engine is not initialized"}
+	}
+	cfg := executor.Decider.Config
+	if v := strings.TrimSpace(fmt.Sprint(patch["provider"])); v != "" && v != "<nil>" {
+		cfg.Provider = v
+	}
+	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_base_url"])); v != "" && v != "<nil>" {
+		cfg.OllamaBaseURL = v
+	}
+	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_model"])); v != "" && v != "<nil>" {
+		cfg.OllamaModel = v
+	}
+	if v := strings.TrimSpace(fmt.Sprint(patch["anthropic_api_key"])); v != "" && v != "<nil>" {
+		cfg.AnthropicKey = v
+	}
+	probe := decide.New(cfg)
+	switch probe.Provider() {
+	case "simulation":
+		return map[string]any{"ok": true, "detail": "Embedded rule-based decisions are ready", "active_provider": "simulation"}
+	case "ollama":
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get(strings.TrimRight(cfg.OllamaBaseURL, "/") + "/api/tags")
+		if err != nil {
+			return map[string]any{"ok": false, "detail": err.Error()}
+		}
+		defer resp.Body.Close()
+		return map[string]any{"ok": resp.StatusCode < 400, "detail": fmt.Sprintf("Ollama HTTP %d", resp.StatusCode), "active_provider": "ollama"}
+	default:
+		req, _ := http.NewRequest("GET", "https://api.anthropic.com/v1/models?limit=1", nil)
+		req.Header.Set("x-api-key", cfg.AnthropicKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+		if err != nil {
+			return map[string]any{"ok": false, "detail": err.Error()}
+		}
+		defer resp.Body.Close()
+		return map[string]any{"ok": resp.StatusCode < 400, "detail": fmt.Sprintf("Anthropic HTTP %d", resp.StatusCode), "active_provider": "anthropic"}
+	}
+}
+
+func embeddedOllamaModels() map[string]any {
+	base := "http://localhost:11434"
+	if executor != nil && executor.Decider != nil && executor.Decider.Config.OllamaBaseURL != "" {
+		base = executor.Decider.Config.OllamaBaseURL
+	}
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(strings.TrimRight(base, "/") + "/api/tags")
+	if err != nil {
+		return map[string]any{"data": []any{}, "error": err.Error()}
+	}
+	defer resp.Body.Close()
+	var payload map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&payload)
+	models := []any{}
+	if raw, ok := payload["models"].([]any); ok {
+		for _, item := range raw {
+			if m, ok := item.(map[string]any); ok {
+				models = append(models, m["name"])
+			}
+		}
+	}
+	return map[string]any{"data": models}
+}
+
 // captureWriter buffers a handler's response so it can be discarded in favour of
 // a fallback. Responses here are a short list of task descriptions, so holding
 // one in memory costs nothing.
@@ -1295,17 +1495,12 @@ func listConnectors(w http.ResponseWriter, r *http.Request) {
 	for _, c := range conns {
 		entry, known := catalog[c.Slug]
 
-		// Alternatives form a group that any one member satisfies, so Slack is
-		// ready with a webhook URL *or* a bot token.
-		satisfied := map[string]bool{}
-		for _, spec := range entry.Credentials {
-			if secretConfigured(creds, spec.Name) {
-				satisfied[credentialGroup(spec)] = true
-			}
-		}
-
 		fields := make([]map[string]any, 0, len(entry.Credentials))
-		missing := []string{}
+		missing := missingCredentialNames(entry, creds)
+		missingSet := map[string]bool{}
+		for _, name := range missing {
+			missingSet[name] = true
+		}
 		for _, spec := range entry.Credentials {
 			source := ""
 			if _, stored := credSet(creds, spec.Name); stored {
@@ -1313,16 +1508,11 @@ func listConnectors(w http.ResponseWriter, r *http.Request) {
 			} else if os.Getenv(spec.Name) != "" {
 				source = "env"
 			}
-			// An alternative is only "missing" while nothing in its group is set.
-			required := !spec.Optional || (spec.AltOf != "" && !satisfied[spec.AltOf])
-			if required && source == "" {
-				missing = append(missing, spec.Name)
-			}
 			fields = append(fields, map[string]any{
 				"name": spec.Name, "label": spec.Label, "help": spec.Help,
 				"secret": spec.Secret, "optional": spec.Optional, "alt_of": spec.AltOf,
 				"placeholder": spec.Placeholder,
-				"configured":  source != "", "source": source,
+				"configured":  source != "", "source": source, "required_now": missingSet[spec.Name],
 			})
 		}
 
@@ -1391,6 +1581,21 @@ var knownSecretKeys = store.KnownSecretNames()
 // configured. Alternatives (a Slack webhook URL *or* a bot token) form a group
 // that any one member satisfies.
 func connectorReady(entry store.CatalogEntry, creds []*store.Credential) bool {
+	if len(entry.CredentialSets) > 0 {
+		for _, set := range entry.CredentialSets {
+			ready := true
+			for _, name := range set {
+				if !secretConfigured(creds, name) {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				return true
+			}
+		}
+		return false
+	}
 	satisfied := map[string]bool{}
 	for _, spec := range entry.Credentials {
 		if secretConfigured(creds, spec.Name) {
@@ -1406,6 +1611,49 @@ func connectorReady(entry store.CatalogEntry, creds []*store.Credential) bool {
 		}
 	}
 	return true
+}
+
+// missingCredentialNames returns the smallest authentication recipe still
+// needed. This avoids telling an access-token user that a full OAuth refresh
+// trio is also mandatory.
+func missingCredentialNames(entry store.CatalogEntry, creds []*store.Credential) []string {
+	if len(entry.CredentialSets) > 0 {
+		var best []string
+		for _, set := range entry.CredentialSets {
+			var candidate []string
+			for _, name := range set {
+				if !secretConfigured(creds, name) {
+					candidate = append(candidate, name)
+				}
+			}
+			if len(candidate) == 0 {
+				return []string{}
+			}
+			if best == nil || len(candidate) < len(best) {
+				best = candidate
+			}
+		}
+		return best
+	}
+	satisfied := map[string]bool{}
+	for _, spec := range entry.Credentials {
+		if secretConfigured(creds, spec.Name) {
+			satisfied[credentialGroup(spec)] = true
+		}
+	}
+	var missing []string
+	seen := map[string]bool{}
+	for _, spec := range entry.Credentials {
+		if spec.Optional && spec.AltOf == "" {
+			continue
+		}
+		group := credentialGroup(spec)
+		if !satisfied[group] && !seen[group] {
+			missing = append(missing, group)
+			seen[group] = true
+		}
+	}
+	return missing
 }
 
 // credentialGroup names the alternatives set a credential belongs to.
@@ -1459,22 +1707,34 @@ func deleteCredential(w http.ResponseWriter, r *http.Request) {
 // Settings page works in any deployment topology (single-port, remote, proxied).
 func systemHealth(w http.ResponseWriter, r *http.Request) {
 	type svc struct {
-		Name string `json:"name"`
-		Port string `json:"port"`
-		URL  string `json:"-"`
+		Name     string `json:"name"`
+		Endpoint string `json:"endpoint"`
+		URL      string `json:"-"`
+		Embedded bool   `json:"-"`
 	}
+	endpoint := func(raw string) string {
+		u, err := url.Parse(raw)
+		if err == nil && u.Host != "" {
+			return u.Host
+		}
+		return raw
+	}
+	registryURL := getEnv("REGISTRY_URL", "http://localhost:8001")
+	aiURL := getEnv("AI_DECISION_URL", "http://localhost:8003")
+	taskURL := getEnv("HUMAN_TASK_URL", "http://localhost:8004")
+	agentURL := getEnv("AGENT_URL", "http://localhost:8005")
 	services := []svc{
-		{"Workflow Registry", "8001", getEnv("REGISTRY_URL", "http://localhost:8001") + "/api/v1/health"},
-		{"Execution Engine", "8002", "self"},
-		{"AI Decision Engine", "8003", getEnv("AI_DECISION_URL", "http://localhost:8003") + "/internal/v1/health"},
-		{"Human Task Service", "8004", getEnv("HUMAN_TASK_URL", "http://localhost:8004") + "/api/v1/health"},
-		{"Agent Integration", "8005", getEnv("AGENT_URL", "http://localhost:8005") + "/api/v1/health"},
+		{"Workflow Registry", endpoint(registryURL), registryURL + "/api/v1/health", false},
+		{"Execution Engine", r.Host, "self", false},
+		{"AI Decision Engine", endpoint(aiURL), aiURL + "/internal/v1/health", true},
+		{"Human Task Service", endpoint(taskURL), taskURL + "/api/v1/health", false},
+		{"Agent Integration", endpoint(agentURL), agentURL + "/api/v1/health", false},
 	}
 
 	client := &http.Client{Timeout: 3 * time.Second}
 	results := make([]map[string]any, len(services))
 	for i, s := range services {
-		entry := map[string]any{"name": s.Name, "port": s.Port, "status": "error"}
+		entry := map[string]any{"name": s.Name, "endpoint": s.Endpoint, "status": "error"}
 		if s.URL == "self" {
 			entry["status"] = "ok"
 			results[i] = entry
@@ -1495,9 +1755,19 @@ func systemHealth(w http.ResponseWriter, r *http.Request) {
 				}
 			}()
 		}
+		if entry["status"] != "ok" && s.Embedded && executor != nil && executor.Decider != nil {
+			entry["status"] = "ok"
+			entry["endpoint"] = "Embedded"
+			entry["mode"] = "embedded"
+			entry["ai_provider"] = executor.Decider.Provider()
+		}
 		results[i] = entry
 	}
-	writeJSON(w, 200, map[string]any{"services": results})
+	writeJSON(w, 200, map[string]any{
+		"services": results,
+		"runtime":  getEnv("KNOTT_RUNTIME", "distributed"),
+		"version":  getEnv("KNOTT_VERSION", "dev"),
+	})
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1968,12 +2238,18 @@ func Run() error {
 	// Sub-workflow nodes start child runs through the run store directly.
 	executor.SubRunner = subRunner{}
 	// Decide in-process when the optional Python service is not running.
+	storedOrEnv := func(name, fallback string) string {
+		if value, ok := db.GetCredential(name); ok && value != "" {
+			return value
+		}
+		return getEnv(name, fallback)
+	}
 	executor.Decider = decide.New(decide.Config{
-		AnthropicKey:  os.Getenv("ANTHROPIC_API_KEY"),
-		AnthropicBase: os.Getenv("ANTHROPIC_BASE_URL"),
-		OllamaBaseURL: os.Getenv("OLLAMA_BASE_URL"),
-		OllamaModel:   getEnv("OLLAMA_MODEL", "llama3.1:latest"),
-		Provider:      os.Getenv("AI_PROVIDER"),
+		AnthropicKey:  storedOrEnv("ANTHROPIC_API_KEY", ""),
+		AnthropicBase: storedOrEnv("ANTHROPIC_BASE_URL", ""),
+		OllamaBaseURL: storedOrEnv("OLLAMA_BASE_URL", ""),
+		OllamaModel:   storedOrEnv("OLLAMA_MODEL", "llama3.1:latest"),
+		Provider:      storedOrEnv("AI_PROVIDER", "auto"),
 	})
 	if executor.Decider.Available() {
 		log.Printf("[Engine] Built-in decision engine ready (model-backed)")
@@ -2106,12 +2382,12 @@ func Run() error {
 		// what the engine can actually decide.
 		r.Handle("/task-specs", taskSpecsHandler(aiProxy))
 		r.Handle("/task-specs/*", taskSpecsHandler(aiProxy))
-		r.Handle("/health", aiProxy)
+		r.Handle("/health", embeddedAIHandler(aiProxy))
 		// Runtime AI provider configuration (Settings page): get/update config,
 		// test connectivity, and list locally-installed Ollama models.
-		r.Handle("/config", aiProxy)
-		r.Handle("/config/*", aiProxy)
-		r.Handle("/ollama/models", aiProxy)
+		r.Handle("/config", embeddedAIHandler(aiProxy))
+		r.Handle("/config/*", embeddedAIHandler(aiProxy))
+		r.Handle("/ollama/models", embeddedAIHandler(aiProxy))
 		// AI workflow generation (build a workflow from a plain-English prompt).
 		r.Handle("/generate-workflow", aiProxy)
 	})

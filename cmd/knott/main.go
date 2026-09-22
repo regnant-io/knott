@@ -41,9 +41,10 @@ import (
 
 // Build metadata, stamped by the release build with -ldflags -X.
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version        = "dev"
+	commit         = "none"
+	date           = "unknown"
+	defaultCommand = "serve" // release GUI builds stamp this to "desktop"
 )
 
 const banner = "\n" +
@@ -79,7 +80,7 @@ Documentation: https://github.com/regnant/knott
 func main() {
 	log.SetFlags(log.Ltime)
 
-	cmd := "serve"
+	cmd := defaultCommand
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
 		cmd = os.Args[1]
 		os.Args = append(os.Args[:1], os.Args[2:]...)
@@ -122,6 +123,12 @@ func serve(desktop bool) error {
 		quiet = flag.Bool("quiet", false, "suppress the startup banner")
 	)
 	flag.Parse()
+	os.Setenv("KNOTT_VERSION", version)
+	if desktop {
+		os.Setenv("KNOTT_RUNTIME", "desktop")
+	} else {
+		os.Setenv("KNOTT_RUNTIME", "server")
+	}
 
 	if *home != "" {
 		os.Setenv("KNOTT_HOME", *home)

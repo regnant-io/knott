@@ -44,6 +44,11 @@ type CatalogEntry struct {
 	// Enabled is the default on/off state for a fresh install.
 	Enabled     bool
 	Credentials []CredentialSpec
+	// CredentialSets describes valid authentication recipes. Each inner slice is
+	// an AND set and the outer slice is OR. It is used for providers such as
+	// Google where either one access token OR the client-id/client-secret/refresh-
+	// token trio is sufficient. When empty, Credentials/Optional/AltOf apply.
+	CredentialSets [][]string
 }
 
 func secret(name, label, help string) CredentialSpec {
@@ -274,6 +279,7 @@ func Catalog() []CatalogEntry {
 				alt(secret("GOOGLE_ACCESS_TOKEN", "Access Token",
 					"A short-lived token. Useful for a quick test; it expires within an hour."), "GOOGLE_REFRESH_TOKEN"),
 			},
+			CredentialSets: [][]string{{"GOOGLE_ACCESS_TOKEN"}, {"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"}},
 		},
 		{
 			Slug: "google_calendar", Name: "Google Calendar", Category: "Productivity", Icon: "layers", Enabled: true,
@@ -285,6 +291,7 @@ func Catalog() []CatalogEntry {
 				secret("GOOGLE_REFRESH_TOKEN", "Refresh Token", "Obtained once through the OAuth consent flow."),
 				alt(secret("GOOGLE_ACCESS_TOKEN", "Access Token", "A short-lived token, useful for a quick test."), "GOOGLE_REFRESH_TOKEN"),
 			},
+			CredentialSets: [][]string{{"GOOGLE_ACCESS_TOKEN"}, {"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"}},
 		},
 		{
 			Slug: "trello", Name: "Trello", Category: "Productivity", Icon: "layers", Enabled: true,
@@ -361,7 +368,7 @@ func Catalog() []CatalogEntry {
 			Slug: "shopify", Name: "Shopify", Category: "E-commerce", Icon: "credit-card", Enabled: true,
 			Description: "List products and create customers in Shopify",
 			Credentials: []CredentialSpec{
-				plain("SHOPIFY_STORE_URL", "Store URL", "Your myshopify domain.", "acme.myshopify.com"),
+				plain("SHOPIFY_STORE_URL", "Store URL", "Your myshopify domain.", "https://acme.myshopify.com"),
 				secret("SHOPIFY_ACCESS_TOKEN", "Admin API Access Token", "Shopify admin → Apps → Develop apps → your app → API credentials."),
 			},
 		},
@@ -381,6 +388,184 @@ func Catalog() []CatalogEntry {
 			Credentials: []CredentialSpec{
 				secret("OPENAI_API_KEY", "API Key", "platform.openai.com/api-keys."),
 			},
+		},
+		{
+			Slug: "anthropic", Name: "Anthropic", Category: "AI", Icon: "cpu", Enabled: true,
+			Description: "Generate text with Claude", DocsURL: "https://console.anthropic.com/settings/keys",
+			Credentials: []CredentialSpec{secret("ANTHROPIC_API_KEY", "API Key", "Anthropic Console → Settings → API Keys.")},
+		},
+		{
+			Slug: "gemini", Name: "Google Gemini", Category: "AI", Icon: "cpu", Enabled: true,
+			Description: "Generate text with Gemini", DocsURL: "https://aistudio.google.com/app/apikey",
+			Credentials: []CredentialSpec{secret("GEMINI_API_KEY", "API Key", "Google AI Studio → Get API key.")},
+		},
+		{
+			Slug: "groq", Name: "Groq", Category: "AI", Icon: "cpu", Enabled: true,
+			Description: "Run low-latency language models through Groq", DocsURL: "https://console.groq.com/keys",
+			Credentials: []CredentialSpec{secret("GROQ_API_KEY", "API Key", "Groq Console → API Keys.")},
+		},
+		{
+			Slug: "cohere", Name: "Cohere", Category: "AI", Icon: "cpu", Enabled: true,
+			Description: "Generate and classify text with Cohere", DocsURL: "https://dashboard.cohere.com/api-keys",
+			Credentials: []CredentialSpec{secret("COHERE_API_KEY", "API Key", "Cohere Dashboard → API Keys.")},
+		},
+
+		// ── Storage & files ────────────────────────────────────────────────────
+		{
+			Slug: "dropbox", Name: "Dropbox", Category: "Storage", Icon: "archive", Enabled: true,
+			Description: "List and upload files in Dropbox", DocsURL: "https://www.dropbox.com/developers/apps",
+			Credentials: []CredentialSpec{secret("DROPBOX_ACCESS_TOKEN", "Access Token", "Dropbox App Console → OAuth 2 → Generated access token.")},
+		},
+		{
+			Slug: "box", Name: "Box", Category: "Storage", Icon: "archive", Enabled: true,
+			Description: "List folders and upload files in Box", DocsURL: "https://developer.box.com/guides/authentication/",
+			Credentials: []CredentialSpec{secret("BOX_ACCESS_TOKEN", "Access Token", "A Box OAuth 2 access token for the target enterprise or user.")},
+		},
+		{
+			Slug: "google_drive", Name: "Google Drive", Category: "Storage", Icon: "archive", Enabled: true,
+			Description: "List and create files in Google Drive", DocsURL: "https://console.cloud.google.com/apis/credentials",
+			Credentials: []CredentialSpec{
+				secret("GOOGLE_CLIENT_ID", "OAuth Client ID", "Google Cloud Console → APIs & Services → Credentials."),
+				secret("GOOGLE_CLIENT_SECRET", "OAuth Client Secret", "Issued alongside the client ID."),
+				secret("GOOGLE_REFRESH_TOKEN", "Refresh Token", "Obtained through the OAuth consent flow with a Drive scope."),
+				alt(secret("GOOGLE_ACCESS_TOKEN", "Access Token", "A short-lived OAuth access token."), "GOOGLE_REFRESH_TOKEN"),
+			},
+			CredentialSets: [][]string{{"GOOGLE_ACCESS_TOKEN"}, {"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"}},
+		},
+		{
+			Slug: "onedrive", Name: "Microsoft OneDrive", Category: "Storage", Icon: "archive", Enabled: true,
+			Description: "List and create files in OneDrive through Microsoft Graph",
+			Credentials: []CredentialSpec{secret("MS_GRAPH_TOKEN", "Microsoft Graph Token", "An OAuth token with Files.ReadWrite permissions.")},
+		},
+
+		// ── Infrastructure & observability ─────────────────────────────────────
+		{
+			Slug: "cloudflare", Name: "Cloudflare", Category: "Operations", Icon: "cloud", Enabled: true,
+			Description: "Manage Cloudflare zones and DNS records", DocsURL: "https://dash.cloudflare.com/profile/api-tokens",
+			Credentials: []CredentialSpec{secret("CLOUDFLARE_API_TOKEN", "API Token", "Cloudflare → My Profile → API Tokens.")},
+		},
+		{
+			Slug: "digitalocean", Name: "DigitalOcean", Category: "Operations", Icon: "cloud", Enabled: true,
+			Description: "List and manage DigitalOcean resources", DocsURL: "https://cloud.digitalocean.com/account/api/tokens",
+			Credentials: []CredentialSpec{secret("DIGITALOCEAN_TOKEN", "Personal Access Token", "DigitalOcean → API → Tokens/Keys.")},
+		},
+		{
+			Slug: "datadog", Name: "Datadog", Category: "Operations", Icon: "zap", Enabled: true,
+			Description: "Submit events and query Datadog", DocsURL: "https://app.datadoghq.com/organization-settings/api-keys",
+			Credentials: []CredentialSpec{
+				secret("DATADOG_API_KEY", "API Key", "Datadog → Organization Settings → API Keys."),
+				secret("DATADOG_APP_KEY", "Application Key", "Datadog → Organization Settings → Application Keys."),
+				optional(plain("DATADOG_SITE", "Datadog Site", "API site for your region.", "datadoghq.com")),
+			},
+		},
+		{
+			Slug: "newrelic", Name: "New Relic", Category: "Operations", Icon: "zap", Enabled: true,
+			Description: "Query New Relic NerdGraph", DocsURL: "https://one.newrelic.com/api-keys",
+			Credentials: []CredentialSpec{secret("NEW_RELIC_API_KEY", "User API Key", "New Relic → API keys. Use a User key.")},
+		},
+		{
+			Slug: "sentry", Name: "Sentry", Category: "Operations", Icon: "zap", Enabled: true,
+			Description: "List projects and inspect issues in Sentry", DocsURL: "https://sentry.io/settings/account/api/auth-tokens/",
+			Credentials: []CredentialSpec{secret("SENTRY_AUTH_TOKEN", "Auth Token", "Sentry → User settings → Auth tokens.")},
+		},
+		{
+			Slug: "grafana", Name: "Grafana", Category: "Operations", Icon: "zap", Enabled: true,
+			Description: "Search dashboards and call the Grafana API",
+			Credentials: []CredentialSpec{
+				plain("GRAFANA_URL", "Grafana URL", "The root URL of your Grafana instance.", "https://grafana.example.com"),
+				secret("GRAFANA_TOKEN", "Service Account Token", "Grafana → Administration → Service accounts."),
+			},
+		},
+		{
+			Slug: "elasticsearch", Name: "Elasticsearch", Category: "Database", Icon: "database", Enabled: true,
+			Description: "Search and index Elasticsearch documents",
+			Credentials: []CredentialSpec{
+				plain("ELASTICSEARCH_URL", "Cluster URL", "Elasticsearch endpoint.", "https://cluster.example.com"),
+				secret("ELASTICSEARCH_API_KEY", "API Key", "An Elasticsearch encoded API key."),
+			},
+		},
+
+		// ── Data platforms ─────────────────────────────────────────────────────
+		{
+			Slug: "supabase", Name: "Supabase", Category: "Database", Icon: "database", Enabled: true,
+			Description: "Read and write Supabase tables through PostgREST", DocsURL: "https://supabase.com/dashboard/project/_/settings/api",
+			Credentials: []CredentialSpec{
+				plain("SUPABASE_URL", "Project URL", "Supabase project settings → API.", "https://project.supabase.co"),
+				secret("SUPABASE_SERVICE_KEY", "Service Role Key", "Supabase project settings → API. Keep this server-side."),
+			},
+		},
+		{
+			Slug: "mongodb_atlas", Name: "MongoDB Atlas Data API", Category: "Database", Icon: "database", Enabled: true,
+			Description: "Find and insert MongoDB Atlas documents through the Data API",
+			Credentials: []CredentialSpec{
+				plain("MONGODB_DATA_API_URL", "Data API URL", "Atlas App Services Data API endpoint.", "https://data.mongodb-api.com/app/data-xxxxx/endpoint/data/v1"),
+				secret("MONGODB_DATA_API_KEY", "API Key", "Atlas App Services → Data API → API Keys."),
+			},
+		},
+		{
+			Slug: "rabbitmq", Name: "RabbitMQ", Category: "Messaging", Icon: "message-square", Enabled: true,
+			Description: "Publish messages through the RabbitMQ Management API",
+			Credentials: []CredentialSpec{
+				plain("RABBITMQ_URL", "Management URL", "RabbitMQ management endpoint.", "https://rabbitmq.example.com"),
+				plain("RABBITMQ_USER", "Username", "RabbitMQ user with management API access.", "knott"),
+				secret("RABBITMQ_PASSWORD", "Password", "Password for the RabbitMQ user."),
+			},
+		},
+		{
+			Slug: "kafka_rest", Name: "Kafka REST Proxy", Category: "Messaging", Icon: "message-square", Enabled: true,
+			Description: "Produce records through a Kafka REST Proxy",
+			Credentials: []CredentialSpec{
+				plain("KAFKA_REST_URL", "REST Proxy URL", "Confluent or self-hosted REST Proxy root URL.", "https://kafka.example.com"),
+				optional(secret("KAFKA_REST_TOKEN", "Bearer Token", "Optional bearer token for the REST Proxy.")),
+			},
+		},
+
+		// ── Collaboration, forms & commerce ────────────────────────────────────
+		{
+			Slug: "zoom", Name: "Zoom", Category: "Communication", Icon: "users", Enabled: true,
+			Description: "List users and create Zoom meetings", DocsURL: "https://developers.zoom.us/docs/internal-apps/",
+			Credentials: []CredentialSpec{secret("ZOOM_ACCESS_TOKEN", "Access Token", "A Zoom OAuth access token with meeting scopes.")},
+		},
+		{
+			Slug: "typeform", Name: "Typeform", Category: "Forms", Icon: "layers", Enabled: true,
+			Description: "List forms and retrieve Typeform responses", DocsURL: "https://www.typeform.com/developers/get-started/personal-access-token/",
+			Credentials: []CredentialSpec{secret("TYPEFORM_TOKEN", "Personal Access Token", "Typeform account → Personal tokens.")},
+		},
+		{
+			Slug: "surveymonkey", Name: "SurveyMonkey", Category: "Forms", Icon: "layers", Enabled: true,
+			Description: "List surveys and retrieve responses", DocsURL: "https://developer.surveymonkey.com/api/v3/",
+			Credentials: []CredentialSpec{secret("SURVEYMONKEY_TOKEN", "Access Token", "SurveyMonkey developer app credentials.")},
+		},
+		{
+			Slug: "wordpress", Name: "WordPress", Category: "Content", Icon: "layers", Enabled: true,
+			Description: "Create and list WordPress posts through the REST API",
+			Credentials: []CredentialSpec{
+				plain("WORDPRESS_URL", "Site URL", "WordPress site root URL.", "https://example.com"),
+				plain("WORDPRESS_USER", "Username", "WordPress user for the application password.", "editor"),
+				secret("WORDPRESS_APP_PASSWORD", "Application Password", "Users → Profile → Application Passwords."),
+			},
+		},
+		{
+			Slug: "woocommerce", Name: "WooCommerce", Category: "E-commerce", Icon: "credit-card", Enabled: true,
+			Description: "List products and create WooCommerce orders",
+			Credentials: []CredentialSpec{
+				plain("WOOCOMMERCE_URL", "Store URL", "WooCommerce store root URL.", "https://store.example.com"),
+				secret("WOOCOMMERCE_KEY", "Consumer Key", "WooCommerce → Settings → Advanced → REST API."),
+				secret("WOOCOMMERCE_SECRET", "Consumer Secret", "Issued with the consumer key."),
+			},
+		},
+		{
+			Slug: "quickbooks", Name: "QuickBooks Online", Category: "Accounting", Icon: "credit-card", Enabled: true,
+			Description: "Query customers and invoices in QuickBooks Online",
+			Credentials: []CredentialSpec{
+				secret("QUICKBOOKS_ACCESS_TOKEN", "OAuth Access Token", "Intuit OAuth 2 access token."),
+				plain("QUICKBOOKS_REALM_ID", "Company Realm ID", "The QuickBooks company ID returned by OAuth.", "123456789"),
+			},
+		},
+		{
+			Slug: "x_twitter", Name: "X / Twitter", Category: "Communication", Icon: "message-square", Enabled: true,
+			Description: "Search recent posts and publish through the X API", DocsURL: "https://developer.x.com/en/portal/dashboard",
+			Credentials: []CredentialSpec{secret("X_BEARER_TOKEN", "Bearer Token", "X Developer Portal → Project/App → Keys and tokens.")},
 		},
 
 		// ── Generic ──────────────────────────────────────────────────────────

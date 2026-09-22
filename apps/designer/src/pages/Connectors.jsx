@@ -312,7 +312,7 @@ function CredentialForm({ connector: c, fields, onSaved }) {
     setBusy('test');
     setTestResult(null);
     try {
-      const r = await connectorsApi.test({ connector_id: c.slug, sample_input: {} });
+      const r = await connectorsApi.test({ mode: 'connection', connector_id: c.slug });
       setTestResult(r);
     } catch (e) {
       setTestResult({ ok: false, error: e.message });
@@ -412,7 +412,7 @@ function CredentialForm({ connector: c, fields, onSaved }) {
       {testResult && (
         <div className={`test-result ${testResult.ok ? 'ok' : 'fail'}`}>
           {testResult.ok
-            ? <><Check size={13} /> Connected{testResult.latency_ms != null && ` in ${testResult.latency_ms}ms`}</>
+            ? <><Check size={13} /> {testResult.validated === 'configuration' ? 'Configuration valid' : 'Connected'}{testResult.latency_ms != null && ` in ${testResult.latency_ms}ms`}{testResult.detail && <> · {testResult.detail}</>}</>
             : <><AlertTriangle size={13} /> {testResult.error || 'The call did not succeed'}</>}
         </div>
       )}

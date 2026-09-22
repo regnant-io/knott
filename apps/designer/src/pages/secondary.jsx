@@ -243,13 +243,14 @@ import { Settings as SettingsIcon, Key, Server, Info, Cpu, CheckCircle2, XCircle
 import { stats as statsApi, aiConfig as aiConfigApi } from '../lib/api.js';
 
 export function Settings({ theme = 'system', onSetTheme }) {
-  const [services, setServices] = useState([]);
+  const [systemInfo, setSystemInfo] = useState({ services: [] });
+  const services = systemInfo.services || [];
   const { toast } = uT();
 
   useEffect(() => {
     const load = () => statsApi.health()
-      .then(r => setServices(r.services || []))
-      .catch(() => setServices([]));
+      .then(r => setSystemInfo(r || { services: [] }))
+      .catch(() => setSystemInfo({ services: [] }));
     load();
     const t = setInterval(load, 10000);
     return () => clearInterval(t);
@@ -315,12 +316,12 @@ export function Settings({ theme = 'system', onSetTheme }) {
             {services.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Checking services…</div>
             ) : services.map(s => (
-              <div key={s.port} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-dim)' }}>
+              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-dim)' }}>
                 <div className={`status-dot ${s.status === 'ok' ? '' : 'offline'}`} />
                 <span style={{ fontWeight: 500, fontSize: 13 }}>{s.name}{s.ai_provider ? ` (${s.ai_provider})` : ''}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>:{s.port}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{s.endpoint || (s.port ? `:${s.port}` : '')}</span>
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: s.status === 'ok' ? 'var(--green)' : 'var(--red)' }}>
-                  {s.status === 'ok' ? '● Online' : '● Offline'}
+                  {s.status === 'ok' ? `● Online${s.mode === 'embedded' ? ' · Embedded' : ''}` : '● Offline'}
                 </span>
               </div>
             ))}
@@ -334,12 +335,13 @@ export function Settings({ theme = 'system', onSetTheme }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
             {[
               ['Product',    'KNOTT'],
-              ['Version',    '1.0.0'],
-              ['Registry',   'Go + Chi (port 8001)'],
-              ['Engine',     'Go + goroutines (port 8002)'],
-              ['AI Engine',  'Python stdlib (port 8003)'],
-              ['Task Svc',   'Go + Chi (port 8004)'],
-              ['Agents',     'Go + Chi (port 8005)'],
+              ['Version',    systemInfo.version || 'development'],
+              ['Runtime',    systemInfo.runtime || 'distributed'],
+              ['Registry',   'Embedded Go service'],
+              ['Engine',     'Go + goroutines'],
+              ['AI Engine',  'Embedded rules/models + optional Python'],
+              ['Task Svc',   'Embedded Go service'],
+              ['Agents',     'Embedded Go service'],
               ['Database',   'SQLite (per service)'],
               ['Frontend',   'React + Vite + React Flow'],
             ].map(([k, v]) => (
