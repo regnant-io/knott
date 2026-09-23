@@ -9,9 +9,9 @@
 Design workflows visually, run them durably, put a human in the loop where it
 matters, and keep an audit trail of every decision — from one binary you own.
 
-[![CI](https://github.com/regnant-io/knott/actions/workflows/ci.yml/badge.svg)](https://github.com/regnant/knott/actions/workflows/ci.yml)
+[![CI](https://github.com/regnant-io/knott/actions/workflows/ci.yml/badge.svg)](https://github.com/regnant-io/knott/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev)
+[![Go](https://img.shields.io/badge/go-1.26+-00ADD8.svg)](https://go.dev)
 
 [Install](#install) · [How it works](#how-it-works) · [Connectors](#connectors) · [Building workflows](docs/workflows.md) · [Deploying](docs/deployment.md) · [Contributing](CONTRIBUTING.md)
 
@@ -40,50 +40,55 @@ It is a single binary. No cluster, no message broker, no managed service.
 <table>
 <tr><td width="33%">
 
-**macOS**
+**Windows**
 
-Download the `.dmg` from
-[Releases](https://github.com/regnant-io/knott/releases),
-drag KNOTT to Applications.
+Run `KNOTT-…-windows-x64-setup.exe` from
+[Releases](https://github.com/regnant-io/knott/releases).
+Choose per-user or all users, the folder,
+shortcuts and the `knott` command.
+A portable `.zip` needs no install.
 
 </td><td width="33%">
 
-**Windows**
+**macOS**
 
-Download the `.msi` from
-[Releases](https://github.com/regnant-io/knott/releases)
-and run it.
+Open `KNOTT-…-macos-arm64.dmg`
+(or `-amd64` for Intel) and drag
+KNOTT to Applications.
 
 </td><td width="33%">
 
 **Linux**
 
-`.deb`, `.rpm`, or the `.AppImage`
-to run without installing.
+`knott-desktop` `.deb` / `.rpm` for the
+app, `knott` for servers.
 
 </td></tr>
 </table>
+
+KNOTT is a native desktop application — a real window over the operating
+system's own web view (WebView2, WKWebView, WebKitGTK), with menus, a
+single-instance lock and a clean shutdown that lets running workflows finish.
+It is not a browser tab, and it does not need a browser installed.
+
+On a server, the same platform is one binary with no window:
 
 ```bash
 # Docker
 docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/regnant-io/knott
 
-# From source (Go 1.26.8+, Node 22+ — Python is optional)
+# The server binary (any OS)
+knott serve --open           # console at http://localhost:8002
+
+# From source (Go 1.26.8+, Node 22+)
 git clone https://github.com/regnant-io/knott && cd knott
-make ui && make run
+make ui && make run          # server + browser
+make desktop-run             # the native desktop app
 ```
 
-Then:
-
-```bash
-knott desktop          # opens KNOTT in its own window
-knott serve --open     # or just serve, and open a browser
-```
-
-The console is at **http://localhost:8002**. On first run, open
-**Workflows → Examples** for ten complete starter workflows covering finance,
-support, supply chain and HR — each a working trigger → decision → review →
-outcome graph you can run immediately.
+On first run, open **Workflows → Examples** for ten complete starter workflows
+covering finance, support, supply chain and HR — or describe what you want on
+an empty canvas and let the AI draft it.
 
 > KNOTT binds to loopback with authentication off, which is right for a laptop
 > and wrong for a server. Set `API_KEYS` before exposing it — see
@@ -108,24 +113,25 @@ A workflow is a graph of steps. You draw it; KNOTT runs it.
                    └───────────┘
 ```
 
-**Building it.** Click the **+** on any step and search for what you want the
-next one to do — "slack", "wait", "approval". The step arrives already
-connected. `Tab` opens the same search from anywhere. Undo, copy/paste and a
-tidy-layout button work the way you expect.
+**Building it.** Click the **+** on any step — or on a connection, to insert a
+step between two others — and the node creator slides in beside the canvas.
+Search steps, apps and app actions at once ("send slack message", "dedupe",
+"approval"), browse by category, or drag any result to exactly where you want
+it. `Tab` opens it from anywhere; double-click the canvas to add a step there.
+The inspector configures the selected step in three tabs — Setup, Settings
+(retries, timeouts, error routing) and Output (what it produced in the run on
+screen).
 
 **Steps you can use**
 
 | | |
 |---|---|
-| **Trigger** | Webhook, schedule, polled source, or a manual run |
-| **AI Decision** | A model decides, with a confidence threshold and a fallback |
-| **Human Task** | Pauses for a person; approval, rejection and justification are recorded |
-| **Condition** | One labelled output per branch, plus a default |
-| **Connector** | Call an app or any HTTP endpoint |
-| **Sub-workflow** | Run another workflow and use its result |
-| **Loop / Parallel / Merge** | Iterate, fan out, fan back in |
-| **Set / Expression / Filter / Wait** | Shape data, compute values, gate, pause |
-| **Agent** | Hand work to a registered external agent |
+| **Triggers** | Manual, webhook, schedule (interval, daily, cron), polling for new items |
+| **AI** | AI Prompt (write, summarise, extract JSON), AI Decision (with a confidence threshold), external agents |
+| **Apps** | 177 connectors, HTTP Request for any API, Run workflow (sub-workflows) |
+| **Flow** | If / Switch, Filter, Loop, Parallel, Merge, Wait, Stop and error, End |
+| **Data** | Set fields, Expression, Transform, Sort, Limit, Remove duplicates, Filter items, Map items, Aggregate, Date & time, Crypto |
+| **Human** | Review tasks — approve, reject or fill in a form, with SLAs |
 
 **When something fails.** Steps that can fail have a second, red output. Draw a
 line from it and that is where the run goes when the step fails — after its
@@ -137,36 +143,34 @@ not retry in lockstep.
 restart resumes where it left off without re-firing a side effect that already
 happened. A distributed lease means exactly one replica executes a given run.
 
-**AI, wherever you want it.** Anthropic Claude, a local Ollama model, or
-deterministic rules. The decision engine is compiled into the binary — set
-`ANTHROPIC_API_KEY` or `OLLAMA_BASE_URL` and it calls that provider; set neither
-and it decides by rule, conservatively, escalating anything it cannot clear. A
-provider that goes down does not stop a run: the rules answer, and the audit log
-records that they did. Set a confidence threshold per step and low-confidence
-decisions go to a person automatically.
-
-An optional Python sidecar adds workflow generation from a plain-English prompt.
-KNOTT runs without it and without Python installed at all.
+**AI, wherever you want it.** Install [Ollama](https://ollama.com), pull any
+model, and KNOTT uses it — no configuration: it finds the local server
+(honouring `OLLAMA_HOST`), picks an installed model, and keeps it loaded
+between steps. Or add an Anthropic API key. With neither, AI Decision steps
+fall back to deterministic rules that escalate anything they cannot clear, and
+the audit log says so. Everything runs inside the binary; Python is not needed.
 
 ---
 
 ## Connectors
 
-Around forty integrations ship in the box: Slack, Microsoft Teams, Discord,
-Telegram, WhatsApp, SendGrid, Twilio, Outlook, Pushover, Mattermost · GitHub,
-GitLab, Linear, Jira, Zendesk, Freshdesk, ServiceNow, PagerDuty · HubSpot,
-Intercom, Close · Notion, Google Sheets, Google Calendar, Airtable, Trello,
-Asana, ClickUp, Monday, Coda, Calendly · Stripe, Shopify, Mailchimp · OpenAI ·
-SQL (SQLite, PostgreSQL, MySQL) · and generic HTTP and GraphQL for everything
-else.
+**177 integrations** across CRM, marketing and analytics, e-commerce and
+logistics, finance, developer tools, databases and vector stores, AI models,
+communication, customer support, productivity, HR, healthcare (FHIR), education,
+legal and e-signature, maps and data, smart home and social media — plus HTTP
+Request and GraphQL for everything else.
 
-Each connector has its own card on the Connectors page: a switch, the exact
-credentials it needs — each with a line telling you where to find the value —
-and a button that makes a real call to check them. Credentials are encrypted at
-rest and never shown again once saved.
+The Connectors page lists them all, filterable by category and status. Each app
+opens a drawer with the exact credentials it needs — with a line telling you
+where to find each value — a button that makes a harmless live call to check
+them, and the actions it offers. Credentials are encrypted at rest and never
+shown again once saved.
 
-Missing one? [Ask for it](https://github.com/-io/knott/issues/new?template=connector.yml),
-or add it — CONTRIBUTING.md has a walkthrough.
+**Adding one is a JSON entry.** A connector is a definition in
+[`internal/connectors/defs`](internal/connectors/defs): its credentials, how it
+authenticates, and the HTTP request each action makes. The engine runs it and
+the console renders its forms from the same definition — no Go, no React. See
+[docs/connectors.md](docs/connectors.md).
 
 ---
 
@@ -208,10 +212,13 @@ AGENT_URL=http://agents:8005 knott-engine
 | `API_KEYS` | `key:role` pairs. Roles: `admin`, `operator`, `viewer` |
 | `KNOTT_SECRET_KEY` | Encrypts stored credentials. Generated on first run if unset |
 | `WEBHOOK_SECRET` | Requires an HMAC signature on inbound webhooks |
-| `CORS_ORIGINS` | Restricts browser origins. Permissive by default |
+| `KNOTT_ALLOWED_ORIGINS` | Extra browser origins allowed to call the API (the console's own origin always is). Alias: `CORS_ORIGINS` |
+| `KNOTT_ALLOWED_HOSTS` | Extra host names a loopback-bound server answers to, e.g. behind a local proxy |
 | `KNOTT_HOME` | State directory. Defaults to the per-OS application data path |
 | `PORT`, `KNOTT_BIND_HOST` | Where to listen. Defaults to `127.0.0.1:8002` |
-| `ANTHROPIC_API_KEY` / `OLLAMA_BASE_URL` | AI provider. Also settable in the UI |
+| `OLLAMA_HOST` / `OLLAMA_BASE_URL` | Where Ollama listens (detected automatically on `127.0.0.1:11434`). `KNOTT_DETECT_OLLAMA=0` turns detection off |
+| `ANTHROPIC_API_KEY` | Use Anthropic Claude. Also settable in Settings → AI |
+| `KNOTT_ENV_SECRETS` | `off` stops workflows reading credentials from environment variables (stored credentials only) |
 | `RUN_RETENTION_DAYS` | Prunes finished runs after this many days |
 | `METRICS_TOKEN` | Gates `/metrics` behind a bearer token |
 

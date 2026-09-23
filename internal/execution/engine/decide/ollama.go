@@ -146,11 +146,13 @@ func (e *Engine) ollamaModelFor(profileOrModel string) (string, error) {
 	cfg := e.Config()
 	want := strings.TrimSpace(profileOrModel)
 	if m, ok := ModelProfiles[want]; ok {
-		if strings.HasPrefix(want, "ollama_") {
+		if want == "ollama_default" {
+			// The configured model, or no preference at all: the shipped
+			// default is only a suggestion and must not be reported as a
+			// model someone asked for.
+			want = cfg.OllamaModel
+		} else if strings.HasPrefix(want, "ollama_") {
 			want = m
-			if profileOrModel == "ollama_default" && cfg.OllamaModel != "" {
-				want = cfg.OllamaModel
-			}
 		} else {
 			// An Anthropic profile ("default", "fast") on Ollama means "the
 			// configured local model".
