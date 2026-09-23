@@ -15,8 +15,9 @@
  * remove most edge crossings, which is what actually makes a graph readable.
  */
 
-const COLUMN_GAP = 260;
-const ROW_GAP = 130;
+// Cards are 260px wide; the gap leaves room for the + button and edge tools.
+export const COLUMN_GAP = 340;
+export const ROW_GAP = 150;
 const ORIGIN = { x: 80, y: 80 };
 const SWEEPS = 6;
 

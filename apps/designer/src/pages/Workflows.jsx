@@ -245,8 +245,10 @@ function GenerateWorkflowModal({ onClose, onCreated }) {
       setPreview(r.workflow);
       setMeta({ generator: r.generator, model: r.model_id });
       setWarnings(r.warnings || []);
-      if (r.generator === 'simulation') {
-        toast('Generated with rule-based fallback', 'info', 'Configure an AI provider in Settings for richer graphs.');
+      if (r.generator === 'simulation' || r.generator === 'template') {
+        toast('Drafted from a template', 'info', r.fallback_reason
+          ? `The AI model failed (${r.fallback_reason}).`
+          : 'Connect an AI model in Settings → AI for a draft tailored to your description.');
       } else {
         toast('Workflow generated', 'success', `via ${r.model_id}`);
       }
@@ -316,7 +318,7 @@ function GenerateWorkflowModal({ onClose, onCreated }) {
               <Bot size={15} />
               <span style={{ fontWeight: 700, fontSize: 14 }}>{preview.name}</span>
               <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {meta?.generator === 'simulation' ? 'rule-based' : meta?.model}
+                {meta?.generator === 'simulation' || meta?.generator === 'template' ? 'template' : meta?.model}
               </span>
             </div>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.5 }}>{preview.description}</p>
