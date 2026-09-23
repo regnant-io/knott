@@ -1,0 +1,243 @@
+[
+  {
+    "slug": "bigcommerce", "name": "BigCommerce", "category": "E-commerce", "color": "#121118", "icon": "shopping-cart",
+    "description": "Read orders and products, and create customers in BigCommerce",
+    "docs_url": "https://developer.bigcommerce.com/docs/rest-management",
+    "credentials": [
+      {"name": "BIGCOMMERCE_STORE_HASH", "label": "Store hash", "placeholder": "abc123", "help": "The code in your API path: /stores/{hash}/."},
+      {"name": "BIGCOMMERCE_ACCESS_TOKEN", "label": "Access token", "secret": true, "help": "Settings → API accounts → Create store-level API account."}
+    ],
+    "http": {
+      "base_url": "https://api.bigcommerce.com/stores/{cred:BIGCOMMERCE_STORE_HASH}",
+      "auth": {"type": "header", "header": "X-Auth-Token", "credential": "BIGCOMMERCE_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "Store info", "method": "GET", "path": "/v2/store", "fields": []}
+    },
+    "actions": [
+      {"id": "list_orders", "label": "List orders", "method": "GET", "path": "/v2/orders", "query": {"status_id": "{status_id}", "limit": "{limit}", "min_date_created": "{since}"},
+       "fields": [
+         {"name": "status_id", "label": "Status ID", "type": "number"},
+         {"name": "since", "label": "Created since", "placeholder": "2026-01-01"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]},
+      {"id": "get_order", "label": "Get order", "method": "GET", "path": "/v2/orders/{order_id}",
+       "fields": [{"name": "order_id", "label": "Order ID", "required": true}]},
+      {"id": "list_products", "label": "List products", "method": "GET", "path": "/v3/catalog/products", "query": {"keyword": "{keyword}", "limit": "{limit}"}, "items_path": "data",
+       "fields": [
+         {"name": "keyword", "label": "Keyword"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]},
+      {"id": "create_customer", "label": "Create customer", "method": "POST", "path": "/v3/customers",
+       "body": [{"email": "{email}", "first_name": "{first_name}", "last_name": "{last_name}", "phone": "{phone}"}],
+       "fields": [
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "first_name", "label": "First name", "required": true},
+         {"name": "last_name", "label": "Last name", "required": true},
+         {"name": "phone", "label": "Phone"}
+       ]}
+    ]
+  },
+  {
+    "slug": "square", "name": "Square", "category": "E-commerce", "color": "#006AFF", "icon": "credit-card",
+    "description": "Read payments and orders, and manage customers in Square",
+    "docs_url": "https://developer.squareup.com/reference/square",
+    "credentials": [{"name": "SQUARE_ACCESS_TOKEN", "label": "Access token", "secret": true, "help": "Developer dashboard → your application → Credentials."}],
+    "http": {
+      "base_url": "https://connect.squareup.com/v2",
+      "auth": {"type": "bearer", "credential": "SQUARE_ACCESS_TOKEN"},
+      "headers": {"Square-Version": "2024-10-17"},
+      "test": {"id": "test", "label": "Locations", "method": "GET", "path": "/locations", "fields": []}
+    },
+    "actions": [
+      {"id": "list_payments", "label": "List payments", "method": "GET", "path": "/payments", "query": {"begin_time": "{begin_time}", "location_id": "{location_id}"}, "items_path": "payments",
+       "fields": [
+         {"name": "begin_time", "label": "Since (RFC 3339)"},
+         {"name": "location_id", "label": "Location ID"}
+       ]},
+      {"id": "search_orders", "label": "Search orders", "method": "POST", "path": "/orders/search", "items_path": "orders",
+       "body": {"location_ids": ["{location_id}"], "limit": "{limit}"},
+       "fields": [
+         {"name": "location_id", "label": "Location ID", "required": true},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]},
+      {"id": "create_customer", "label": "Create customer", "method": "POST", "path": "/customers",
+       "body": {"given_name": "{given_name}", "family_name": "{family_name}", "email_address": "{email}", "phone_number": "{phone}"},
+       "fields": [
+         {"name": "given_name", "label": "First name"},
+         {"name": "family_name", "label": "Last name"},
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "phone", "label": "Phone"}
+       ]}
+    ]
+  },
+  {
+    "slug": "gumroad", "name": "Gumroad", "category": "E-commerce", "color": "#FF90E8", "icon": "shopping-bag",
+    "description": "Read products and sales from Gumroad",
+    "docs_url": "https://app.gumroad.com/api",
+    "credentials": [{"name": "GUMROAD_ACCESS_TOKEN", "label": "Access token", "secret": true, "help": "Settings → Advanced → Applications."}],
+    "http": {
+      "base_url": "https://api.gumroad.com/v2",
+      "auth": {"type": "query", "param": "access_token", "credential": "GUMROAD_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "User", "method": "GET", "path": "/user", "fields": []}
+    },
+    "actions": [
+      {"id": "list_products", "label": "List products", "method": "GET", "path": "/products", "items_path": "products", "fields": []},
+      {"id": "list_sales", "label": "List sales", "method": "GET", "path": "/sales", "query": {"after": "{after}", "product_id": "{product_id}"}, "items_path": "sales",
+       "fields": [
+         {"name": "after", "label": "After (YYYY-MM-DD)"},
+         {"name": "product_id", "label": "Product ID"}
+       ]}
+    ]
+  },
+  {
+    "slug": "lemonsqueezy", "name": "Lemon Squeezy", "category": "E-commerce", "color": "#FFC233", "icon": "shopping-bag",
+    "description": "Read orders and subscriptions from Lemon Squeezy",
+    "docs_url": "https://docs.lemonsqueezy.com/api",
+    "credentials": [{"name": "LEMONSQUEEZY_API_KEY", "label": "API key", "secret": true, "help": "Settings → API."}],
+    "http": {
+      "base_url": "https://api.lemonsqueezy.com/v1",
+      "auth": {"type": "bearer", "credential": "LEMONSQUEEZY_API_KEY"},
+      "headers": {"Accept": "application/vnd.api+json", "Content-Type": "application/vnd.api+json"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_orders", "label": "List orders", "method": "GET", "path": "/orders", "query": {"filter[store_id]": "{store_id}", "filter[user_email]": "{email}"}, "items_path": "data",
+       "fields": [
+         {"name": "store_id", "label": "Store ID"},
+         {"name": "email", "label": "Customer email"}
+       ]},
+      {"id": "list_subscriptions", "label": "List subscriptions", "method": "GET", "path": "/subscriptions", "query": {"filter[status]": "{status}"}, "items_path": "data",
+       "fields": [{"name": "status", "label": "Status", "type": "select", "options": ["on_trial", "active", "paused", "past_due", "unpaid", "cancelled", "expired"]}]}
+    ]
+  },
+  {
+    "slug": "paddle", "name": "Paddle", "category": "E-commerce", "color": "#FDDD35", "icon": "credit-card",
+    "description": "Manage customers and read transactions in Paddle Billing",
+    "docs_url": "https://developer.paddle.com/api-reference/overview",
+    "credentials": [{"name": "PADDLE_API_KEY", "label": "API key", "secret": true, "help": "Paddle → Developer tools → Authentication."}],
+    "http": {
+      "base_url": "https://api.paddle.com",
+      "auth": {"type": "bearer", "credential": "PADDLE_API_KEY"},
+      "test": {"id": "test", "label": "Products", "method": "GET", "path": "/products", "query": {"per_page": "1"}, "fields": []}
+    },
+    "actions": [
+      {"id": "list_transactions", "label": "List transactions", "method": "GET", "path": "/transactions", "query": {"status": "{status}", "customer_id": "{customer_id}"}, "items_path": "data",
+       "fields": [
+         {"name": "status", "label": "Status", "type": "select", "options": ["draft", "ready", "billed", "paid", "completed", "canceled", "past_due"]},
+         {"name": "customer_id", "label": "Customer ID"}
+       ]},
+      {"id": "create_customer", "label": "Create customer", "method": "POST", "path": "/customers",
+       "body": {"email": "{email}", "name": "{name}"},
+       "fields": [
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "name", "label": "Name"}
+       ]},
+      {"id": "list_customers", "label": "List customers", "method": "GET", "path": "/customers", "query": {"search": "{search}"}, "items_path": "data",
+       "fields": [{"name": "search", "label": "Search"}]}
+    ]
+  },
+  {
+    "slug": "ecwid", "name": "Ecwid", "category": "E-commerce", "color": "#0087CD", "icon": "shopping-cart",
+    "description": "Read orders and products from an Ecwid store",
+    "docs_url": "https://api-docs.ecwid.com/reference/overview",
+    "credentials": [
+      {"name": "ECWID_STORE_ID", "label": "Store ID"},
+      {"name": "ECWID_TOKEN", "label": "Secret access token", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://app.ecwid.com/api/v3/{cred:ECWID_STORE_ID}",
+      "auth": {"type": "bearer", "credential": "ECWID_TOKEN"},
+      "test": {"id": "test", "label": "Store profile", "method": "GET", "path": "/profile", "fields": []}
+    },
+    "actions": [
+      {"id": "list_orders", "label": "List orders", "method": "GET", "path": "/orders", "query": {"paymentStatus": "{payment_status}", "createdFrom": "{created_from}"}, "items_path": "items",
+       "fields": [
+         {"name": "payment_status", "label": "Payment status", "type": "select", "options": ["PAID", "AWAITING_PAYMENT", "REFUNDED", "CANCELLED"]},
+         {"name": "created_from", "label": "Created from (UNIX or date)"}
+       ]},
+      {"id": "list_products", "label": "List products", "method": "GET", "path": "/products", "query": {"keyword": "{keyword}"}, "items_path": "items",
+       "fields": [{"name": "keyword", "label": "Keyword"}]}
+    ]
+  },
+  {
+    "slug": "magento", "name": "Adobe Commerce (Magento)", "category": "E-commerce", "color": "#EE672F", "icon": "shopping-cart",
+    "description": "Read orders and products from Magento 2 / Adobe Commerce",
+    "docs_url": "https://developer.adobe.com/commerce/webapi/rest/",
+    "credentials": [
+      {"name": "MAGENTO_URL", "label": "Store URL", "placeholder": "https://shop.acme.com"},
+      {"name": "MAGENTO_ACCESS_TOKEN", "label": "Integration access token", "secret": true, "help": "System → Integrations."}
+    ],
+    "http": {"base_url": "{cred:MAGENTO_URL}/rest/V1", "auth": {"type": "bearer", "credential": "MAGENTO_ACCESS_TOKEN"}},
+    "actions": [
+      {"id": "get_order", "label": "Get order", "method": "GET", "path": "/orders/{order_id}",
+       "fields": [{"name": "order_id", "label": "Order entity ID", "required": true}]},
+      {"id": "list_orders", "label": "List recent orders", "method": "GET", "path": "/orders", "query": {"searchCriteria[pageSize]": "{page_size}", "searchCriteria[sortOrders][0][field]": "created_at"}, "items_path": "items",
+       "fields": [{"name": "page_size", "label": "Page size", "type": "number", "default": 20}]},
+      {"id": "get_product", "label": "Get product", "method": "GET", "path": "/products/{sku}",
+       "fields": [{"name": "sku", "label": "SKU", "required": true}]}
+    ]
+  },
+  {
+    "slug": "shippo", "name": "Shippo", "category": "Logistics", "color": "#1C9C88", "icon": "truck",
+    "description": "Track parcels and create shipments across carriers with Shippo",
+    "docs_url": "https://docs.goshippo.com/shippoapi/public-api/",
+    "credentials": [{"name": "SHIPPO_API_TOKEN", "label": "API token", "secret": true, "help": "Settings → API. Test tokens start with shippo_test_."}],
+    "http": {
+      "base_url": "https://api.goshippo.com",
+      "auth": {"type": "header", "header": "Authorization", "prefix": "ShippoToken ", "credential": "SHIPPO_API_TOKEN"},
+      "test": {"id": "test", "label": "Carrier accounts", "method": "GET", "path": "/carrier_accounts", "fields": []}
+    },
+    "actions": [
+      {"id": "track", "label": "Track shipment", "method": "GET", "path": "/tracks/{carrier}/{tracking_number}",
+       "fields": [
+         {"name": "carrier", "label": "Carrier", "required": true, "placeholder": "usps"},
+         {"name": "tracking_number", "label": "Tracking number", "required": true}
+       ]},
+      {"id": "create_shipment", "label": "Create shipment (get rates)", "method": "POST", "path": "/shipments",
+       "body": {"address_from": "{address_from}", "address_to": "{address_to}", "parcels": "{parcels}", "async": false},
+       "fields": [
+         {"name": "address_from", "label": "From address (JSON)", "type": "json", "required": true},
+         {"name": "address_to", "label": "To address (JSON)", "type": "json", "required": true},
+         {"name": "parcels", "label": "Parcels (JSON array)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "easypost", "name": "EasyPost", "category": "Logistics", "color": "#2F5FE5", "icon": "truck",
+    "description": "Track packages with EasyPost trackers",
+    "docs_url": "https://docs.easypost.com/docs/trackers",
+    "credentials": [{"name": "EASYPOST_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://api.easypost.com/v2",
+      "auth": {"type": "basic", "credential": "EASYPOST_API_KEY", "password_value": ""}
+    },
+    "actions": [
+      {"id": "create_tracker", "label": "Create tracker", "method": "POST", "path": "/trackers",
+       "body": {"tracker": {"tracking_code": "{tracking_code}", "carrier": "{carrier}"}},
+       "fields": [
+         {"name": "tracking_code", "label": "Tracking code", "required": true},
+         {"name": "carrier", "label": "Carrier", "placeholder": "UPS"}
+       ]},
+      {"id": "list_trackers", "label": "List trackers", "method": "GET", "path": "/trackers", "query": {"tracking_code": "{tracking_code}"}, "items_path": "trackers",
+       "fields": [{"name": "tracking_code", "label": "Tracking code"}]}
+    ]
+  },
+  {
+    "slug": "aftership", "name": "AfterShip", "category": "Logistics", "color": "#FF6B2B", "icon": "truck",
+    "description": "Register and follow shipments across 1,000+ carriers",
+    "docs_url": "https://www.aftership.com/docs/tracking/quickstart/api-quick-start",
+    "credentials": [{"name": "AFTERSHIP_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://api.aftership.com/tracking/2024-10", "auth": {"type": "header", "header": "as-api-key", "credential": "AFTERSHIP_API_KEY"}},
+    "actions": [
+      {"id": "create_tracking", "label": "Create tracking", "method": "POST", "path": "/trackings",
+       "body": {"tracking_number": "{tracking_number}", "slug": "{carrier}", "title": "{title}", "order_id": "{order_id}"},
+       "fields": [
+         {"name": "tracking_number", "label": "Tracking number", "required": true},
+         {"name": "carrier", "label": "Carrier slug", "placeholder": "dhl"},
+         {"name": "title", "label": "Title"},
+         {"name": "order_id", "label": "Order ID"}
+       ]},
+      {"id": "list_trackings", "label": "List trackings", "method": "GET", "path": "/trackings", "query": {"tag": "{tag}"}, "items_path": "data.trackings",
+       "fields": [{"name": "tag", "label": "Status tag", "type": "select", "options": ["Pending", "InfoReceived", "InTransit", "OutForDelivery", "AttemptFail", "Delivered", "Exception", "Expired"]}]}
+    ]
+  }
+]

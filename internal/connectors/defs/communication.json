@@ -1,0 +1,271 @@
+[
+  {
+    "slug": "google_chat", "name": "Google Chat", "category": "Communication", "color": "#00AC47", "icon": "message-square",
+    "description": "Post messages to a Google Chat space through an incoming webhook",
+    "docs_url": "https://developers.google.com/workspace/chat/quickstart/webhooks",
+    "credentials": [{"name": "GOOGLE_CHAT_WEBHOOK_URL", "label": "Space webhook URL", "secret": true, "help": "Space → Apps & integrations → Webhooks."}],
+    "http": {"base_url": "{cred:GOOGLE_CHAT_WEBHOOK_URL}", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "send_message", "label": "Send message", "method": "POST", "path": "", "body": {"text": "{text}"},
+       "fields": [{"name": "text", "label": "Message", "type": "textarea", "required": true, "placeholder": "Run {{ input.id }} needs review"}]}
+    ]
+  },
+  {
+    "slug": "webex", "name": "Webex", "category": "Communication", "color": "#07C1E4", "icon": "message-square",
+    "description": "Send messages to Webex spaces and people",
+    "docs_url": "https://developer.webex.com/docs/api/v1/messages",
+    "credentials": [{"name": "WEBEX_TOKEN", "label": "Bot access token", "secret": true, "help": "developer.webex.com → My Webex Apps → Create a Bot."}],
+    "http": {
+      "base_url": "https://webexapis.com/v1",
+      "auth": {"type": "bearer", "credential": "WEBEX_TOKEN"},
+      "test": {"id": "test", "label": "Who am I", "method": "GET", "path": "/people/me", "fields": []}
+    },
+    "actions": [
+      {"id": "send_message", "label": "Send message", "method": "POST", "path": "/messages",
+       "body": {"roomId": "{room_id}", "toPersonEmail": "{to_email}", "markdown": "{markdown}"},
+       "fields": [
+         {"name": "room_id", "label": "Space (room) ID"},
+         {"name": "to_email", "label": "Or: person email"},
+         {"name": "markdown", "label": "Message (Markdown)", "type": "textarea", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "zulip", "name": "Zulip", "category": "Communication", "color": "#6492FE", "icon": "message-square",
+    "description": "Post to Zulip streams and topics",
+    "docs_url": "https://zulip.com/api/send-message",
+    "credentials": [
+      {"name": "ZULIP_SITE", "label": "Organization URL", "placeholder": "https://acme.zulipchat.com"},
+      {"name": "ZULIP_EMAIL", "label": "Bot email", "placeholder": "knott-bot@acme.zulipchat.com"},
+      {"name": "ZULIP_API_KEY", "label": "Bot API key", "secret": true}
+    ],
+    "http": {
+      "base_url": "{cred:ZULIP_SITE}/api/v1",
+      "auth": {"type": "basic", "credential": "ZULIP_EMAIL", "password": "ZULIP_API_KEY"},
+      "test": {"id": "test", "label": "Own user", "method": "GET", "path": "/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "send_stream_message", "label": "Send stream message", "method": "POST", "path": "/messages", "body_type": "form",
+       "body": {"type": "stream", "to": "{stream}", "topic": "{topic}", "content": "{content}"},
+       "fields": [
+         {"name": "stream", "label": "Stream", "required": true},
+         {"name": "topic", "label": "Topic", "required": true},
+         {"name": "content", "label": "Message", "type": "textarea", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "rocketchat", "name": "Rocket.Chat", "category": "Communication", "color": "#F5455C", "icon": "message-square",
+    "description": "Post messages to a self-hosted Rocket.Chat",
+    "docs_url": "https://developer.rocket.chat/apidocs/post-message",
+    "credentials": [
+      {"name": "ROCKETCHAT_URL", "label": "Server URL", "placeholder": "https://chat.acme.com"},
+      {"name": "ROCKETCHAT_USER_ID", "label": "User ID"},
+      {"name": "ROCKETCHAT_TOKEN", "label": "Personal access token", "secret": true}
+    ],
+    "http": {
+      "base_url": "{cred:ROCKETCHAT_URL}/api/v1",
+      "auth": {"type": "header", "header": "X-Auth-Token", "credential": "ROCKETCHAT_TOKEN"},
+      "headers": {"X-User-Id": "{cred:ROCKETCHAT_USER_ID}"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/me", "fields": []}
+    },
+    "actions": [
+      {"id": "post_message", "label": "Post message", "method": "POST", "path": "/chat.postMessage",
+       "body": {"channel": "{channel}", "text": "{text}"},
+       "fields": [
+         {"name": "channel", "label": "Channel", "required": true, "placeholder": "#general"},
+         {"name": "text", "label": "Message", "type": "textarea", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "vonage_sms", "name": "Vonage SMS", "category": "Communication", "color": "#871FFF", "icon": "smartphone",
+    "description": "Send SMS worldwide with Vonage (Nexmo)",
+    "docs_url": "https://developer.vonage.com/en/api/sms",
+    "credentials": [
+      {"name": "VONAGE_API_KEY", "label": "API key"},
+      {"name": "VONAGE_API_SECRET", "label": "API secret", "secret": true}
+    ],
+    "http": {"base_url": "https://rest.nexmo.com", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "send_sms", "label": "Send SMS", "method": "POST", "path": "/sms/json", "body_type": "form",
+       "body": {"api_key": "{cred:VONAGE_API_KEY}", "api_secret": "{cred:VONAGE_API_SECRET}", "from": "{from}", "to": "{to}", "text": "{text}"},
+       "fields": [
+         {"name": "from", "label": "From", "required": true, "placeholder": "ACME or 15551234567"},
+         {"name": "to", "label": "To", "required": true, "placeholder": "447700900000"},
+         {"name": "text", "label": "Message", "type": "textarea", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "plivo", "name": "Plivo", "category": "Communication", "color": "#43A047", "icon": "smartphone",
+    "description": "Send SMS through Plivo",
+    "docs_url": "https://www.plivo.com/docs/messaging/api/message",
+    "credentials": [
+      {"name": "PLIVO_AUTH_ID", "label": "Auth ID"},
+      {"name": "PLIVO_AUTH_TOKEN", "label": "Auth token", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://api.plivo.com/v1/Account/{cred:PLIVO_AUTH_ID}",
+      "auth": {"type": "basic", "credential": "PLIVO_AUTH_ID", "password": "PLIVO_AUTH_TOKEN"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/", "fields": []}
+    },
+    "actions": [
+      {"id": "send_sms", "label": "Send SMS", "method": "POST", "path": "/Message/",
+       "body": {"src": "{from}", "dst": "{to}", "text": "{text}"},
+       "fields": [
+         {"name": "from", "label": "From number", "required": true},
+         {"name": "to", "label": "To number", "required": true},
+         {"name": "text", "label": "Message", "type": "textarea", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "clicksend", "name": "ClickSend", "category": "Communication", "color": "#1C75BC", "icon": "smartphone",
+    "description": "Send SMS through ClickSend",
+    "docs_url": "https://developers.clicksend.com/docs/rest/v3/",
+    "credentials": [
+      {"name": "CLICKSEND_USERNAME", "label": "Username"},
+      {"name": "CLICKSEND_API_KEY", "label": "API key", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://rest.clicksend.com/v3",
+      "auth": {"type": "basic", "credential": "CLICKSEND_USERNAME", "password": "CLICKSEND_API_KEY"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "send_sms", "label": "Send SMS", "method": "POST", "path": "/sms/send",
+       "body": {"messages": [{"source": "knott", "from": "{from}", "to": "{to}", "body": "{body}"}]},
+       "fields": [
+         {"name": "to", "label": "To", "required": true, "placeholder": "+61411111111"},
+         {"name": "body", "label": "Message", "type": "textarea", "required": true},
+         {"name": "from", "label": "Sender ID"}
+       ]}
+    ]
+  },
+  {
+    "slug": "ntfy", "name": "ntfy", "category": "Communication", "color": "#338574", "icon": "bell",
+    "description": "Push notifications to phones and desktops via ntfy (hosted or self-hosted)",
+    "docs_url": "https://docs.ntfy.sh/publish/",
+    "credentials": [{"name": "NTFY_SERVER", "label": "Server URL", "placeholder": "https://ntfy.sh"}],
+    "http": {"base_url": "{cred:NTFY_SERVER}", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "publish", "label": "Publish notification", "method": "POST", "path": "",
+       "body": {"topic": "{topic}", "title": "{title}", "message": "{message}", "priority": "{priority}", "tags": "{tags}", "click": "{click}"},
+       "fields": [
+         {"name": "topic", "label": "Topic", "required": true},
+         {"name": "message", "label": "Message", "type": "textarea", "required": true},
+         {"name": "title", "label": "Title"},
+         {"name": "priority", "label": "Priority (1–5)", "type": "number"},
+         {"name": "tags", "label": "Tags (JSON array)", "type": "json", "placeholder": "[\"warning\"]"},
+         {"name": "click", "label": "Click URL"}
+       ]}
+    ]
+  },
+  {
+    "slug": "gotify", "name": "Gotify", "category": "Communication", "color": "#1E88E5", "icon": "bell",
+    "description": "Send push notifications to a self-hosted Gotify server",
+    "docs_url": "https://gotify.net/api-docs",
+    "credentials": [
+      {"name": "GOTIFY_URL", "label": "Server URL", "placeholder": "https://gotify.acme.com"},
+      {"name": "GOTIFY_APP_TOKEN", "label": "Application token", "secret": true}
+    ],
+    "http": {"base_url": "{cred:GOTIFY_URL}", "auth": {"type": "header", "header": "X-Gotify-Key", "credential": "GOTIFY_APP_TOKEN"}},
+    "actions": [
+      {"id": "send", "label": "Send message", "method": "POST", "path": "/message",
+       "body": {"title": "{title}", "message": "{message}", "priority": "{priority}"},
+       "fields": [
+         {"name": "message", "label": "Message", "type": "textarea", "required": true},
+         {"name": "title", "label": "Title"},
+         {"name": "priority", "label": "Priority", "type": "number", "default": 5}
+       ]}
+    ]
+  },
+  {
+    "slug": "pushbullet", "name": "Pushbullet", "category": "Communication", "color": "#4AB367", "icon": "bell",
+    "description": "Push notes to your devices with Pushbullet",
+    "docs_url": "https://docs.pushbullet.com/",
+    "credentials": [{"name": "PUSHBULLET_TOKEN", "label": "Access token", "secret": true, "help": "Settings → Account → Create access token."}],
+    "http": {
+      "base_url": "https://api.pushbullet.com/v2",
+      "auth": {"type": "header", "header": "Access-Token", "credential": "PUSHBULLET_TOKEN"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "push_note", "label": "Push note", "method": "POST", "path": "/pushes",
+       "body": {"type": "note", "title": "{title}", "body": "{body}"},
+       "fields": [
+         {"name": "title", "label": "Title", "required": true},
+         {"name": "body", "label": "Body", "type": "textarea"}
+       ]}
+    ]
+  },
+  {
+    "slug": "front", "name": "Front", "category": "Customer Support", "color": "#A857F1", "icon": "inbox",
+    "description": "Send messages and read conversations in Front shared inboxes",
+    "docs_url": "https://dev.frontapp.com/reference/introduction",
+    "credentials": [{"name": "FRONT_API_TOKEN", "label": "API token", "secret": true, "help": "Settings → Developers → API tokens."}],
+    "http": {
+      "base_url": "https://api2.frontapp.com",
+      "auth": {"type": "bearer", "credential": "FRONT_API_TOKEN"},
+      "test": {"id": "test", "label": "Token identity", "method": "GET", "path": "/me", "fields": []}
+    },
+    "actions": [
+      {"id": "send_message", "label": "Send message", "method": "POST", "path": "/channels/{channel_id}/messages",
+       "body": {"to": ["{to}"], "subject": "{subject}", "body": "{body}"},
+       "fields": [
+         {"name": "channel_id", "label": "Channel ID", "required": true, "placeholder": "cha_123"},
+         {"name": "to", "label": "To", "required": true},
+         {"name": "subject", "label": "Subject"},
+         {"name": "body", "label": "Body", "type": "textarea", "required": true}
+       ]},
+      {"id": "list_conversations", "label": "List conversations", "method": "GET", "path": "/conversations", "query": {"q[statuses][]": "{status}"}, "items_path": "_results",
+       "fields": [{"name": "status", "label": "Status", "type": "select", "options": ["open", "archived", "assigned", "unassigned"]}]}
+    ]
+  },
+  {
+    "slug": "helpscout", "name": "Help Scout", "category": "Customer Support", "color": "#1292EE", "icon": "inbox",
+    "description": "Read Help Scout mailboxes and conversations",
+    "docs_url": "https://developer.helpscout.com/mailbox-api/",
+    "credentials": [{"name": "HELPSCOUT_ACCESS_TOKEN", "label": "OAuth access token", "secret": true, "help": "Create an app under Your Profile → My Apps and exchange its client credentials."}],
+    "http": {
+      "base_url": "https://api.helpscout.net/v2",
+      "auth": {"type": "bearer", "credential": "HELPSCOUT_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "Mailboxes", "method": "GET", "path": "/mailboxes", "fields": []}
+    },
+    "actions": [
+      {"id": "list_conversations", "label": "List conversations", "method": "GET", "path": "/conversations", "query": {"status": "{status}", "mailbox": "{mailbox}"}, "items_path": "_embedded.conversations",
+       "fields": [
+         {"name": "status", "label": "Status", "type": "select", "options": ["active", "pending", "closed", "all"]},
+         {"name": "mailbox", "label": "Mailbox ID"}
+       ]},
+      {"id": "list_mailboxes", "label": "List mailboxes", "method": "GET", "path": "/mailboxes", "items_path": "_embedded.mailboxes", "fields": []}
+    ]
+  },
+  {
+    "slug": "gorgias", "name": "Gorgias", "category": "Customer Support", "color": "#1E1E2D", "icon": "inbox",
+    "description": "Create and list e-commerce support tickets in Gorgias",
+    "docs_url": "https://developers.gorgias.com/reference",
+    "credentials": [
+      {"name": "GORGIAS_DOMAIN", "label": "Account subdomain", "placeholder": "acme"},
+      {"name": "GORGIAS_EMAIL", "label": "User email"},
+      {"name": "GORGIAS_API_KEY", "label": "API key", "secret": true, "help": "Settings → REST API."}
+    ],
+    "http": {
+      "base_url": "https://{cred:GORGIAS_DOMAIN}.gorgias.com/api",
+      "auth": {"type": "basic", "credential": "GORGIAS_EMAIL", "password": "GORGIAS_API_KEY"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "create_ticket", "label": "Create ticket", "method": "POST", "path": "/tickets",
+       "body": {"customer": {"email": "{customer_email}"}, "messages": [{"channel": "email", "via": "api", "from_agent": false, "sender": {"email": "{customer_email}"}, "subject": "{subject}", "body_text": "{body}"}]},
+       "fields": [
+         {"name": "customer_email", "label": "Customer email", "required": true},
+         {"name": "subject", "label": "Subject", "required": true},
+         {"name": "body", "label": "Message", "type": "textarea", "required": true}
+       ]},
+      {"id": "list_tickets", "label": "List tickets", "method": "GET", "path": "/tickets", "query": {"limit": "{limit}"}, "items_path": "data",
+       "fields": [{"name": "limit", "label": "Limit", "type": "number", "default": 30}]}
+    ]
+  }
+]

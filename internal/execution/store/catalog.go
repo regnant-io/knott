@@ -3,6 +3,8 @@
 
 package store
 
+import "github.com/regnant/knott/internal/connectors"
+
 // The connector catalog: one source of truth for every integration KNOTT ships.
 //
 // A connector entry carries a stable slug, presentation metadata, and the exact
@@ -70,8 +72,34 @@ func optional(base CredentialSpec) CredentialSpec {
 	return base
 }
 
-// Catalog returns every connector KNOTT ships with.
+// Catalog returns every connector KNOTT ships with: the native ones below and
+// every declarative definition in internal/connectors.
 func Catalog() []CatalogEntry {
+	return append(nativeCatalog(), declarativeCatalog()...)
+}
+
+// declarativeCatalog adapts the data-defined connectors to catalog entries.
+func declarativeCatalog() []CatalogEntry {
+	defs := connectors.Declarative()
+	out := make([]CatalogEntry, 0, len(defs))
+	for _, d := range defs {
+		creds := make([]CredentialSpec, 0, len(d.Credentials))
+		for _, c := range d.Credentials {
+			creds = append(creds, CredentialSpec{
+				Name: c.Name, Label: c.Label, Help: c.Help, Placeholder: c.Placeholder,
+				Secret: c.Secret, Optional: c.Optional, AltOf: c.AltOf,
+			})
+		}
+		out = append(out, CatalogEntry{
+			Slug: d.Slug, Name: d.Name, Category: d.Category, Description: d.Description,
+			Icon: d.Icon, DocsURL: d.DocsURL, Enabled: d.Enabled, Credentials: creds,
+		})
+	}
+	return out
+}
+
+// nativeCatalog lists the connectors implemented in the engine.
+func nativeCatalog() []CatalogEntry {
 	return []CatalogEntry{
 		// ── Communication ────────────────────────────────────────────────────
 		{

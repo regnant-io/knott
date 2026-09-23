@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/regnant/knott/internal/connectors"
 	"io"
 	"net/http"
 	"net/url"
@@ -814,6 +815,10 @@ func (e *Executor) executeToolCall(runID string, node *WorkflowStep, ctx map[str
 // Credentials are read from environment variables (12-factor) so they are never
 // stored in the workflow definition. Each connector maps env vars → API calls.
 func (e *Executor) callConnector(connectorID, action string, in map[string]any) (map[string]any, error) {
+	// Declarative connectors run from their definition alone.
+	if def, ok := connectors.Get(connectorID); ok && !def.Native && def.HTTP != nil {
+		return e.callDeclarative(def, action, in)
+	}
 	switch strings.ToLower(connectorID) {
 
 	case "webhook", "http", "webhook_http":

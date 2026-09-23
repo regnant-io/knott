@@ -1,0 +1,353 @@
+[
+  {
+    "slug": "bamboohr", "name": "BambooHR", "category": "HR & Recruiting", "color": "#73C41D", "icon": "users",
+    "description": "Read the employee directory, employees and time-off requests",
+    "docs_url": "https://documentation.bamboohr.com/reference",
+    "credentials": [
+      {"name": "BAMBOOHR_SUBDOMAIN", "label": "Company subdomain", "placeholder": "acme"},
+      {"name": "BAMBOOHR_API_KEY", "label": "API key", "secret": true, "help": "Your profile → API keys."}
+    ],
+    "http": {
+      "base_url": "https://api.bamboohr.com/api/gateway.php/{cred:BAMBOOHR_SUBDOMAIN}/v1",
+      "auth": {"type": "basic", "credential": "BAMBOOHR_API_KEY", "password_value": "x"}
+    },
+    "actions": [
+      {"id": "directory", "label": "Employee directory", "method": "GET", "path": "/employees/directory", "items_path": "employees", "fields": []},
+      {"id": "get_employee", "label": "Get employee", "method": "GET", "path": "/employees/{employee_id}", "query": {"fields": "{fields}"},
+       "fields": [
+         {"name": "employee_id", "label": "Employee ID", "required": true},
+         {"name": "fields", "label": "Fields", "default": "firstName,lastName,jobTitle,workEmail,department,hireDate"}
+       ]},
+      {"id": "time_off_requests", "label": "Time-off requests", "method": "GET", "path": "/time_off/requests/", "query": {"start": "{start}", "end": "{end}", "status": "{status}"},
+       "fields": [
+         {"name": "start", "label": "Start (YYYY-MM-DD)", "required": true},
+         {"name": "end", "label": "End (YYYY-MM-DD)", "required": true},
+         {"name": "status", "label": "Status", "type": "select", "options": ["approved", "requested", "declined", "canceled"]}
+       ]}
+    ]
+  },
+  {
+    "slug": "greenhouse", "name": "Greenhouse", "category": "HR & Recruiting", "color": "#24A47F", "icon": "users",
+    "description": "Read candidates and jobs from Greenhouse Recruiting",
+    "docs_url": "https://developers.greenhouse.io/harvest.html",
+    "credentials": [{"name": "GREENHOUSE_API_KEY", "label": "Harvest API key", "secret": true, "help": "Configure → Dev Center → API Credential Management."}],
+    "http": {"base_url": "https://harvest.greenhouse.io/v1", "auth": {"type": "basic", "credential": "GREENHOUSE_API_KEY", "password_value": ""}},
+    "actions": [
+      {"id": "list_candidates", "label": "List candidates", "method": "GET", "path": "/candidates", "query": {"per_page": "{per_page}", "created_after": "{created_after}"},
+       "fields": [
+         {"name": "created_after", "label": "Created after (ISO 8601)"},
+         {"name": "per_page", "label": "Per page", "type": "number", "default": 50}
+       ]},
+      {"id": "list_jobs", "label": "List jobs", "method": "GET", "path": "/jobs", "query": {"status": "{status}"},
+       "fields": [{"name": "status", "label": "Status", "type": "select", "options": ["open", "closed", "draft"]}]}
+    ]
+  },
+  {
+    "slug": "lever", "name": "Lever", "category": "HR & Recruiting", "color": "#1F2A44", "icon": "users",
+    "description": "Read opportunities and postings from Lever",
+    "docs_url": "https://hire.lever.co/developer/documentation",
+    "credentials": [{"name": "LEVER_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://api.lever.co/v1", "auth": {"type": "basic", "credential": "LEVER_API_KEY", "password_value": ""}},
+    "actions": [
+      {"id": "list_opportunities", "label": "List opportunities", "method": "GET", "path": "/opportunities", "query": {"stage_id": "{stage_id}", "limit": "{limit}"}, "items_path": "data",
+       "fields": [
+         {"name": "stage_id", "label": "Stage ID"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]},
+      {"id": "list_postings", "label": "List postings", "method": "GET", "path": "/postings", "query": {"state": "{state}"}, "items_path": "data",
+       "fields": [{"name": "state", "label": "State", "type": "select", "options": ["published", "internal", "closed", "draft", "pending"]}]}
+    ]
+  },
+  {
+    "slug": "workable", "name": "Workable", "category": "HR & Recruiting", "color": "#00BFA5", "icon": "users",
+    "description": "Read jobs and candidates from Workable",
+    "docs_url": "https://workable.readme.io/reference",
+    "credentials": [
+      {"name": "WORKABLE_SUBDOMAIN", "label": "Account subdomain", "placeholder": "acme"},
+      {"name": "WORKABLE_TOKEN", "label": "API access token", "secret": true}
+    ],
+    "http": {"base_url": "https://{cred:WORKABLE_SUBDOMAIN}.workable.com/spi/v3", "auth": {"type": "bearer", "credential": "WORKABLE_TOKEN"}},
+    "actions": [
+      {"id": "list_jobs", "label": "List jobs", "method": "GET", "path": "/jobs", "query": {"state": "{state}"}, "items_path": "jobs",
+       "fields": [{"name": "state", "label": "State", "type": "select", "options": ["published", "draft", "closed", "archived"]}]},
+      {"id": "list_candidates", "label": "List candidates", "method": "GET", "path": "/candidates", "query": {"shortcode": "{job_shortcode}", "stage": "{stage}"}, "items_path": "candidates",
+       "fields": [
+         {"name": "job_shortcode", "label": "Job shortcode"},
+         {"name": "stage", "label": "Stage slug"}
+       ]}
+    ]
+  },
+  {
+    "slug": "fhir", "name": "FHIR (HL7) Server", "category": "Healthcare", "color": "#E6004C", "icon": "heart",
+    "description": "Read, search and create resources on any HL7 FHIR R4 server (Epic, Cerner, HAPI, Medplum…)",
+    "docs_url": "https://hl7.org/fhir/R4/http.html",
+    "credentials": [
+      {"name": "FHIR_BASE_URL", "label": "FHIR base URL", "placeholder": "https://fhir.example.org/r4"},
+      {"name": "FHIR_ACCESS_TOKEN", "label": "Bearer token", "secret": true, "help": "A SMART on FHIR backend-services token."}
+    ],
+    "http": {
+      "base_url": "{cred:FHIR_BASE_URL}",
+      "auth": {"type": "bearer", "credential": "FHIR_ACCESS_TOKEN"},
+      "headers": {"Accept": "application/fhir+json", "Content-Type": "application/fhir+json"},
+      "test": {"id": "test", "label": "Capability statement", "method": "GET", "path": "/metadata", "fields": []}
+    },
+    "actions": [
+      {"id": "read", "label": "Read resource", "method": "GET", "path": "/{resource_type}/{id}",
+       "fields": [
+         {"name": "resource_type", "label": "Resource type", "required": true, "placeholder": "Patient"},
+         {"name": "id", "label": "Resource ID", "required": true}
+       ]},
+      {"id": "search", "label": "Search", "method": "GET", "path": "/{resource_type}?{search*}", "items_path": "entry",
+       "fields": [
+         {"name": "resource_type", "label": "Resource type", "required": true, "placeholder": "Observation"},
+         {"name": "search", "label": "Search parameters", "placeholder": "patient=123&category=vital-signs"}
+       ]},
+      {"id": "create", "label": "Create resource", "method": "POST", "path": "/{resource_type}", "body": "{resource}",
+       "fields": [
+         {"name": "resource_type", "label": "Resource type", "required": true},
+         {"name": "resource", "label": "Resource (JSON)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "canvas_lms", "name": "Canvas LMS", "category": "Education", "color": "#E72429", "icon": "book-open",
+    "description": "Read courses and enrolments and post announcements in Canvas",
+    "docs_url": "https://canvas.instructure.com/doc/api/",
+    "credentials": [
+      {"name": "CANVAS_URL", "label": "Canvas URL", "placeholder": "https://school.instructure.com"},
+      {"name": "CANVAS_TOKEN", "label": "Access token", "secret": true, "help": "Account → Settings → New access token."}
+    ],
+    "http": {
+      "base_url": "{cred:CANVAS_URL}/api/v1",
+      "auth": {"type": "bearer", "credential": "CANVAS_TOKEN"},
+      "test": {"id": "test", "label": "Self", "method": "GET", "path": "/users/self", "fields": []}
+    },
+    "actions": [
+      {"id": "list_courses", "label": "List courses", "method": "GET", "path": "/courses", "query": {"enrollment_state": "{state}"},
+       "fields": [{"name": "state", "label": "Enrolment state", "type": "select", "options": ["active", "invited_or_pending", "completed"]}]},
+      {"id": "list_enrollments", "label": "List enrolments", "method": "GET", "path": "/courses/{course_id}/enrollments",
+       "fields": [{"name": "course_id", "label": "Course ID", "required": true}]},
+      {"id": "post_announcement", "label": "Post announcement", "method": "POST", "path": "/courses/{course_id}/discussion_topics",
+       "body": {"title": "{title}", "message": "{message}", "is_announcement": true},
+       "fields": [
+         {"name": "course_id", "label": "Course ID", "required": true},
+         {"name": "title", "label": "Title", "required": true},
+         {"name": "message", "label": "Message (HTML)", "type": "textarea", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "docusign", "name": "DocuSign", "category": "Legal & Documents", "color": "#FFCC22", "icon": "file-signature",
+    "description": "Track envelopes and their status in DocuSign eSignature",
+    "docs_url": "https://developers.docusign.com/docs/esign-rest-api/reference/",
+    "credentials": [
+      {"name": "DOCUSIGN_BASE_URI", "label": "Account base URI", "placeholder": "https://na4.docusign.net", "help": "From /oauth/userinfo → accounts[].base_uri."},
+      {"name": "DOCUSIGN_ACCOUNT_ID", "label": "Account ID"},
+      {"name": "DOCUSIGN_ACCESS_TOKEN", "label": "OAuth access token", "secret": true}
+    ],
+    "http": {"base_url": "{cred:DOCUSIGN_BASE_URI}/restapi/v2.1/accounts/{cred:DOCUSIGN_ACCOUNT_ID}", "auth": {"type": "bearer", "credential": "DOCUSIGN_ACCESS_TOKEN"}},
+    "actions": [
+      {"id": "list_envelopes", "label": "List envelopes", "method": "GET", "path": "/envelopes", "query": {"from_date": "{from_date}", "status": "{status}"}, "items_path": "envelopes",
+       "fields": [
+         {"name": "from_date", "label": "Changed since (ISO date)", "required": true},
+         {"name": "status", "label": "Status", "type": "select", "options": ["sent", "delivered", "completed", "declined", "voided"]}
+       ]},
+      {"id": "get_envelope", "label": "Get envelope", "method": "GET", "path": "/envelopes/{envelope_id}",
+       "fields": [{"name": "envelope_id", "label": "Envelope ID", "required": true}]}
+    ]
+  },
+  {
+    "slug": "dropbox_sign", "name": "Dropbox Sign", "category": "Legal & Documents", "color": "#0061FE", "icon": "file-signature",
+    "description": "List signature requests and their status (formerly HelloSign)",
+    "docs_url": "https://developers.hellosign.com/api/reference/",
+    "credentials": [{"name": "DROPBOX_SIGN_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://api.hellosign.com/v3",
+      "auth": {"type": "basic", "credential": "DROPBOX_SIGN_API_KEY", "password_value": ""},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "list_signature_requests", "label": "List signature requests", "method": "GET", "path": "/signature_request/list", "query": {"query": "{query}"}, "items_path": "signature_requests",
+       "fields": [{"name": "query", "label": "Search", "placeholder": "complete:true"}]},
+      {"id": "get_signature_request", "label": "Get signature request", "method": "GET", "path": "/signature_request/{id}",
+       "fields": [{"name": "id", "label": "Signature request ID", "required": true}]}
+    ]
+  },
+  {
+    "slug": "pandadoc", "name": "PandaDoc", "category": "Legal & Documents", "color": "#248567", "icon": "file-text",
+    "description": "List documents and check their status in PandaDoc",
+    "docs_url": "https://developers.pandadoc.com/reference/about",
+    "credentials": [{"name": "PANDADOC_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://api.pandadoc.com/public/v1", "auth": {"type": "header", "header": "Authorization", "prefix": "API-Key ", "credential": "PANDADOC_API_KEY"}},
+    "actions": [
+      {"id": "list_documents", "label": "List documents", "method": "GET", "path": "/documents", "query": {"status": "{status}", "q": "{q}"}, "items_path": "results",
+       "fields": [
+         {"name": "q", "label": "Search"},
+         {"name": "status", "label": "Status code", "type": "number"}
+       ]},
+      {"id": "document_status", "label": "Document status", "method": "GET", "path": "/documents/{document_id}",
+       "fields": [{"name": "document_id", "label": "Document ID", "required": true}]}
+    ]
+  },
+  {
+    "slug": "home_assistant", "name": "Home Assistant", "category": "IoT & Smart Home", "color": "#18BCF2", "icon": "home",
+    "description": "Call services, read states and fire events in Home Assistant",
+    "docs_url": "https://developers.home-assistant.io/docs/api/rest/",
+    "credentials": [
+      {"name": "HOME_ASSISTANT_URL", "label": "Home Assistant URL", "placeholder": "http://homeassistant.local:8123"},
+      {"name": "HOME_ASSISTANT_TOKEN", "label": "Long-lived access token", "secret": true, "help": "Profile → Security → Long-lived access tokens."}
+    ],
+    "http": {
+      "base_url": "{cred:HOME_ASSISTANT_URL}/api",
+      "auth": {"type": "bearer", "credential": "HOME_ASSISTANT_TOKEN"},
+      "test": {"id": "test", "label": "API", "method": "GET", "path": "/", "fields": []}
+    },
+    "actions": [
+      {"id": "call_service", "label": "Call service", "method": "POST", "path": "/services/{domain}/{service}", "body": "{data}",
+       "fields": [
+         {"name": "domain", "label": "Domain", "required": true, "placeholder": "light"},
+         {"name": "service", "label": "Service", "required": true, "placeholder": "turn_on"},
+         {"name": "data", "label": "Service data (JSON)", "type": "json", "placeholder": "{ \"entity_id\": \"light.kitchen\" }", "default": {}}
+       ]},
+      {"id": "get_state", "label": "Get state", "method": "GET", "path": "/states/{entity_id}",
+       "fields": [{"name": "entity_id", "label": "Entity ID", "required": true, "placeholder": "sensor.outdoor_temperature"}]},
+      {"id": "fire_event", "label": "Fire event", "method": "POST", "path": "/events/{event_type}", "body": "{data}",
+       "fields": [
+         {"name": "event_type", "label": "Event type", "required": true},
+         {"name": "data", "label": "Event data (JSON)", "type": "json", "default": {}}
+       ]}
+    ]
+  },
+  {
+    "slug": "google_maps", "name": "Google Maps Platform", "category": "Maps & Data", "color": "#34A853", "icon": "map-pin",
+    "description": "Geocode addresses and compute travel distances",
+    "docs_url": "https://developers.google.com/maps/documentation",
+    "credentials": [{"name": "GOOGLE_MAPS_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://maps.googleapis.com/maps/api", "auth": {"type": "query", "param": "key", "credential": "GOOGLE_MAPS_API_KEY"}},
+    "actions": [
+      {"id": "geocode", "label": "Geocode address", "method": "GET", "path": "/geocode/json", "query": {"address": "{address}"}, "items_path": "results",
+       "fields": [{"name": "address", "label": "Address", "required": true}]},
+      {"id": "distance_matrix", "label": "Distance matrix", "method": "GET", "path": "/distancematrix/json", "query": {"origins": "{origins}", "destinations": "{destinations}", "mode": "{mode}"},
+       "fields": [
+         {"name": "origins", "label": "Origins", "required": true, "placeholder": "Nairobi|Mombasa"},
+         {"name": "destinations", "label": "Destinations", "required": true},
+         {"name": "mode", "label": "Mode", "type": "select", "options": ["driving", "walking", "bicycling", "transit"]}
+       ]}
+    ]
+  },
+  {
+    "slug": "openweather", "name": "OpenWeather", "category": "Maps & Data", "color": "#EB6E4B", "icon": "cloud",
+    "description": "Current weather and forecasts for any city",
+    "docs_url": "https://openweathermap.org/api",
+    "credentials": [{"name": "OPENWEATHER_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://api.openweathermap.org/data/2.5", "auth": {"type": "query", "param": "appid", "credential": "OPENWEATHER_API_KEY"}},
+    "actions": [
+      {"id": "current", "label": "Current weather", "method": "GET", "path": "/weather", "query": {"q": "{city}", "units": "{units}"},
+       "fields": [
+         {"name": "city", "label": "City", "required": true, "placeholder": "Nairobi,KE"},
+         {"name": "units", "label": "Units", "type": "select", "options": ["metric", "imperial", "standard"]}
+       ]},
+      {"id": "forecast", "label": "5-day forecast", "method": "GET", "path": "/forecast", "query": {"q": "{city}", "units": "{units}"}, "items_path": "list",
+       "fields": [
+         {"name": "city", "label": "City", "required": true},
+         {"name": "units", "label": "Units", "type": "select", "options": ["metric", "imperial", "standard"]}
+       ]}
+    ]
+  },
+  {
+    "slug": "ipinfo", "name": "IPinfo", "category": "Maps & Data", "color": "#3F81F4", "icon": "map-pin",
+    "description": "Geolocation, ASN and company data for IP addresses",
+    "docs_url": "https://ipinfo.io/developers",
+    "credentials": [{"name": "IPINFO_TOKEN", "label": "Access token", "secret": true}],
+    "http": {"base_url": "https://ipinfo.io", "auth": {"type": "bearer", "credential": "IPINFO_TOKEN"}},
+    "actions": [
+      {"id": "lookup", "label": "Look up IP", "method": "GET", "path": "/{ip}/json",
+       "fields": [{"name": "ip", "label": "IP address", "required": true, "placeholder": "{{ input.ip }}"}]}
+    ]
+  },
+  {
+    "slug": "hunter", "name": "Hunter", "category": "Maps & Data", "color": "#FF5722", "icon": "search",
+    "description": "Find and verify professional email addresses",
+    "docs_url": "https://hunter.io/api-documentation/v2",
+    "credentials": [{"name": "HUNTER_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://api.hunter.io/v2",
+      "auth": {"type": "query", "param": "api_key", "credential": "HUNTER_API_KEY"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "find_email", "label": "Find email", "method": "GET", "path": "/email-finder", "query": {"domain": "{domain}", "first_name": "{first_name}", "last_name": "{last_name}"},
+       "fields": [
+         {"name": "domain", "label": "Company domain", "required": true},
+         {"name": "first_name", "label": "First name", "required": true},
+         {"name": "last_name", "label": "Last name", "required": true}
+       ]},
+      {"id": "verify_email", "label": "Verify email", "method": "GET", "path": "/email-verifier", "query": {"email": "{email}"},
+       "fields": [{"name": "email", "label": "Email", "required": true}]},
+      {"id": "domain_search", "label": "Domain search", "method": "GET", "path": "/domain-search", "query": {"domain": "{domain}", "limit": "{limit}"},
+       "fields": [
+         {"name": "domain", "label": "Domain", "required": true},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 10}
+       ]}
+    ]
+  },
+  {
+    "slug": "mastodon", "name": "Mastodon", "category": "Social Media", "color": "#6364FF", "icon": "at-sign",
+    "description": "Post statuses to any Mastodon instance",
+    "docs_url": "https://docs.joinmastodon.org/methods/statuses/",
+    "credentials": [
+      {"name": "MASTODON_URL", "label": "Instance URL", "placeholder": "https://mastodon.social"},
+      {"name": "MASTODON_ACCESS_TOKEN", "label": "Access token", "secret": true, "help": "Preferences → Development → New application."}
+    ],
+    "http": {
+      "base_url": "{cred:MASTODON_URL}/api/v1",
+      "auth": {"type": "bearer", "credential": "MASTODON_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "Verify credentials", "method": "GET", "path": "/accounts/verify_credentials", "fields": []}
+    },
+    "actions": [
+      {"id": "post_status", "label": "Post status", "method": "POST", "path": "/statuses",
+       "body": {"status": "{status}", "visibility": "{visibility}", "spoiler_text": "{content_warning}"},
+       "fields": [
+         {"name": "status", "label": "Text", "type": "textarea", "required": true},
+         {"name": "visibility", "label": "Visibility", "type": "select", "options": ["public", "unlisted", "private", "direct"]},
+         {"name": "content_warning", "label": "Content warning"}
+       ]}
+    ]
+  },
+  {
+    "slug": "youtube", "name": "YouTube Data", "category": "Social Media", "color": "#FF0000", "icon": "youtube",
+    "description": "Search videos and read channel statistics",
+    "docs_url": "https://developers.google.com/youtube/v3/docs",
+    "credentials": [{"name": "YOUTUBE_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://www.googleapis.com/youtube/v3", "auth": {"type": "query", "param": "key", "credential": "YOUTUBE_API_KEY"}},
+    "actions": [
+      {"id": "search", "label": "Search videos", "method": "GET", "path": "/search", "query": {"part": "snippet", "type": "video", "q": "{query}", "maxResults": "{max_results}", "channelId": "{channel_id}"}, "items_path": "items",
+       "fields": [
+         {"name": "query", "label": "Query", "required": true},
+         {"name": "channel_id", "label": "Channel ID"},
+         {"name": "max_results", "label": "Max results", "type": "number", "default": 10}
+       ]},
+      {"id": "channel_stats", "label": "Channel statistics", "method": "GET", "path": "/channels", "query": {"part": "statistics,snippet", "id": "{channel_id}"}, "items_path": "items",
+       "fields": [{"name": "channel_id", "label": "Channel ID", "required": true}]}
+    ]
+  },
+  {
+    "slug": "facebook_pages", "name": "Facebook Pages", "category": "Social Media", "color": "#1877F2", "icon": "facebook",
+    "description": "Publish posts to a Facebook Page",
+    "docs_url": "https://developers.facebook.com/docs/pages-api",
+    "credentials": [{"name": "FACEBOOK_PAGE_TOKEN", "label": "Page access token", "secret": true}],
+    "http": {
+      "base_url": "https://graph.facebook.com/v21.0",
+      "auth": {"type": "query", "param": "access_token", "credential": "FACEBOOK_PAGE_TOKEN"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/me", "fields": []}
+    },
+    "actions": [
+      {"id": "publish_post", "label": "Publish post", "method": "POST", "path": "/{page_id}/feed", "body": {"message": "{message}", "link": "{link}"},
+       "fields": [
+         {"name": "page_id", "label": "Page ID", "required": true},
+         {"name": "message", "label": "Message", "type": "textarea", "required": true},
+         {"name": "link", "label": "Link"}
+       ]}
+    ]
+  }
+]

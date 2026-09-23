@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/regnant/knott/internal/connectors"
 	"io"
 	"log"
 	"math/rand"
@@ -1432,11 +1433,30 @@ func listConnectors(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
+		def, _ := connectors.Get(c.Slug)
+		actions := make([]map[string]any, 0, len(def.Actions))
+		for _, a := range def.Actions {
+			fields := a.Fields
+			if fields == nil {
+				fields = []connectors.Field{}
+			}
+			actions = append(actions, map[string]any{
+				"id": a.ID, "label": a.Label, "description": a.Description, "fields": fields,
+			})
+		}
+		kind := "native"
+		if !def.Native && def.HTTP != nil {
+			kind = "declarative"
+		}
 		out = append(out, map[string]any{
 			"id": c.ID, "slug": c.Slug, "name": c.Name, "category": c.Category,
 			"description": c.Description, "icon": c.Icon, "status": c.Status,
 			"installed": c.Installed, "created_at": c.CreatedAt,
 			"docs_url":            entry.DocsURL,
+			"color":               def.Color,
+			"ui":                  def.UI,
+			"kind":                kind,
+			"actions":             actions,
 			"executable":          known,
 			"credentials":         fields,
 			"credential_keys":     c.CredentialKeys,

@@ -12,7 +12,7 @@ func TestOnlyEngineCallbacksAreAccepted(t *testing.T) {
 		"http://169.254.169.254/latest/meta-data/":                       false,
 		"http://127.0.0.1:8002/api/v1/credentials":                       false,
 		"http://attacker.example/internal/v1/task-complete/run/node":     false,
-		"file:///etc/passwd":                                             false,
+		"file:///etc/passwd": false,
 	}
 	for raw, want := range cases {
 		if got := trustedCallback(raw); got != want {

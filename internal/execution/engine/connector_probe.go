@@ -5,6 +5,7 @@ package engine
 
 import (
 	"fmt"
+	"github.com/regnant/knott/internal/connectors"
 	"net/url"
 	"strings"
 )
@@ -336,6 +337,9 @@ func (e *Executor) TestConnection(connectorID string) (map[string]any, error) {
 		return configuredOnly("OAuth token and company realm are present. Use a workflow query for a live company-data test.", "QUICKBOOKS_ACCESS_TOKEN", "QUICKBOOKS_REALM_ID")
 	case "x_twitter":
 		return getBearer("X_BEARER_TOKEN", "https://api.x.com/2/users/me", nil)
+	}
+	if def, ok := connectors.Get(id); ok && !def.Native && def.HTTP != nil {
+		return e.testDeclarative(def)
 	}
 	return nil, fmt.Errorf("unknown connector %q", connectorID)
 }
