@@ -19,6 +19,10 @@ on:
       version:
         description: 'Version to build (e.g. v1.2.0)'
         required: true
+      publish:
+        description: 'Attach the builds to a draft GitHub release (off = build and keep them as run artifacts only)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -295,6 +299,7 @@ jobs:
   publish:
     name: Publish release
     needs: [cli, windows, macos, linux-desktop]
+    if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
