@@ -8,7 +8,7 @@ MODULE     := github.com/regnant/knott
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE       ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS    := -s -w \
+LDFLAGS    = -s -w \
               -X main.version=$(VERSION) \
               -X main.commit=$(COMMIT) \
               -X main.date=$(DATE)
@@ -137,10 +137,9 @@ rpm: ## Build an .rpm (needs nfpm)
 macapp: desktop build ## Assemble KNOTT.app and a .dmg (macOS)
 	bash build/macos/make-app.sh "$(VERSION)" $(DESKTOP_OUT) $(BIN)/knott
 
-windows-installer: ## Build the Windows installer (needs NSIS; run after `make desktop`)
-	mkdir -p $(DIST)/win && cp $(BIN)/KNOTT.exe $(DIST)/win/ && GOOS=windows go build -trimpath -ldflags '$(LDFLAGS)' -o $(DIST)/win/knott.exe ./cmd/knott
-	cp LICENSE NOTICE $(DIST)/win/
-	makensis -DVERSION=$(patsubst v%,%,$(VERSION)) -DSOURCE=$(abspath $(DIST)/win) -DOUTFILE=$(abspath $(DIST))/KNOTT-$(patsubst v%,%,$(VERSION))-windows-x64-setup.exe build/windows/installer.nsi
+WIN_DIST_VERSION ?= 0.0.0-local
+windows-installer: ## Build the Windows installer and portable ZIP (needs PowerShell and NSIS)
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File build/windows/make-distribution.ps1 -Version $(WIN_DIST_VERSION)
 
 docker: ## Build the container image
 	docker build -f build/docker/Dockerfile -t knott:$(VERSION) -t knott:latest .

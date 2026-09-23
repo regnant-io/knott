@@ -6,7 +6,7 @@ Five minutes from download to a running, AI-assisted workflow.
 
 | | |
 |---|---|
-| **Windows** | Run `KNOTT-…-windows-x64-setup.exe` from [Releases](https://github.com/regnant-io/knott/releases). The defaults (just for you, Start menu shortcut) are fine. |
+| **Windows** | Run `KNOTT-…-windows-x64-setup.exe` from [Releases](https://github.com/regnant-io/knott/releases), or unpack the `-portable.zip` and open `KNOTT.exe`. The `knott_…_windows_amd64.zip` archive contains the command-line server. |
 | **macOS** | Open the `.dmg` (`arm64` for Apple silicon, `amd64` for Intel) and drag KNOTT to Applications. The first time, right-click KNOTT → **Open**. |
 | **Linux** | `sudo apt install ./knott_*.deb ./knott-desktop_*.deb` (or the `.rpm`s). |
 

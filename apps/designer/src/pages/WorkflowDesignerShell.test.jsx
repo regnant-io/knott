@@ -52,6 +52,19 @@ describe('defToFlow', () => {
     expect(error.data.kind).toBe('error');
   });
 
+  it('draws a review step\'s outcome routes', () => {
+    const { edges } = defToFlow({
+      steps: [
+        { id: 'review', type: 'human_task', next: 'fallback', next_map: { APPROVE: 'yes', REJECT: 'no' } },
+        { id: 'yes', type: 'end' }, { id: 'no', type: 'end' }, { id: 'fallback', type: 'end' },
+      ],
+    });
+    const byHandle = Object.fromEntries(edges.map(e => [e.sourceHandle, e.target]));
+    expect(byHandle['decision-APPROVE']).toBe('yes');
+    expect(byHandle['decision-REJECT']).toBe('no');
+    expect(byHandle.main).toBe('fallback');
+  });
+
   it('falls back to a known node type rather than rendering nothing', () => {
     const { nodes } = defToFlow({ steps: [{ id: 'x', type: 'some_future_type' }] });
     expect(nodes[0].type).toBe('tool_call');
@@ -121,6 +134,14 @@ describe('flowToDef', () => {
     );
     expect(def.steps.map(s => s.id)).toEqual(['a']);
     expect(def.annotations).toEqual([{ id: 'n1', text: 'why', position: { x: 5, y: 6 } }]);
+  });
+
+  it('writes review outcome edges back to next_map and drops removed ones', () => {
+    const def = flowToDef(
+      [node('review', 'human_task', { next_map: { APPROVE: 'old', MORE_INFO: 'gone' } }), node('ok', 'end'), node('no', 'end')],
+      [edge('review', 'ok', 'decision-APPROVE'), edge('review', 'no', 'decision-REJECT')],
+    );
+    expect(def.steps.find(s => s.id === 'review').next_map).toEqual({ APPROVE: 'ok', REJECT: 'no' });
   });
 
   it('survives a full round trip', () => {

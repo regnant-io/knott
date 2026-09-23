@@ -132,6 +132,69 @@ function ConditionNode({ id, data, selected }) {
   );
 }
 
+/** The outcomes a reviewer can choose, in the order the task inbox shows them. */
+export const REVIEW_OUTCOMES = [
+  { decision: 'APPROVE', label: 'Approved' },
+  { decision: 'REJECT', label: 'Rejected' },
+  { decision: 'MORE_INFO', label: 'More info requested' },
+];
+
+/**
+ * A review step routes on the reviewer's decision: one output per outcome,
+ * plus "any other outcome" for the step's plain next. The routes used to live
+ * only in the definition's next_map, invisible and uneditable on the canvas.
+ */
+function HumanTaskNode({ id, data, selected }) {
+  const meta = data.__meta || {};
+  const entry = meta.entry || {};
+  const Icon = entry.icon;
+  const run = data.__run;
+  const rows = [
+    ...REVIEW_OUTCOMES.map(o => ({ handle: `decision-${o.decision}`, label: o.label })),
+    ...Object.keys(data.next_map || {})
+      .filter(d => !REVIEW_OUTCOMES.some(o => o.decision === d))
+      .map(d => ({ handle: `decision-${d}`, label: d })),
+    { handle: 'main', label: 'Any other outcome', muted: true },
+  ];
+  return (
+    <div className={['kn-node', 'fam-human', 'type-human_task', selected ? 'selected' : '', data.disabled ? 'is-disabled' : '', run ? `run-${run.status}` : '', data.__errorWired ? 'has-error-route' : ''].filter(Boolean).join(' ')}
+      style={{ '--c': entry.color }}>
+      <Handle type="target" position={Position.Left} className="kn-handle in" />
+      <div className="kn-node-main">
+        <div className="kn-node-icon">{Icon && <Icon size={18} />}</div>
+        <div className="kn-node-text">
+          <div className="kn-node-kind">{entry.label}</div>
+          <div className="kn-node-name">{data.name || id}</div>
+          {meta.detail && <div className="kn-node-detail">{meta.detail}</div>}
+        </div>
+        <RunBadge run={run} />
+      </div>
+      <div className="kn-branches">
+        {rows.map(row => (
+          <div key={row.handle} className={`kn-branch sans${row.muted ? ' muted' : ''}`}>
+            <span className="kn-branch-label">{row.label}</span>
+            <Handle type="source" position={Position.Right} id={row.handle} className="kn-handle out branch" />
+            <button type="button" className="kn-add branch" title={`Add the step for “${row.label}”`}
+              aria-label={`Add the step for ${row.label}`}
+              onClick={e => { e.stopPropagation(); data.__onAppend?.(id, row.handle); }}>
+              <Plus size={11} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="kn-error-out">
+        <span>on error</span>
+        <Handle type="source" position={Position.Right} id="error" className="kn-handle err" />
+        <button type="button" className="kn-add err" title="Add a step for when this fails"
+          aria-label="Add a step for when this fails"
+          onClick={e => { e.stopPropagation(); data.__onAppend?.(id, 'error'); }}>
+          <Plus size={11} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** An annotation on the canvas. Never executed, never connected. */
 function NoteNode({ data, selected }) {
   return (
@@ -157,7 +220,7 @@ function clip(s, n) { return s.length > n ? `${s.slice(0, n - 1)}…` : s; }
 const Step = memo(StepNode);
 
 export const NODE_TYPES = {
-  trigger: Step, ai_decision: Step, llm: Step, human_task: Step, tool_call: Step,
+  trigger: Step, ai_decision: Step, llm: Step, human_task: memo(HumanTaskNode), tool_call: Step,
   sub_workflow: Step, agent_call: Step, parallel: Step, loop: Step, code: Step,
   set: Step, filter: Step, wait: Step, merge: Step, transform: Step, list: Step,
   datetime: Step, crypto: Step, stop_error: Step, end: Step, emit: Step,
