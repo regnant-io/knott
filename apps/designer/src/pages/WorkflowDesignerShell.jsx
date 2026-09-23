@@ -27,6 +27,7 @@ import { useRunOverlay } from '../designer/useRunOverlay.js';
 import { useConnectors } from '../lib/useConnectors.js';
 import { AppIcon } from '../components/AppIcon.jsx';
 import { useToast } from '../components/Layout.jsx';
+import { useKnottDialog } from '../components/KnottDialog.jsx';
 import { sampleContext } from '../lib/expr.js';
 
 let nodeSeq = Date.now() % 100000;
@@ -63,6 +64,7 @@ function defToFlow(def) {
   const edges = [];
   const push = (source, target, handle, label, kind) => {
     if (!target) return;
+    if (edges.some(e => e.source === source && e.sourceHandle === handle)) return;
     edges.push({
       id: `e-${source}-${handle}-${target}`,
       source, target, sourceHandle: handle, label,
@@ -76,8 +78,13 @@ function defToFlow(def) {
     if (s.type === 'condition') {
       (s.cases || []).forEach((c, i) => push(s.id, c.next, `case-${i}`, undefined, 'branch'));
       push(s.id, s.default, 'default', 'otherwise', 'branch');
-    } else if (s.next) {
-      push(s.id, s.next, 'main', undefined, 'main');
+    } else {
+      if (s.type === 'human_task') {
+        for (const [decision, target] of Object.entries(s.next_map || {})) {
+          push(s.id, target, `decision-${decision}`, decisionLabel(decision), 'branch');
+        }
+      }
+      if (s.next) push(s.id, s.next, 'main', undefined, 'main');
     }
     const onError = s.config?.on_error;
     if (onError) push(s.id, onError, 'error', 'on error', 'error');
@@ -100,6 +107,7 @@ function flowToDef(nodes, edges, trigger) {
         step.cases = (step.cases || []).map(c => ({ ...c, next: '' }));
         step.default = '';
       }
+      if (n.type === 'human_task') delete step.next_map;
       return step;
     });
 
@@ -112,6 +120,8 @@ function flowToDef(nodes, edges, trigger) {
 
     if (handle === 'error') {
       step.config.on_error = e.target;
+    } else if (handle.startsWith('decision-')) {
+      step.next_map = { ...(step.next_map || {}), [handle.slice(9)]: e.target };
     } else if (step.type === 'condition') {
       if (handle === 'default') {
         step.default = e.target;
@@ -177,6 +187,7 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor, theme }) {
   const clipboard = useRef(null);
   const dragStart = useRef(null);
   const { toast } = useToast();
+  const { confirm } = useKnottDialog();
   const { screenToFlowPosition, fitView } = useReactFlow();
 
   const selected = useMemo(() => nodes.find(n => n.id === selectedId) || null, [nodes, selectedId]);
@@ -337,7 +348,8 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor, theme }) {
       id: `e-${params.source}-${handle}-${params.target}`,
       className: kind,
       data: { kind },
-      label: kind === 'error' ? 'on error' : handle === 'default' ? 'otherwise' : undefined,
+      label: kind === 'error' ? 'on error' : handle === 'default' ? 'otherwise'
+        : handle.startsWith('decision-') ? decisionLabel(handle.slice(9)) : undefined,
       ...EDGE_STYLE,
     }, kept);
   }
@@ -552,8 +564,8 @@ function DesignerCanvas({ workflowId, onBack, NodePropsEditor, theme }) {
     toast(next === 'active' ? 'Workflow will be active once saved' : 'Workflow will be a draft once saved', 'info');
   }
 
-  function handleBack() {
-    if (dirty && !confirm('This workflow has unsaved changes. Leave anyway?')) return;
+  async function handleBack() {
+    if (dirty && !await confirm('This workflow has unsaved changes. Leave anyway?', { title: 'Leave workflow', action: 'Leave', destructive: true })) return;
     onBack();
   }
 
@@ -1062,6 +1074,10 @@ function parseDefinition(raw, toast) {
     toast?.('That workflow’s definition could not be read — starting from an empty canvas', 'warning');
     return { trigger: { type: 'api' }, steps: [] };
   }
+}
+
+function decisionLabel(decision) {
+  return { APPROVE: 'approved', REJECT: 'rejected', MORE_INFO: 'more info' }[decision] || decision.toLowerCase();
 }
 
 /** Whether any two cards would sit on top of each other. */

@@ -157,13 +157,13 @@ jobs:
           SHORT="${VERSION#v}"; NUM="${SHORT%%-*}.0"
           LDF="-s -w -X main.version=${VERSION} -X main.commit=${GITHUB_SHA::7}"
           OUT="$GITHUB_WORKSPACE/dist/win"
-          mkdir -p "$OUT/bin"
+          mkdir -p "$OUT/desktop" "$OUT/cli"
           # go-winres runs on the build machine, whatever GOARCH the app targets.
           (cd desktop && GOARCH= go run "$WINRES" make --in winres/winres.json --out rsrc --arch "$GOARCH" \
               --product-version "$NUM" --file-version "$NUM")
-          (cd desktop && go build -trimpath -tags desktop,production -ldflags "$LDF -H windowsgui" -o "$OUT/KNOTT.exe" .)
-          go build -trimpath -ldflags "$LDF -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "$OUT/knott.exe" ./cmd/knott
-          cp "$OUT/knott.exe" "$OUT/bin/knott.exe"
+          (cd desktop && go build -trimpath -tags desktop,production -ldflags "$LDF -H windowsgui" -o "$OUT/desktop/KNOTT.exe" .)
+          go build -trimpath -ldflags "$LDF -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "$OUT/cli/knott.exe" ./cmd/knott
+          go version -m "$OUT/desktop/KNOTT.exe" | grep -Eq '^[[:space:]]*path[[:space:]]+github.com/regnant/knott/desktop$'
           cp LICENSE NOTICE README.md "$OUT/"
 
       - name: Fetch the WebView2 bootstrapper
@@ -193,8 +193,8 @@ jobs:
           SHORT="${VERSION#v}"
           P="dist/KNOTT-${SHORT}-windows-${{ matrix.label }}-portable"
           mkdir -p "$P/bin" "$P/data"
-          cp dist/win/KNOTT.exe "$P/"
-          cp dist/win/knott.exe "$P/bin/"
+          cp dist/win/desktop/KNOTT.exe "$P/"
+          cp dist/win/cli/knott.exe "$P/bin/"
           cp LICENSE NOTICE README.md "$P/"
           # A data folder next to the app keeps everything inside this folder.
           echo "KNOTT keeps its workflows, runs and credentials here because this copy is portable." > "$P/data/README.txt"

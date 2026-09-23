@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Plus, Trash2, Play, Pause, Zap, CalendarClock, RefreshCw } from 'lucide-react';
 import { schedules as schedApi, workflows as wfApi } from '../lib/api.js';
 import { StatusBadge, useToast } from '../components/Layout.jsx';
+import { useKnottDialog } from '../components/KnottDialog.jsx';
 import { format } from 'date-fns';
 
 function describe(s) {
@@ -26,6 +27,7 @@ export default function Schedules() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const { toast } = useToast();
+  const { confirm } = useKnottDialog();
 
   const load = useCallback(async () => {
     try {
@@ -54,7 +56,7 @@ export default function Schedules() {
   }
 
   async function remove(s) {
-    if (!confirm(`Delete schedule "${s.name || describe(s)}"?`)) return;
+    if (!await confirm(`Delete schedule "${s.name || describe(s)}"?`, { title: 'Delete schedule', action: 'Delete', destructive: true })) return;
     try { await schedApi.delete(s.id); toast('Schedule deleted', 'info'); load(); }
     catch (e) { toast('Delete failed', 'error', e.message); }
   }
