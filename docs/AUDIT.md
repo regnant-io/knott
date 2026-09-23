@@ -35,7 +35,7 @@ Severity: **Critical** — exploitable without credentials, or silent data loss 
 | B4 | Medium | `createRun` treated any registry response but 404 as success and leaked the body on 404; registry calls had no timeout, so a wedged registry hung run creation and every run list. | **Fixed** |
 | B5 | Low | Webhook URLs in the builder used `window.location.origin`, wrong behind the desktop app. | **Fixed** — `/api/v1/info` public URL. |
 | B6 | Low | The AI engine's configuration was written by Settings while runs read it, without synchronisation (a data race). | **Fixed** — guarded, copy-on-read. |
-| B7 | Low | Human-task decision routes (`next_map`) are not drawn on the canvas. | **Open** |
+| B7 | Low | Human-task decision routes (`next_map`) were not drawn on the canvas, so they could not be seen or edited. | **Fixed** — one output per outcome (approved, rejected, more info) plus "any other outcome". |
 | B8 | Low | `/api/v1/runs` returns the latest 100 with no pagination. | **Open** |
 
 ## Performance

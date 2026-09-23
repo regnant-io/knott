@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Play, Pencil, Trash2, Tag, Clock, GitBranch, Search, Sparkles, Wand2, Bot, AlertTriangle, Workflow, ArrowUpRight } from 'lucide-react';
 import { workflows as wfApi, runs as runsApi, examples as examplesApi, aiGenerate } from '../lib/api.js';
 import { StatusBadge, useToast } from '../components/Layout.jsx';
+import { useKnottDialog } from '../components/KnottDialog.jsx';
 import { format } from 'date-fns';
 
 export default function Workflows({ onNav, onDesign }) {
@@ -17,6 +18,7 @@ export default function Workflows({ onNav, onDesign }) {
   const [seeding, setSeeding]     = useState(false);
   const [runInput, setRunInput]   = useState('{\n  "transaction_id": "TXN-001",\n  "amount": 1500,\n  "merchant": "Unknown Merchant"\n}');
   const { toast } = useToast();
+  const { confirm } = useKnottDialog();
 
   async function load() {
     try { const r = await wfApi.list(); setList(r.data || []); }
@@ -37,7 +39,7 @@ export default function Workflows({ onNav, onDesign }) {
   }
 
   async function handleDelete(id, name) {
-    if (!confirm(`Archive workflow "${name}"?`)) return;
+    if (!await confirm(`Archive workflow "${name}"?`, { title: 'Archive workflow', action: 'Archive' })) return;
     try {
       await wfApi.delete(id);
       toast(`"${name}" archived`, 'success');

@@ -1,7 +1,7 @@
 // Copyright 2026 Regnant
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Layout, ToastProvider } from './components/Layout.jsx';
 import Workflows from './pages/Workflows.jsx';
 import Runs from './pages/Runs.jsx';
@@ -24,6 +24,10 @@ function PageLoading() {
       <div className="spinner spinner-lg" />
     </div>
   );
+}
+
+function notifyDesktop(title, body) {
+  window.go?.main?.Desktop?.Notify?.(title, body)?.catch(error => console.warn('Desktop notification failed:', error));
 }
 import { tasks as tasksApi, stats as statsApi, checkAuth } from './lib/api.js';
 
@@ -65,6 +69,8 @@ export default function App() {
   const [systemStatus, setSystemStatus] = useState('ok');
   const [theme, toggleTheme, setTheme] = useTheme();
   const [authState, setAuthState] = useState('checking'); // checking | needsAuth | ok
+  const previousPending = useRef(null);
+  const previousHealth = useRef(null);
 
   // On mount, determine whether the backend requires a token and whether ours works.
   useEffect(() => {
@@ -81,7 +87,12 @@ export default function App() {
     async function fetchPending() {
       try {
         const r = await tasksApi.list({ status: 'PENDING' });
-        setPendingCount((r.data || []).length);
+        const count = (r.data || []).length;
+        if (previousPending.current !== null && count > previousPending.current) {
+          notifyDesktop('Human review needed', `${count} task${count === 1 ? '' : 's'} waiting for a decision in KNOTT.`);
+        }
+        previousPending.current = count;
+        setPendingCount(count);
       } catch {}
     }
     fetchPending();
@@ -96,8 +107,17 @@ export default function App() {
         const r = await statsApi.health();
         const svcs = r.services || [];
         const down = svcs.filter(s => s.status !== 'ok').length;
-        setSystemStatus(down === 0 ? 'ok' : down >= svcs.length ? 'offline' : 'degraded');
-      } catch { setSystemStatus('offline'); }
+        const next = down === 0 ? 'ok' : down >= svcs.length ? 'offline' : 'degraded';
+        if (previousHealth.current === 'ok' && next !== 'ok') {
+          notifyDesktop('KNOTT needs attention', next === 'offline' ? 'The local engine is unavailable.' : `${down} service${down === 1 ? '' : 's'} need attention.`);
+        }
+        previousHealth.current = next;
+        setSystemStatus(next);
+      } catch {
+        if (previousHealth.current === 'ok') notifyDesktop('KNOTT needs attention', 'The local engine is unavailable.');
+        previousHealth.current = 'offline';
+        setSystemStatus('offline');
+      }
     }
     fetchHealth();
     const t = setInterval(fetchHealth, 15000);
@@ -117,7 +137,7 @@ export default function App() {
   // Auth gate: show a loader while probing, the login screen if a token is needed.
   if (authState === 'checking') {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
+      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
         <div className="spinner spinner-lg" />
       </div>
     );

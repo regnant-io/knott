@@ -35,6 +35,7 @@ Thumbs.db
 /.scratch/
 /dist/
 app-window/
+/webview/
 
 # Generated on first run in a checkout
 /secret.key

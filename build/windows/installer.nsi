@@ -16,8 +16,8 @@
 ; Build (from the repository root):
 ;   makensis -DVERSION=1.2.0 -DSOURCE=dist\win-amd64 -DOUTFILE=dist\KNOTT-1.2.0-windows-x64-setup.exe build\windows\installer.nsi
 ;
-; SOURCE must hold KNOTT.exe (the desktop app), knott.exe (the CLI) and the
-; licence files. build\windows\MicrosoftEdgeWebview2Setup.exe is embedded when
+; SOURCE must hold desktop\KNOTT.exe (the desktop app), cli\knott.exe (the CLI)
+; and the licence files. build\windows\MicrosoftEdgeWebview2Setup.exe is embedded when
 ; present.
 
 Unicode true
@@ -28,7 +28,7 @@ SetCompressor /SOLID lzma
   !define VERSION "0.0.0"
 !endif
 !ifndef SOURCE
-  !error "Pass -DSOURCE=<folder with KNOTT.exe and knott.exe>"
+  !error "Pass -DSOURCE=<folder with desktop\KNOTT.exe and cli\knott.exe>"
 !endif
 !ifndef OUTFILE
   !define OUTFILE "KNOTT-${VERSION}-setup.exe"
@@ -109,10 +109,11 @@ Section "!${APPNAME} desktop app" SecCore
   Sleep 800
 
   SetOutPath "$INSTDIR"
-  File "${SOURCE}\KNOTT.exe"
+  File "/oname=KNOTT.exe" "${SOURCE}\desktop\KNOTT.exe"
   File "${SOURCE}\LICENSE"
   File "${SOURCE}\NOTICE"
   File "..\..\brand\icons\knott.ico"
+  File "/oname=knott-notification.png" "..\..\brand\icons\knott-64.png"
 
   Call EnsureWebView2
 
@@ -135,7 +136,7 @@ SectionEnd
 
 Section "Command-line tool (knott)" SecCLI
   SetOutPath "$INSTDIR\bin"
-  File "${SOURCE}\knott.exe"
+  File "/oname=knott.exe" "${SOURCE}\cli\knott.exe"
 SectionEnd
 
 Section "Add knott to PATH" SecPath
@@ -240,6 +241,7 @@ Section "Uninstall"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\NOTICE"
   Delete "$INSTDIR\knott.ico"
+  Delete "$INSTDIR\knott-notification.png"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
 

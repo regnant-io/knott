@@ -129,12 +129,14 @@ export function AIDecisions() {
 import { agents as agentsApi } from '../lib/api.js';
 import { Bot, Plus, Trash2, Activity, Wifi, WifiOff } from 'lucide-react';
 import { StatusBadge as SB, useToast as uT } from '../components/Layout.jsx';
+import { useKnottDialog } from '../components/KnottDialog.jsx';
 
 export function Agents() {
   const [list, setList]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const { toast } = uT();
+  const { confirm } = useKnottDialog();
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -150,7 +152,7 @@ export function Agents() {
   }
 
   async function handleDelete(id, name) {
-    if (!confirm(`Remove agent "${name}"?`)) return;
+    if (!await confirm(`Remove agent "${name}"?`, { title: 'Remove agent', action: 'Remove', destructive: true })) return;
     await agentsApi.delete(id);
     toast(`"${name}" removed`, 'info');
     load();
