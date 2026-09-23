@@ -1,0 +1,330 @@
+[
+  {
+    "slug": "todoist", "name": "Todoist", "category": "Productivity", "color": "#E44332", "icon": "check-square",
+    "description": "Create, list and complete tasks in Todoist",
+    "docs_url": "https://developer.todoist.com/api/v1/",
+    "credentials": [{"name": "TODOIST_API_TOKEN", "label": "API token", "secret": true, "help": "Settings → Integrations → Developer."}],
+    "http": {
+      "base_url": "https://api.todoist.com/api/v1",
+      "auth": {"type": "bearer", "credential": "TODOIST_API_TOKEN"},
+      "test": {"id": "test", "label": "Projects", "method": "GET", "path": "/projects", "fields": []}
+    },
+    "actions": [
+      {"id": "create_task", "label": "Create task", "method": "POST", "path": "/tasks",
+       "body": {"content": "{content}", "description": "{description}", "due_string": "{due}", "priority": "{priority}", "project_id": "{project_id}", "labels": "{labels}"},
+       "fields": [
+         {"name": "content", "label": "Task", "required": true},
+         {"name": "description", "label": "Description", "type": "textarea"},
+         {"name": "due", "label": "Due", "placeholder": "tomorrow at 9am"},
+         {"name": "priority", "label": "Priority (1–4)", "type": "number"},
+         {"name": "project_id", "label": "Project ID"},
+         {"name": "labels", "label": "Labels (JSON array)", "type": "json"}
+       ]},
+      {"id": "list_tasks", "label": "List tasks", "method": "GET", "path": "/tasks", "query": {"project_id": "{project_id}"}, "items_path": "results",
+       "fields": [{"name": "project_id", "label": "Project ID"}]},
+      {"id": "close_task", "label": "Complete task", "method": "POST", "path": "/tasks/{task_id}/close", "body_type": "none",
+       "fields": [{"name": "task_id", "label": "Task ID", "required": true}]}
+    ]
+  },
+  {
+    "slug": "smartsheet", "name": "Smartsheet", "category": "Productivity", "color": "#0073EC", "icon": "table",
+    "description": "Read sheets and add rows in Smartsheet",
+    "docs_url": "https://smartsheet.redoc.ly/",
+    "credentials": [{"name": "SMARTSHEET_TOKEN", "label": "API access token", "secret": true, "help": "Account → Apps & Integrations → API Access."}],
+    "http": {
+      "base_url": "https://api.smartsheet.com/2.0",
+      "auth": {"type": "bearer", "credential": "SMARTSHEET_TOKEN"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "add_rows", "label": "Add rows", "method": "POST", "path": "/sheets/{sheet_id}/rows", "body": "{rows}",
+       "fields": [
+         {"name": "sheet_id", "label": "Sheet ID", "required": true},
+         {"name": "rows", "label": "Rows (JSON array)", "type": "json", "required": true, "placeholder": "[{ \"toBottom\": true, \"cells\": [{ \"columnId\": 123, \"value\": \"{{ input.name }}\" }] }]"}
+       ]},
+      {"id": "get_sheet", "label": "Get sheet", "method": "GET", "path": "/sheets/{sheet_id}",
+       "fields": [{"name": "sheet_id", "label": "Sheet ID", "required": true}]}
+    ]
+  },
+  {
+    "slug": "wrike", "name": "Wrike", "category": "Productivity", "color": "#08CF65", "icon": "check-square",
+    "description": "Create tasks in Wrike folders and projects",
+    "docs_url": "https://developers.wrike.com/api/v4/",
+    "credentials": [{"name": "WRIKE_TOKEN", "label": "Permanent access token", "secret": true, "help": "Apps & Integrations → API."}],
+    "http": {
+      "base_url": "https://www.wrike.com/api/v4",
+      "auth": {"type": "bearer", "credential": "WRIKE_TOKEN"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/contacts", "query": {"me": "true"}, "fields": []}
+    },
+    "actions": [
+      {"id": "create_task", "label": "Create task", "method": "POST", "path": "/folders/{folder_id}/tasks", "body_type": "form",
+       "body": {"title": "{title}", "description": "{description}", "importance": "{importance}"},
+       "fields": [
+         {"name": "folder_id", "label": "Folder or project ID", "required": true},
+         {"name": "title", "label": "Title", "required": true},
+         {"name": "description", "label": "Description", "type": "textarea"},
+         {"name": "importance", "label": "Importance", "type": "select", "options": ["High", "Normal", "Low"]}
+       ]}
+    ]
+  },
+  {
+    "slug": "shortcut", "name": "Shortcut", "category": "Productivity", "color": "#58B1E4", "icon": "check-square",
+    "description": "Create stories in Shortcut (formerly Clubhouse)",
+    "docs_url": "https://developer.shortcut.com/api/rest/v3",
+    "credentials": [{"name": "SHORTCUT_TOKEN", "label": "API token", "secret": true}],
+    "http": {
+      "base_url": "https://api.app.shortcut.com/api/v3",
+      "auth": {"type": "header", "header": "Shortcut-Token", "credential": "SHORTCUT_TOKEN"},
+      "test": {"id": "test", "label": "Member", "method": "GET", "path": "/member", "fields": []}
+    },
+    "actions": [
+      {"id": "create_story", "label": "Create story", "method": "POST", "path": "/stories",
+       "body": {"name": "{name}", "description": "{description}", "story_type": "{story_type}", "workflow_state_id": "{workflow_state_id}", "group_id": "{group_id}"},
+       "fields": [
+         {"name": "name", "label": "Name", "required": true},
+         {"name": "description", "label": "Description", "type": "textarea"},
+         {"name": "story_type", "label": "Type", "type": "select", "options": ["feature", "bug", "chore"]},
+         {"name": "workflow_state_id", "label": "Workflow state ID", "type": "number", "required": true},
+         {"name": "group_id", "label": "Team (group) ID"}
+       ]}
+    ]
+  },
+  {
+    "slug": "basecamp", "name": "Basecamp", "category": "Productivity", "color": "#1D2D35", "icon": "check-square",
+    "description": "Add to-dos to Basecamp projects",
+    "docs_url": "https://github.com/basecamp/bc3-api",
+    "credentials": [
+      {"name": "BASECAMP_ACCOUNT_ID", "label": "Account ID", "help": "The number after 3.basecamp.com/ in your URL."},
+      {"name": "BASECAMP_ACCESS_TOKEN", "label": "OAuth access token", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://3.basecampapi.com/{cred:BASECAMP_ACCOUNT_ID}",
+      "auth": {"type": "bearer", "credential": "BASECAMP_ACCESS_TOKEN"},
+      "headers": {"User-Agent": "KNOTT (https://github.com/regnant-io/knott)"},
+      "test": {"id": "test", "label": "Projects", "method": "GET", "path": "/projects.json", "fields": []}
+    },
+    "actions": [
+      {"id": "create_todo", "label": "Create to-do", "method": "POST", "path": "/buckets/{project_id}/todolists/{todolist_id}/todos.json",
+       "body": {"content": "{content}", "description": "{description}", "due_on": "{due_on}"},
+       "fields": [
+         {"name": "project_id", "label": "Project ID", "required": true},
+         {"name": "todolist_id", "label": "To-do list ID", "required": true},
+         {"name": "content", "label": "To-do", "required": true},
+         {"name": "description", "label": "Notes", "type": "textarea"},
+         {"name": "due_on", "label": "Due (YYYY-MM-DD)"}
+       ]}
+    ]
+  },
+  {
+    "slug": "confluence", "name": "Confluence", "category": "Productivity", "color": "#1868DB", "icon": "file-text",
+    "description": "Publish pages to Confluence Cloud",
+    "docs_url": "https://developer.atlassian.com/cloud/confluence/rest/v2/",
+    "credentials": [
+      {"name": "CONFLUENCE_URL", "label": "Site URL", "placeholder": "https://acme.atlassian.net"},
+      {"name": "CONFLUENCE_EMAIL", "label": "Account email"},
+      {"name": "CONFLUENCE_API_TOKEN", "label": "API token", "secret": true, "help": "id.atlassian.com → Security → API tokens."}
+    ],
+    "http": {
+      "base_url": "{cred:CONFLUENCE_URL}/wiki/api/v2",
+      "auth": {"type": "basic", "credential": "CONFLUENCE_EMAIL", "password": "CONFLUENCE_API_TOKEN"},
+      "test": {"id": "test", "label": "Spaces", "method": "GET", "path": "/spaces", "query": {"limit": "1"}, "fields": []}
+    },
+    "actions": [
+      {"id": "create_page", "label": "Create page", "method": "POST", "path": "/pages",
+       "body": {"spaceId": "{space_id}", "status": "current", "title": "{title}", "parentId": "{parent_id}", "body": {"representation": "storage", "value": "{body}"}},
+       "fields": [
+         {"name": "space_id", "label": "Space ID", "required": true},
+         {"name": "title", "label": "Title", "required": true},
+         {"name": "body", "label": "Body (storage format / HTML)", "type": "textarea", "required": true},
+         {"name": "parent_id", "label": "Parent page ID"}
+       ]}
+    ]
+  },
+  {
+    "slug": "miro", "name": "Miro", "category": "Productivity", "color": "#FFD02F", "icon": "layout",
+    "description": "Add sticky notes to Miro boards",
+    "docs_url": "https://developers.miro.com/reference/api-reference",
+    "credentials": [{"name": "MIRO_ACCESS_TOKEN", "label": "Access token", "secret": true}],
+    "http": {
+      "base_url": "https://api.miro.com/v2",
+      "auth": {"type": "bearer", "credential": "MIRO_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "Boards", "method": "GET", "path": "/boards", "query": {"limit": "1"}, "fields": []}
+    },
+    "actions": [
+      {"id": "create_sticky_note", "label": "Create sticky note", "method": "POST", "path": "/boards/{board_id}/sticky_notes",
+       "body": {"data": {"content": "{content}", "shape": "square"}, "style": {"fillColor": "{color}"}},
+       "fields": [
+         {"name": "board_id", "label": "Board ID", "required": true},
+         {"name": "content", "label": "Text", "required": true},
+         {"name": "color", "label": "Colour", "type": "select", "options": ["light_yellow", "yellow", "orange", "light_green", "green", "light_blue", "blue", "light_pink", "red", "gray"]}
+       ]}
+    ]
+  },
+  {
+    "slug": "figma", "name": "Figma", "category": "Productivity", "color": "#F24E1E", "icon": "pen-tool",
+    "description": "Read and post comments on Figma files",
+    "docs_url": "https://www.figma.com/developers/api",
+    "credentials": [{"name": "FIGMA_TOKEN", "label": "Personal access token", "secret": true}],
+    "http": {
+      "base_url": "https://api.figma.com/v1",
+      "auth": {"type": "header", "header": "X-Figma-Token", "credential": "FIGMA_TOKEN"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_comments", "label": "List comments", "method": "GET", "path": "/files/{file_key}/comments", "items_path": "comments",
+       "fields": [{"name": "file_key", "label": "File key", "required": true}]},
+      {"id": "post_comment", "label": "Post comment", "method": "POST", "path": "/files/{file_key}/comments", "body": {"message": "{message}"},
+       "fields": [
+         {"name": "file_key", "label": "File key", "required": true},
+         {"name": "message", "label": "Comment", "type": "textarea", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "toggl", "name": "Toggl Track", "category": "Productivity", "color": "#E57CD8", "icon": "clock",
+    "description": "Log and read time entries in Toggl Track",
+    "docs_url": "https://engineering.toggl.com/docs/",
+    "credentials": [{"name": "TOGGL_API_TOKEN", "label": "API token", "secret": true, "help": "Profile settings → API Token."}],
+    "http": {
+      "base_url": "https://api.track.toggl.com/api/v9",
+      "auth": {"type": "basic", "credential": "TOGGL_API_TOKEN", "password_value": "api_token"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_time_entries", "label": "List my time entries", "method": "GET", "path": "/me/time_entries", "query": {"start_date": "{start_date}", "end_date": "{end_date}"},
+       "fields": [
+         {"name": "start_date", "label": "Start (YYYY-MM-DD)"},
+         {"name": "end_date", "label": "End (YYYY-MM-DD)"}
+       ]},
+      {"id": "create_time_entry", "label": "Create time entry", "method": "POST", "path": "/workspaces/{workspace_id}/time_entries",
+       "body": {"workspace_id": "{workspace_id}", "description": "{description}", "start": "{start}", "duration": "{duration}", "project_id": "{project_id}", "created_with": "KNOTT"},
+       "fields": [
+         {"name": "workspace_id", "label": "Workspace ID", "type": "number", "required": true},
+         {"name": "start", "label": "Start (RFC 3339)", "required": true},
+         {"name": "duration", "label": "Duration (seconds)", "type": "number", "required": true},
+         {"name": "description", "label": "Description"},
+         {"name": "project_id", "label": "Project ID", "type": "number"}
+       ]}
+    ]
+  },
+  {
+    "slug": "clockify", "name": "Clockify", "category": "Productivity", "color": "#03A9F4", "icon": "clock",
+    "description": "Log time entries in Clockify",
+    "docs_url": "https://docs.clockify.me/",
+    "credentials": [{"name": "CLOCKIFY_API_KEY", "label": "API key", "secret": true, "help": "Profile settings → API."}],
+    "http": {
+      "base_url": "https://api.clockify.me/api/v1",
+      "auth": {"type": "header", "header": "X-Api-Key", "credential": "CLOCKIFY_API_KEY"},
+      "test": {"id": "test", "label": "User", "method": "GET", "path": "/user", "fields": []}
+    },
+    "actions": [
+      {"id": "create_time_entry", "label": "Create time entry", "method": "POST", "path": "/workspaces/{workspace_id}/time-entries",
+       "body": {"start": "{start}", "end": "{end}", "description": "{description}", "projectId": "{project_id}", "billable": "{billable}"},
+       "fields": [
+         {"name": "workspace_id", "label": "Workspace ID", "required": true},
+         {"name": "start", "label": "Start (RFC 3339)", "required": true},
+         {"name": "end", "label": "End (RFC 3339)"},
+         {"name": "description", "label": "Description"},
+         {"name": "project_id", "label": "Project ID"},
+         {"name": "billable", "label": "Billable", "type": "boolean"}
+       ]}
+    ]
+  },
+  {
+    "slug": "cal_com", "name": "Cal.com", "category": "Productivity", "color": "#111827", "icon": "calendar",
+    "description": "Read bookings from Cal.com scheduling",
+    "docs_url": "https://cal.com/docs/api-reference/v2/introduction",
+    "credentials": [{"name": "CALCOM_API_KEY", "label": "API key", "secret": true, "help": "Settings → Developer → API keys. Starts with cal_."}],
+    "http": {
+      "base_url": "https://api.cal.com/v2",
+      "auth": {"type": "bearer", "credential": "CALCOM_API_KEY"},
+      "headers": {"cal-api-version": "2024-08-13"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_bookings", "label": "List bookings", "method": "GET", "path": "/bookings", "query": {"status": "{status}", "afterStart": "{after}"}, "items_path": "data",
+       "fields": [
+         {"name": "status", "label": "Status", "type": "select", "options": ["upcoming", "recurring", "past", "cancelled", "unconfirmed"]},
+         {"name": "after", "label": "Starting after (RFC 3339)"}
+       ]}
+    ]
+  },
+  {
+    "slug": "jotform", "name": "Jotform", "category": "Productivity", "color": "#FF6100", "icon": "clipboard",
+    "description": "Read forms and submissions from Jotform",
+    "docs_url": "https://api.jotform.com/docs/",
+    "credentials": [{"name": "JOTFORM_API_KEY", "label": "API key", "secret": true, "help": "Settings → API. EU accounts: use the EU key."}],
+    "http": {
+      "base_url": "https://api.jotform.com",
+      "auth": {"type": "query", "param": "apiKey", "credential": "JOTFORM_API_KEY"},
+      "test": {"id": "test", "label": "User", "method": "GET", "path": "/user", "fields": []}
+    },
+    "actions": [
+      {"id": "list_submissions", "label": "List submissions", "method": "GET", "path": "/form/{form_id}/submissions", "query": {"limit": "{limit}"}, "items_path": "content",
+       "fields": [
+         {"name": "form_id", "label": "Form ID", "required": true},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 20}
+       ]},
+      {"id": "list_forms", "label": "List forms", "method": "GET", "path": "/user/forms", "items_path": "content", "fields": []}
+    ]
+  },
+  {
+    "slug": "webflow", "name": "Webflow", "category": "Productivity", "color": "#146EF5", "icon": "globe",
+    "description": "List and create CMS items in Webflow",
+    "docs_url": "https://developers.webflow.com/data/reference",
+    "credentials": [{"name": "WEBFLOW_TOKEN", "label": "Site API token", "secret": true}],
+    "http": {
+      "base_url": "https://api.webflow.com/v2",
+      "auth": {"type": "bearer", "credential": "WEBFLOW_TOKEN"},
+      "test": {"id": "test", "label": "Token", "method": "GET", "path": "/token/authorized_by", "fields": []}
+    },
+    "actions": [
+      {"id": "list_items", "label": "List CMS items", "method": "GET", "path": "/collections/{collection_id}/items", "items_path": "items",
+       "fields": [{"name": "collection_id", "label": "Collection ID", "required": true}]},
+      {"id": "create_item", "label": "Create CMS item", "method": "POST", "path": "/collections/{collection_id}/items",
+       "body": {"isDraft": "{is_draft}", "fieldData": "{field_data}"},
+       "fields": [
+         {"name": "collection_id", "label": "Collection ID", "required": true},
+         {"name": "field_data", "label": "Field data (JSON)", "type": "json", "required": true, "placeholder": "{ \"name\": \"{{ input.title }}\", \"slug\": \"{{ input.slug }}\" }"},
+         {"name": "is_draft", "label": "Draft", "type": "boolean"}
+       ]}
+    ]
+  },
+  {
+    "slug": "strapi", "name": "Strapi", "category": "Productivity", "color": "#4945FF", "icon": "layout",
+    "description": "Read and create entries in a Strapi headless CMS",
+    "docs_url": "https://docs.strapi.io/dev-docs/api/rest",
+    "credentials": [
+      {"name": "STRAPI_URL", "label": "Server URL", "placeholder": "https://cms.acme.com"},
+      {"name": "STRAPI_TOKEN", "label": "API token", "secret": true}
+    ],
+    "http": {"base_url": "{cred:STRAPI_URL}/api", "auth": {"type": "bearer", "credential": "STRAPI_TOKEN"}},
+    "actions": [
+      {"id": "list_entries", "label": "List entries", "method": "GET", "path": "/{collection}", "items_path": "data",
+       "fields": [{"name": "collection", "label": "Collection (plural API ID)", "required": true, "placeholder": "articles"}]},
+      {"id": "create_entry", "label": "Create entry", "method": "POST", "path": "/{collection}", "body": {"data": "{data}"},
+       "fields": [
+         {"name": "collection", "label": "Collection (plural API ID)", "required": true},
+         {"name": "data", "label": "Data (JSON)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "contentful", "name": "Contentful", "category": "Productivity", "color": "#0681B6", "icon": "layout",
+    "description": "Read published entries from Contentful",
+    "docs_url": "https://www.contentful.com/developers/docs/references/content-delivery-api/",
+    "credentials": [
+      {"name": "CONTENTFUL_SPACE_ID", "label": "Space ID"},
+      {"name": "CONTENTFUL_DELIVERY_TOKEN", "label": "Content Delivery API token", "secret": true}
+    ],
+    "http": {"base_url": "https://cdn.contentful.com/spaces/{cred:CONTENTFUL_SPACE_ID}", "auth": {"type": "bearer", "credential": "CONTENTFUL_DELIVERY_TOKEN"}},
+    "actions": [
+      {"id": "list_entries", "label": "List entries", "method": "GET", "path": "/environments/{environment}/entries", "query": {"content_type": "{content_type}", "limit": "{limit}"}, "items_path": "items",
+       "fields": [
+         {"name": "environment", "label": "Environment", "default": "master"},
+         {"name": "content_type", "label": "Content type ID"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]}
+    ]
+  }
+]

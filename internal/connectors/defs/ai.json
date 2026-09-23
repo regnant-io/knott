@@ -1,0 +1,189 @@
+[
+  {
+    "slug": "mistral", "name": "Mistral AI", "category": "AI", "color": "#FA520F", "icon": "sparkles",
+    "description": "Chat completions with Mistral models",
+    "docs_url": "https://docs.mistral.ai/api/",
+    "credentials": [{"name": "MISTRAL_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://api.mistral.ai/v1",
+      "auth": {"type": "bearer", "credential": "MISTRAL_API_KEY"},
+      "test": {"id": "test", "label": "Models", "method": "GET", "path": "/models", "fields": []}
+    },
+    "actions": [
+      {"id": "chat", "label": "Chat completion", "method": "POST", "path": "/chat/completions",
+       "body": {"model": "{model}", "messages": [{"role": "user", "content": "{prompt}"}], "temperature": "{temperature}"},
+       "fields": [
+         {"name": "prompt", "label": "Prompt", "type": "textarea", "required": true},
+         {"name": "model", "label": "Model", "default": "mistral-small-latest"},
+         {"name": "temperature", "label": "Temperature", "type": "number"}
+       ]}
+    ]
+  },
+  {
+    "slug": "deepseek", "name": "DeepSeek", "category": "AI", "color": "#4D6BFE", "icon": "sparkles",
+    "description": "Chat completions with DeepSeek models",
+    "docs_url": "https://api-docs.deepseek.com/",
+    "credentials": [{"name": "DEEPSEEK_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://api.deepseek.com",
+      "auth": {"type": "bearer", "credential": "DEEPSEEK_API_KEY"},
+      "test": {"id": "test", "label": "Models", "method": "GET", "path": "/models", "fields": []}
+    },
+    "actions": [
+      {"id": "chat", "label": "Chat completion", "method": "POST", "path": "/chat/completions",
+       "body": {"model": "{model}", "messages": [{"role": "user", "content": "{prompt}"}]},
+       "fields": [
+         {"name": "prompt", "label": "Prompt", "type": "textarea", "required": true},
+         {"name": "model", "label": "Model", "default": "deepseek-chat"}
+       ]}
+    ]
+  },
+  {
+    "slug": "openrouter", "name": "OpenRouter", "category": "AI", "color": "#6467F2", "icon": "sparkles",
+    "description": "One API for hundreds of hosted models",
+    "docs_url": "https://openrouter.ai/docs/api-reference/overview",
+    "credentials": [{"name": "OPENROUTER_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "auth": {"type": "bearer", "credential": "OPENROUTER_API_KEY"},
+      "headers": {"X-Title": "KNOTT"},
+      "test": {"id": "test", "label": "Key info", "method": "GET", "path": "/key", "fields": []}
+    },
+    "actions": [
+      {"id": "chat", "label": "Chat completion", "method": "POST", "path": "/chat/completions",
+       "body": {"model": "{model}", "messages": [{"role": "user", "content": "{prompt}"}]},
+       "fields": [
+         {"name": "prompt", "label": "Prompt", "type": "textarea", "required": true},
+         {"name": "model", "label": "Model", "required": true, "placeholder": "meta-llama/llama-3.3-70b-instruct"}
+       ]}
+    ]
+  },
+  {
+    "slug": "perplexity", "name": "Perplexity", "category": "AI", "color": "#20808D", "icon": "search",
+    "description": "Search-grounded answers with citations",
+    "docs_url": "https://docs.perplexity.ai/api-reference/chat-completions",
+    "credentials": [{"name": "PERPLEXITY_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://api.perplexity.ai", "auth": {"type": "bearer", "credential": "PERPLEXITY_API_KEY"}},
+    "actions": [
+      {"id": "ask", "label": "Ask", "method": "POST", "path": "/chat/completions",
+       "body": {"model": "{model}", "messages": [{"role": "user", "content": "{prompt}"}]},
+       "fields": [
+         {"name": "prompt", "label": "Question", "type": "textarea", "required": true},
+         {"name": "model", "label": "Model", "default": "sonar"}
+       ]}
+    ]
+  },
+  {
+    "slug": "together_ai", "name": "Together AI", "category": "AI", "color": "#0F6FFF", "icon": "sparkles",
+    "description": "Open-weight models served by Together AI",
+    "docs_url": "https://docs.together.ai/reference/chat-completions-1",
+    "credentials": [{"name": "TOGETHER_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://api.together.xyz/v1", "auth": {"type": "bearer", "credential": "TOGETHER_API_KEY"}},
+    "actions": [
+      {"id": "chat", "label": "Chat completion", "method": "POST", "path": "/chat/completions",
+       "body": {"model": "{model}", "messages": [{"role": "user", "content": "{prompt}"}], "max_tokens": "{max_tokens}"},
+       "fields": [
+         {"name": "prompt", "label": "Prompt", "type": "textarea", "required": true},
+         {"name": "model", "label": "Model", "required": true, "placeholder": "meta-llama/Llama-3.3-70B-Instruct-Turbo"},
+         {"name": "max_tokens", "label": "Max tokens", "type": "number"}
+       ]}
+    ]
+  },
+  {
+    "slug": "xai", "name": "xAI Grok", "category": "AI", "color": "#000000", "icon": "sparkles",
+    "description": "Chat completions with xAI's Grok models",
+    "docs_url": "https://docs.x.ai/docs/api-reference",
+    "credentials": [{"name": "XAI_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://api.x.ai/v1",
+      "auth": {"type": "bearer", "credential": "XAI_API_KEY"},
+      "test": {"id": "test", "label": "Key", "method": "GET", "path": "/api-key", "fields": []}
+    },
+    "actions": [
+      {"id": "chat", "label": "Chat completion", "method": "POST", "path": "/chat/completions",
+       "body": {"model": "{model}", "messages": [{"role": "user", "content": "{prompt}"}]},
+       "fields": [
+         {"name": "prompt", "label": "Prompt", "type": "textarea", "required": true},
+         {"name": "model", "label": "Model", "required": true, "placeholder": "grok-3"}
+       ]}
+    ]
+  },
+  {
+    "slug": "deepl", "name": "DeepL", "category": "AI", "color": "#0F2B46", "icon": "languages",
+    "description": "High-quality machine translation",
+    "docs_url": "https://developers.deepl.com/docs",
+    "credentials": [
+      {"name": "DEEPL_API_URL", "label": "API URL", "placeholder": "https://api-free.deepl.com", "help": "Pro accounts use https://api.deepl.com."},
+      {"name": "DEEPL_API_KEY", "label": "Auth key", "secret": true}
+    ],
+    "http": {
+      "base_url": "{cred:DEEPL_API_URL}/v2",
+      "auth": {"type": "header", "header": "Authorization", "prefix": "DeepL-Auth-Key ", "credential": "DEEPL_API_KEY"},
+      "test": {"id": "test", "label": "Usage", "method": "GET", "path": "/usage", "fields": []}
+    },
+    "actions": [
+      {"id": "translate", "label": "Translate text", "method": "POST", "path": "/translate",
+       "body": {"text": ["{text}"], "target_lang": "{target_lang}", "source_lang": "{source_lang}", "formality": "{formality}"},
+       "fields": [
+         {"name": "text", "label": "Text", "type": "textarea", "required": true},
+         {"name": "target_lang", "label": "Target language", "required": true, "placeholder": "DE"},
+         {"name": "source_lang", "label": "Source language (optional)", "placeholder": "EN"},
+         {"name": "formality", "label": "Formality", "type": "select", "options": ["default", "more", "less", "prefer_more", "prefer_less"]}
+       ]}
+    ]
+  },
+  {
+    "slug": "elevenlabs", "name": "ElevenLabs", "category": "AI", "color": "#000000", "icon": "mic",
+    "description": "List voices and check usage for ElevenLabs speech synthesis",
+    "docs_url": "https://elevenlabs.io/docs/api-reference/introduction",
+    "credentials": [{"name": "ELEVENLABS_API_KEY", "label": "API key", "secret": true}],
+    "http": {
+      "base_url": "https://api.elevenlabs.io/v1",
+      "auth": {"type": "header", "header": "xi-api-key", "credential": "ELEVENLABS_API_KEY"},
+      "test": {"id": "test", "label": "User", "method": "GET", "path": "/user", "fields": []}
+    },
+    "actions": [
+      {"id": "list_voices", "label": "List voices", "method": "GET", "path": "/voices", "items_path": "voices", "fields": []},
+      {"id": "subscription", "label": "Subscription & usage", "method": "GET", "path": "/user/subscription", "fields": []}
+    ]
+  },
+  {
+    "slug": "replicate", "name": "Replicate", "category": "AI", "color": "#000000", "icon": "cpu",
+    "description": "Run open-source models (image, audio, text) on Replicate",
+    "docs_url": "https://replicate.com/docs/reference/http",
+    "credentials": [{"name": "REPLICATE_API_TOKEN", "label": "API token", "secret": true}],
+    "http": {
+      "base_url": "https://api.replicate.com/v1",
+      "auth": {"type": "bearer", "credential": "REPLICATE_API_TOKEN"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "run_model", "label": "Run model", "method": "POST", "path": "/models/{owner}/{model}/predictions", "headers": {"Prefer": "wait"}, "body": {"input": "{input}"},
+       "fields": [
+         {"name": "owner", "label": "Owner", "required": true, "placeholder": "black-forest-labs"},
+         {"name": "model", "label": "Model", "required": true, "placeholder": "flux-schnell"},
+         {"name": "input", "label": "Input (JSON)", "type": "json", "required": true, "placeholder": "{ \"prompt\": \"{{ input.prompt }}\" }"}
+       ]},
+      {"id": "get_prediction", "label": "Get prediction", "method": "GET", "path": "/predictions/{id}",
+       "fields": [{"name": "id", "label": "Prediction ID", "required": true}]}
+    ]
+  },
+  {
+    "slug": "assemblyai", "name": "AssemblyAI", "category": "AI", "color": "#2545D3", "icon": "mic",
+    "description": "Transcribe audio and video with AssemblyAI",
+    "docs_url": "https://www.assemblyai.com/docs/api-reference/overview",
+    "credentials": [{"name": "ASSEMBLYAI_API_KEY", "label": "API key", "secret": true}],
+    "http": {"base_url": "https://api.assemblyai.com/v2", "auth": {"type": "header", "header": "Authorization", "credential": "ASSEMBLYAI_API_KEY"}},
+    "actions": [
+      {"id": "transcribe", "label": "Start transcription", "method": "POST", "path": "/transcript",
+       "body": {"audio_url": "{audio_url}", "speaker_labels": "{speaker_labels}", "language_code": "{language_code}"},
+       "fields": [
+         {"name": "audio_url", "label": "Audio URL", "required": true},
+         {"name": "speaker_labels", "label": "Label speakers", "type": "boolean"},
+         {"name": "language_code", "label": "Language code", "placeholder": "en_us"}
+       ]},
+      {"id": "get_transcript", "label": "Get transcript", "method": "GET", "path": "/transcript/{id}",
+       "fields": [{"name": "id", "label": "Transcript ID", "required": true}]}
+    ]
+  }
+]

@@ -1,0 +1,330 @@
+[
+  {
+    "slug": "brevo", "name": "Brevo", "category": "Marketing", "color": "#0B996E", "icon": "mail",
+    "description": "Manage contacts and send transactional email with Brevo (Sendinblue)",
+    "docs_url": "https://developers.brevo.com/reference",
+    "credentials": [{"name": "BREVO_API_KEY", "label": "API key", "secret": true, "help": "Brevo → SMTP & API → API keys."}],
+    "http": {
+      "base_url": "https://api.brevo.com/v3",
+      "auth": {"type": "header", "header": "api-key", "credential": "BREVO_API_KEY"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "create_contact", "label": "Create or update contact", "method": "POST", "path": "/contacts",
+       "body": {"email": "{email}", "attributes": "{attributes}", "listIds": "{list_ids}", "updateEnabled": true},
+       "fields": [
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "attributes", "label": "Attributes (JSON)", "type": "json", "placeholder": "{ \"FIRSTNAME\": \"{{ input.first }}\" }"},
+         {"name": "list_ids", "label": "List IDs (JSON array)", "type": "json", "placeholder": "[2, 7]"}
+       ]},
+      {"id": "send_email", "label": "Send transactional email", "method": "POST", "path": "/smtp/email",
+       "body": {"sender": {"email": "{from_email}", "name": "{from_name}"}, "to": [{"email": "{to}"}], "subject": "{subject}", "htmlContent": "{html}", "textContent": "{text}"},
+       "fields": [
+         {"name": "from_email", "label": "From email", "required": true},
+         {"name": "from_name", "label": "From name"},
+         {"name": "to", "label": "To", "required": true},
+         {"name": "subject", "label": "Subject", "required": true},
+         {"name": "html", "label": "HTML body", "type": "textarea"},
+         {"name": "text", "label": "Text body", "type": "textarea"}
+       ]}
+    ]
+  },
+  {
+    "slug": "klaviyo", "name": "Klaviyo", "category": "Marketing", "color": "#232426", "icon": "mail",
+    "description": "Sync profiles and track events for Klaviyo flows",
+    "docs_url": "https://developers.klaviyo.com/en/reference/api_overview",
+    "credentials": [{"name": "KLAVIYO_API_KEY", "label": "Private API key", "secret": true, "help": "Klaviyo → Settings → API keys. Starts with pk_."}],
+    "http": {
+      "base_url": "https://a.klaviyo.com/api",
+      "auth": {"type": "header", "header": "Authorization", "prefix": "Klaviyo-API-Key ", "credential": "KLAVIYO_API_KEY"},
+      "headers": {"revision": "2024-10-15", "Accept": "application/vnd.api+json", "Content-Type": "application/vnd.api+json"},
+      "test": {"id": "test", "label": "Accounts", "method": "GET", "path": "/accounts", "fields": []}
+    },
+    "actions": [
+      {"id": "create_profile", "label": "Create profile", "method": "POST", "path": "/profiles",
+       "body": {"data": {"type": "profile", "attributes": {"email": "{email}", "first_name": "{first_name}", "last_name": "{last_name}", "phone_number": "{phone}", "properties": "{properties}"}}},
+       "fields": [
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "first_name", "label": "First name"},
+         {"name": "last_name", "label": "Last name"},
+         {"name": "phone", "label": "Phone (E.164)"},
+         {"name": "properties", "label": "Custom properties (JSON)", "type": "json"}
+       ]},
+      {"id": "track_event", "label": "Track event", "method": "POST", "path": "/events",
+       "body": {"data": {"type": "event", "attributes": {"properties": "{properties}", "metric": {"data": {"type": "metric", "attributes": {"name": "{metric}"}}}, "profile": {"data": {"type": "profile", "attributes": {"email": "{email}"}}}}}},
+       "fields": [
+         {"name": "metric", "label": "Event name", "required": true, "placeholder": "Placed Order"},
+         {"name": "email", "label": "Profile email", "required": true},
+         {"name": "properties", "label": "Properties (JSON)", "type": "json"}
+       ]}
+    ]
+  },
+  {
+    "slug": "activecampaign", "name": "ActiveCampaign", "category": "Marketing", "color": "#356AE6", "icon": "mail",
+    "description": "Create contacts and apply tags in ActiveCampaign",
+    "docs_url": "https://developers.activecampaign.com/reference",
+    "credentials": [
+      {"name": "ACTIVECAMPAIGN_URL", "label": "API URL", "placeholder": "https://acme.api-us1.com", "help": "Settings → Developer."},
+      {"name": "ACTIVECAMPAIGN_API_KEY", "label": "API key", "secret": true, "help": "Settings → Developer."}
+    ],
+    "http": {
+      "base_url": "{cred:ACTIVECAMPAIGN_URL}/api/3",
+      "auth": {"type": "header", "header": "Api-Token", "credential": "ACTIVECAMPAIGN_API_KEY"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "create_contact", "label": "Create or update contact", "method": "POST", "path": "/contact/sync",
+       "body": {"contact": {"email": "{email}", "firstName": "{first_name}", "lastName": "{last_name}", "phone": "{phone}"}},
+       "fields": [
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "first_name", "label": "First name"},
+         {"name": "last_name", "label": "Last name"},
+         {"name": "phone", "label": "Phone"}
+       ]},
+      {"id": "add_tag", "label": "Tag a contact", "method": "POST", "path": "/contactTags",
+       "body": {"contactTag": {"contact": "{contact_id}", "tag": "{tag_id}"}},
+       "fields": [
+         {"name": "contact_id", "label": "Contact ID", "required": true},
+         {"name": "tag_id", "label": "Tag ID", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "kit", "name": "Kit (ConvertKit)", "category": "Marketing", "color": "#FB6970", "icon": "mail",
+    "description": "Add and tag newsletter subscribers in Kit",
+    "docs_url": "https://developers.kit.com/v4",
+    "credentials": [{"name": "KIT_API_KEY", "label": "V4 API key", "secret": true, "help": "Kit → Settings → Developer."}],
+    "http": {
+      "base_url": "https://api.kit.com/v4",
+      "auth": {"type": "header", "header": "X-Kit-Api-Key", "credential": "KIT_API_KEY"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "create_subscriber", "label": "Create subscriber", "method": "POST", "path": "/subscribers",
+       "body": {"email_address": "{email}", "first_name": "{first_name}", "fields": "{fields}"},
+       "fields": [
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "first_name", "label": "First name"},
+         {"name": "fields", "label": "Custom fields (JSON)", "type": "json"}
+       ]},
+      {"id": "tag_subscriber", "label": "Tag subscriber", "method": "POST", "path": "/tags/{tag_id}/subscribers",
+       "body": {"email_address": "{email}"},
+       "fields": [
+         {"name": "tag_id", "label": "Tag ID", "required": true},
+         {"name": "email", "label": "Email", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "mailgun", "name": "Mailgun", "category": "Marketing", "color": "#F06B66", "icon": "mail",
+    "description": "Send email through Mailgun",
+    "docs_url": "https://documentation.mailgun.com/docs/mailgun/api-reference/",
+    "credentials": [
+      {"name": "MAILGUN_BASE_URL", "label": "API base URL", "placeholder": "https://api.mailgun.net", "help": "Use https://api.eu.mailgun.net for EU domains."},
+      {"name": "MAILGUN_API_KEY", "label": "API key", "secret": true, "help": "Mailgun → API Security."}
+    ],
+    "http": {
+      "base_url": "{cred:MAILGUN_BASE_URL}/v3",
+      "auth": {"type": "basic", "user_value": "api", "password": "MAILGUN_API_KEY"}
+    },
+    "actions": [
+      {"id": "send_email", "label": "Send email", "method": "POST", "path": "/{domain}/messages", "body_type": "form",
+       "body": {"from": "{from}", "to": "{to}", "subject": "{subject}", "text": "{text}", "html": "{html}"},
+       "fields": [
+         {"name": "domain", "label": "Sending domain", "required": true, "placeholder": "mg.example.com"},
+         {"name": "from", "label": "From", "required": true, "placeholder": "Acme <alerts@mg.example.com>"},
+         {"name": "to", "label": "To", "required": true},
+         {"name": "subject", "label": "Subject", "required": true},
+         {"name": "text", "label": "Text body", "type": "textarea"},
+         {"name": "html", "label": "HTML body", "type": "textarea"}
+       ]}
+    ]
+  },
+  {
+    "slug": "postmark", "name": "Postmark", "category": "Marketing", "color": "#FFDE00", "icon": "mail",
+    "description": "Send transactional email through Postmark",
+    "docs_url": "https://postmarkapp.com/developer/api/overview",
+    "credentials": [{"name": "POSTMARK_SERVER_TOKEN", "label": "Server API token", "secret": true, "help": "Server → API Tokens."}],
+    "http": {
+      "base_url": "https://api.postmarkapp.com",
+      "auth": {"type": "header", "header": "X-Postmark-Server-Token", "credential": "POSTMARK_SERVER_TOKEN"},
+      "test": {"id": "test", "label": "Server", "method": "GET", "path": "/server", "fields": []}
+    },
+    "actions": [
+      {"id": "send_email", "label": "Send email", "method": "POST", "path": "/email",
+       "body": {"From": "{from}", "To": "{to}", "Subject": "{subject}", "HtmlBody": "{html}", "TextBody": "{text}", "MessageStream": "{stream}"},
+       "fields": [
+         {"name": "from", "label": "From", "required": true},
+         {"name": "to", "label": "To", "required": true},
+         {"name": "subject", "label": "Subject", "required": true},
+         {"name": "html", "label": "HTML body", "type": "textarea"},
+         {"name": "text", "label": "Text body", "type": "textarea"},
+         {"name": "stream", "label": "Message stream", "default": "outbound"}
+       ]}
+    ]
+  },
+  {
+    "slug": "resend", "name": "Resend", "category": "Marketing", "color": "#000000", "icon": "mail",
+    "description": "Send email with the Resend API",
+    "docs_url": "https://resend.com/docs/api-reference/introduction",
+    "credentials": [{"name": "RESEND_API_KEY", "label": "API key", "secret": true, "help": "Resend → API Keys. Starts with re_."}],
+    "http": {
+      "base_url": "https://api.resend.com",
+      "auth": {"type": "bearer", "credential": "RESEND_API_KEY"},
+      "test": {"id": "test", "label": "Domains", "method": "GET", "path": "/domains", "fields": []}
+    },
+    "actions": [
+      {"id": "send_email", "label": "Send email", "method": "POST", "path": "/emails",
+       "body": {"from": "{from}", "to": ["{to}"], "subject": "{subject}", "html": "{html}", "text": "{text}", "reply_to": "{reply_to}"},
+       "fields": [
+         {"name": "from", "label": "From", "required": true, "placeholder": "Acme <onboarding@acme.com>"},
+         {"name": "to", "label": "To", "required": true},
+         {"name": "subject", "label": "Subject", "required": true},
+         {"name": "html", "label": "HTML body", "type": "textarea"},
+         {"name": "text", "label": "Text body", "type": "textarea"},
+         {"name": "reply_to", "label": "Reply-to"}
+       ]}
+    ]
+  },
+  {
+    "slug": "customerio", "name": "Customer.io", "category": "Marketing", "color": "#7131FF", "icon": "users",
+    "description": "Identify people and track events for Customer.io campaigns",
+    "docs_url": "https://docs.customer.io/api/track/",
+    "credentials": [
+      {"name": "CUSTOMERIO_SITE_ID", "label": "Site ID", "help": "Account settings → API credentials."},
+      {"name": "CUSTOMERIO_API_KEY", "label": "Tracking API key", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://track.customer.io/api/v1",
+      "auth": {"type": "basic", "credential": "CUSTOMERIO_SITE_ID", "password": "CUSTOMERIO_API_KEY"}
+    },
+    "actions": [
+      {"id": "identify", "label": "Identify person", "method": "PUT", "path": "/customers/{id}", "body": "{attributes}",
+       "fields": [
+         {"name": "id", "label": "Person ID", "required": true},
+         {"name": "attributes", "label": "Attributes (JSON)", "type": "json", "required": true, "placeholder": "{ \"email\": \"{{ input.email }}\", \"plan\": \"pro\" }"}
+       ]},
+      {"id": "track_event", "label": "Track event", "method": "POST", "path": "/customers/{id}/events",
+       "body": {"name": "{name}", "data": "{data}"},
+       "fields": [
+         {"name": "id", "label": "Person ID", "required": true},
+         {"name": "name", "label": "Event name", "required": true},
+         {"name": "data", "label": "Event data (JSON)", "type": "json"}
+       ]}
+    ]
+  },
+  {
+    "slug": "segment", "name": "Segment", "category": "Marketing", "color": "#52BD94", "icon": "activity",
+    "description": "Send identify and track calls to Segment",
+    "docs_url": "https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/",
+    "credentials": [{"name": "SEGMENT_WRITE_KEY", "label": "Write key", "secret": true, "help": "Source → Settings → API keys."}],
+    "http": {
+      "base_url": "https://api.segment.io/v1",
+      "auth": {"type": "basic", "credential": "SEGMENT_WRITE_KEY", "password_value": ""}
+    },
+    "actions": [
+      {"id": "track", "label": "Track event", "method": "POST", "path": "/track",
+       "body": {"userId": "{user_id}", "anonymousId": "{anonymous_id}", "event": "{event}", "properties": "{properties}"},
+       "fields": [
+         {"name": "event", "label": "Event", "required": true},
+         {"name": "user_id", "label": "User ID"},
+         {"name": "anonymous_id", "label": "Anonymous ID"},
+         {"name": "properties", "label": "Properties (JSON)", "type": "json"}
+       ]},
+      {"id": "identify", "label": "Identify user", "method": "POST", "path": "/identify",
+       "body": {"userId": "{user_id}", "traits": "{traits}"},
+       "fields": [
+         {"name": "user_id", "label": "User ID", "required": true},
+         {"name": "traits", "label": "Traits (JSON)", "type": "json"}
+       ]}
+    ]
+  },
+  {
+    "slug": "posthog", "name": "PostHog", "category": "Marketing", "color": "#F54E00", "icon": "activity",
+    "description": "Capture product analytics events in PostHog",
+    "docs_url": "https://posthog.com/docs/api/capture",
+    "credentials": [
+      {"name": "POSTHOG_HOST", "label": "Ingestion host", "placeholder": "https://us.i.posthog.com", "help": "EU projects use https://eu.i.posthog.com."},
+      {"name": "POSTHOG_PROJECT_API_KEY", "label": "Project API key", "secret": true, "help": "Project settings. Starts with phc_."}
+    ],
+    "http": {"base_url": "{cred:POSTHOG_HOST}", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "capture", "label": "Capture event", "method": "POST", "path": "/capture/",
+       "body": {"api_key": "{cred:POSTHOG_PROJECT_API_KEY}", "event": "{event}", "distinct_id": "{distinct_id}", "properties": "{properties}"},
+       "fields": [
+         {"name": "event", "label": "Event", "required": true},
+         {"name": "distinct_id", "label": "Distinct ID", "required": true},
+         {"name": "properties", "label": "Properties (JSON)", "type": "json"}
+       ]}
+    ]
+  },
+  {
+    "slug": "mixpanel", "name": "Mixpanel", "category": "Marketing", "color": "#7856FF", "icon": "activity",
+    "description": "Track events into Mixpanel",
+    "docs_url": "https://developer.mixpanel.com/reference/track-event",
+    "credentials": [{"name": "MIXPANEL_PROJECT_TOKEN", "label": "Project token", "secret": true, "help": "Project settings → Project token."}],
+    "http": {"base_url": "https://api.mixpanel.com", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "track", "label": "Track event", "method": "POST", "path": "/track",
+       "body": [{"event": "{event}", "properties": {"token": "{cred:MIXPANEL_PROJECT_TOKEN}", "distinct_id": "{distinct_id}"}}],
+       "fields": [
+         {"name": "event", "label": "Event", "required": true},
+         {"name": "distinct_id", "label": "Distinct ID", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "amplitude", "name": "Amplitude", "category": "Marketing", "color": "#1E61F0", "icon": "activity",
+    "description": "Send events to Amplitude's HTTP API",
+    "docs_url": "https://amplitude.com/docs/apis/analytics/http-v2",
+    "credentials": [{"name": "AMPLITUDE_API_KEY", "label": "API key", "secret": true, "help": "Project settings → General."}],
+    "http": {"base_url": "https://api2.amplitude.com", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "track", "label": "Track event", "method": "POST", "path": "/2/httpapi",
+       "body": {"api_key": "{cred:AMPLITUDE_API_KEY}", "events": [{"user_id": "{user_id}", "device_id": "{device_id}", "event_type": "{event_type}", "event_properties": "{properties}"}]},
+       "fields": [
+         {"name": "event_type", "label": "Event type", "required": true},
+         {"name": "user_id", "label": "User ID"},
+         {"name": "device_id", "label": "Device ID"},
+         {"name": "properties", "label": "Event properties (JSON)", "type": "json"}
+       ]}
+    ]
+  },
+  {
+    "slug": "google_analytics", "name": "Google Analytics 4", "category": "Marketing", "color": "#E37400", "icon": "bar-chart",
+    "description": "Send server-side events with the GA4 Measurement Protocol",
+    "docs_url": "https://developers.google.com/analytics/devguides/collection/protocol/ga4",
+    "credentials": [
+      {"name": "GA4_MEASUREMENT_ID", "label": "Measurement ID", "placeholder": "G-XXXXXXX"},
+      {"name": "GA4_API_SECRET", "label": "Measurement Protocol API secret", "secret": true, "help": "Admin → Data streams → Measurement Protocol API secrets."}
+    ],
+    "http": {"base_url": "https://www.google-analytics.com", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "send_event", "label": "Send event", "method": "POST", "path": "/mp/collect",
+       "query": {"measurement_id": "{cred:GA4_MEASUREMENT_ID}", "api_secret": "{cred:GA4_API_SECRET}"},
+       "body": {"client_id": "{client_id}", "user_id": "{user_id}", "events": [{"name": "{event}", "params": "{params}"}]},
+       "fields": [
+         {"name": "client_id", "label": "Client ID", "required": true},
+         {"name": "event", "label": "Event name", "required": true, "placeholder": "purchase"},
+         {"name": "user_id", "label": "User ID"},
+         {"name": "params", "label": "Parameters (JSON)", "type": "json"}
+       ]}
+    ]
+  },
+  {
+    "slug": "plausible", "name": "Plausible Analytics", "category": "Marketing", "color": "#5850EC", "icon": "bar-chart",
+    "description": "Read traffic statistics from privacy-friendly Plausible",
+    "docs_url": "https://plausible.io/docs/stats-api",
+    "credentials": [{"name": "PLAUSIBLE_API_KEY", "label": "API key", "secret": true, "help": "Account settings → API keys."}],
+    "http": {"base_url": "https://plausible.io/api/v1", "auth": {"type": "bearer", "credential": "PLAUSIBLE_API_KEY"}},
+    "actions": [
+      {"id": "aggregate", "label": "Aggregate stats", "method": "GET", "path": "/stats/aggregate",
+       "query": {"site_id": "{site_id}", "period": "{period}", "metrics": "{metrics}"},
+       "fields": [
+         {"name": "site_id", "label": "Site", "required": true, "placeholder": "example.com"},
+         {"name": "period", "label": "Period", "type": "select", "options": ["day", "7d", "30d", "month", "6mo", "12mo"]},
+         {"name": "metrics", "label": "Metrics", "default": "visitors,pageviews,bounce_rate"}
+       ]}
+    ]
+  }
+]
