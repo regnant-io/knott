@@ -3,7 +3,7 @@
 
 // Package platform resolves the per-OS locations and defaults a self-contained
 // KNOTT install needs: where state lives, where the secret key is kept, and how
-// to open a browser window.
+// to open the user's browser.
 package platform
 
 import (
@@ -38,7 +38,10 @@ func Home() (string, error) {
 		}
 	}
 	// A repository checkout keeps its state in ./data, matching the dev scripts.
-	if st, err := os.Stat("data"); err == nil && st.IsDir() {
+	// Only a directory that already holds KNOTT state counts: an app launched
+	// from Explorer or Finder inherits whatever working directory it was given,
+	// and an unrelated ./data there must not become the state directory.
+	if looksLikeState(".") {
 		abs, err := filepath.Abs(".")
 		if err == nil {
 			return abs, nil
@@ -103,6 +106,16 @@ func EnsureSecretKey(home string) (string, error) {
 	return key, nil
 }
 
+// looksLikeState reports whether dir holds a KNOTT data directory.
+func looksLikeState(dir string) bool {
+	for _, f := range []string{"workflows.db", "runs.db"} {
+		if _, err := os.Stat(filepath.Join(dir, "data", f)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // OpenBrowser opens url in the user's default browser. Failure is not fatal —
 // callers print the URL as a fallback.
 func OpenBrowser(url string) error {
@@ -113,64 +126,5 @@ func OpenBrowser(url string) error {
 		return exec.Command("open", url).Start()
 	default:
 		return exec.Command("xdg-open", url).Start()
-	}
-}
-
-// OpenAppWindow launches a Chromium-family browser in app mode, giving KNOTT a
-// chromeless window that looks and behaves like a native desktop app without
-// shipping a second browser engine inside the download. It reports whether a
-// suitable browser was found; callers fall back to OpenBrowser.
-func OpenAppWindow(url, profileDir string) bool {
-	for _, bin := range chromiumCandidates() {
-		path, err := exec.LookPath(bin)
-		if err != nil {
-			if _, statErr := os.Stat(bin); statErr != nil {
-				continue
-			}
-			path = bin
-		}
-		cmd := exec.Command(path,
-			"--app="+url,
-			"--user-data-dir="+profileDir,
-			"--no-first-run",
-			"--no-default-browser-check",
-			menuflag,
-		)
-		if err := cmd.Start(); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// menuflag keeps the app window free of the browser's own new-tab affordances.
-const menuflag = "--disable-features=Translate,AutofillServerCommunication"
-
-func chromiumCandidates() []string {
-	switch runtime.GOOS {
-	case "windows":
-		pf := os.Getenv("ProgramFiles")
-		pf86 := os.Getenv("ProgramFiles(x86)")
-		local := os.Getenv("LOCALAPPDATA")
-		return []string{
-			filepath.Join(pf, "Google", "Chrome", "Application", "chrome.exe"),
-			filepath.Join(pf86, "Google", "Chrome", "Application", "chrome.exe"),
-			filepath.Join(local, "Google", "Chrome", "Application", "chrome.exe"),
-			filepath.Join(pf86, "Microsoft", "Edge", "Application", "msedge.exe"),
-			filepath.Join(pf, "Microsoft", "Edge", "Application", "msedge.exe"),
-			"chrome.exe", "msedge.exe",
-		}
-	case "darwin":
-		return []string{
-			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-			"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-			"/Applications/Chromium.app/Contents/MacOS/Chromium",
-			"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-		}
-	default:
-		return []string{
-			"google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-			"microsoft-edge", "brave-browser", "vivaldi",
-		}
 	}
 }

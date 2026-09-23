@@ -35,3 +35,6 @@ Thumbs.db
 /.scratch/
 /dist/
 app-window/
+
+# Generated on first run in a checkout
+/secret.key
