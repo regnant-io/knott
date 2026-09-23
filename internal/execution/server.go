@@ -30,14 +30,25 @@ import (
 	"github.com/regnant/knott/internal/execution/engine"
 	"github.com/regnant/knott/internal/execution/engine/decide"
 	"github.com/regnant/knott/internal/execution/store"
+	"github.com/regnant/knott/internal/httpx"
 	"github.com/regnant/knott/internal/ui"
 )
 
 var (
 	db       *store.DB
 	executor *engine.Executor
-	runLocks sync.Map // runID -> *sync.Mutex, serializes processing per-run only
+	runLocks = map[string]*runLock{} // runID -> lock, serializes processing per run
+	locksMu  sync.Mutex
+
+	// registryClient bounds calls to sibling services. The default client has
+	// no timeout, so a wedged registry used to hang every run list and start.
+	registryClient = &http.Client{Timeout: 15 * time.Second}
 )
+
+type runLock struct {
+	sync.Mutex
+	refs int
+}
 
 // instanceID uniquely identifies this engine replica for run leasing, so a run
 // is executed by exactly one replica and a dead replica's runs can be reclaimed.
@@ -65,11 +76,30 @@ func resolveLeaseTTL() time.Duration {
 	return 60 * time.Second
 }
 
-// lockForRun returns a per-run mutex so concurrent runs execute in parallel
-// while a single run is never processed by two goroutines at once.
-func lockForRun(runID string) *sync.Mutex {
-	m, _ := runLocks.LoadOrStore(runID, &sync.Mutex{})
-	return m.(*sync.Mutex)
+// lockRun takes the per-run lock so concurrent runs execute in parallel while
+// a single run is never processed by two goroutines at once. The returned
+// function releases it and forgets the lock once nobody holds it — previously
+// every run ever executed left a mutex behind for the life of the process.
+func lockRun(runID string) (unlock func()) {
+	locksMu.Lock()
+	l := runLocks[runID]
+	if l == nil {
+		l = &runLock{}
+		runLocks[runID] = l
+	}
+	l.refs++
+	locksMu.Unlock()
+
+	l.Lock()
+	return func() {
+		l.Unlock()
+		locksMu.Lock()
+		l.refs--
+		if l.refs == 0 {
+			delete(runLocks, runID)
+		}
+		locksMu.Unlock()
+	}
 }
 
 // nodePolicy holds per-node execution policy resolved from node.Config with
@@ -104,9 +134,14 @@ func resolveNodePolicy(node *engine.WorkflowStep) nodePolicy {
 	// Defaults by node type.
 	p := nodePolicy{Retries: 0, RetryDelay: 2 * time.Second, MaxRetryDelay: 60 * time.Second, Timeout: 0}
 	switch node.Type {
-	case "tool_call", "agent_call", "ai_decision":
+	case "tool_call", "agent_call":
 		p.Retries = 2
 		p.Timeout = 45 * time.Second
+	case "ai_decision", "llm":
+		// A local model can take minutes to load and answer on a laptop CPU;
+		// 45 seconds failed most first calls to Ollama.
+		p.Retries = 1
+		p.Timeout = 5 * time.Minute
 	}
 
 	if v, ok := getF("retries"); ok {
@@ -326,9 +361,7 @@ func checkpointedNext(ctx map[string]any, nodeID string) (string, bool) {
 // ─── Workflow Execution Loop ──────────────────────────────────────────────────
 
 func processRun(runID string) {
-	lock := lockForRun(runID)
-	lock.Lock()
-	defer lock.Unlock()
+	defer lockRun(runID)()
 
 	// Acquire the distributed run lease so exactly one replica executes this run.
 	// If another live replica holds it, skip — that replica is responsible.
@@ -732,12 +765,20 @@ func createRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify workflow exists in registry
-	resp, err := http.Get(getEnv("REGISTRY_URL", "http://localhost:8001") + "/api/v1/workflows/" + body.WorkflowID)
-	if err != nil || resp.StatusCode == 404 {
-		writeError(w, 404, "WORKFLOW_NOT_FOUND", "Workflow not found in registry")
+	resp, err := registryClient.Get(getEnv("REGISTRY_URL", "http://localhost:8001") + "/api/v1/workflows/" + url.PathEscape(body.WorkflowID))
+	if err != nil {
+		writeError(w, 502, "REGISTRY_UNAVAILABLE", "Could not reach the workflow registry")
 		return
 	}
 	resp.Body.Close()
+	if resp.StatusCode == 404 {
+		writeError(w, 404, "WORKFLOW_NOT_FOUND", "Workflow not found in registry")
+		return
+	}
+	if resp.StatusCode >= 400 {
+		writeError(w, 502, "REGISTRY_ERROR", fmt.Sprintf("The workflow registry answered HTTP %d", resp.StatusCode))
+		return
+	}
 
 	inputData := body.InputData
 	if len(inputData) == 0 {
@@ -767,7 +808,7 @@ func triggerWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify workflow exists in registry before accepting the trigger.
-	resp, err := http.Get(getEnv("REGISTRY_URL", "http://localhost:8001") + "/api/v1/workflows/" + workflowID)
+	resp, err := registryClient.Get(getEnv("REGISTRY_URL", "http://localhost:8001") + "/api/v1/workflows/" + url.PathEscape(workflowID))
 	if err != nil {
 		writeError(w, 502, "REGISTRY_UNAVAILABLE", "Could not reach workflow registry")
 		return
@@ -844,7 +885,7 @@ func listRuns(w http.ResponseWriter, r *http.Request) {
 // fetchWorkflowNames returns workflow_id → name from a single registry list call.
 func fetchWorkflowNames() map[string]string {
 	names := map[string]string{}
-	resp, err := http.Get(getEnv("REGISTRY_URL", "http://localhost:8001") + "/api/v1/workflows")
+	resp, err := registryClient.Get(getEnv("REGISTRY_URL", "http://localhost:8001") + "/api/v1/workflows")
 	if err != nil {
 		return names
 	}
@@ -994,7 +1035,7 @@ func getStats(w http.ResponseWriter, r *http.Request) {
 	// Also fetch workflow count from registry
 	registryURL := getEnv("REGISTRY_URL", "http://localhost:8001")
 	wfCount := 0
-	resp, err := http.Get(registryURL + "/api/v1/workflows")
+	resp, err := registryClient.Get(registryURL + "/api/v1/workflows")
 	if err == nil {
 		var result struct {
 			Total int `json:"total"`
@@ -1007,7 +1048,7 @@ func getStats(w http.ResponseWriter, r *http.Request) {
 	// Fetch pending task count from human task service
 	taskURL := getEnv("HUMAN_TASK_URL", "http://localhost:8004")
 	pendingTasks := 0
-	resp2, err := http.Get(taskURL + "/api/v1/tasks?status=PENDING")
+	resp2, err := registryClient.Get(taskURL + "/api/v1/tasks?status=PENDING")
 	if err == nil {
 		var result struct {
 			Total int `json:"total"`
@@ -1031,12 +1072,37 @@ func getStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getInfo describes this server to the console: the address external systems
+// should call (webhook URLs), the runtime, and whether a key is required. The
+// desktop app serves the console from its own origin, so the console cannot
+// derive the public address from window.location.
+func getInfo(w http.ResponseWriter, r *http.Request) {
+	public := os.Getenv("KNOTT_PUBLIC_URL")
+	if public == "" {
+		scheme := "http"
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			scheme = "https"
+		}
+		public = scheme + "://" + r.Host
+	}
+	writeJSON(w, 200, map[string]any{
+		"version":         getEnv("KNOTT_VERSION", "dev"),
+		"runtime":         getEnv("KNOTT_RUNTIME", "distributed"),
+		"public_url":      strings.TrimRight(public, "/"),
+		"auth_required":   len(apiKeys) > 0,
+		"webhook_signing": os.Getenv("WEBHOOK_SECRET") != "",
+	})
+}
+
 // getDiagnostics surfaces recent failures, retries, and per-node tallies for the
 // Observability page — operators see why runs/connector calls fail at a glance.
 func getDiagnostics(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	if v := r.URL.Query().Get("limit"); v != "" {
 		fmt.Sscanf(v, "%d", &limit)
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 50
 	}
 	writeJSON(w, 200, db.GetDiagnostics(limit))
 }
@@ -1139,6 +1205,15 @@ func testConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "output": out, "latency_ms": latency})
+}
+
+func firstNonEmptyStr(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func firstNonEmptyString(v any, fallback string) string {
@@ -1257,7 +1332,7 @@ func directCompleteTask(w http.ResponseWriter, r *http.Request) {
 	taskURL := getEnv("HUMAN_TASK_URL", "http://localhost:8004")
 	payload, _ := json.Marshal(req)
 
-	resp, err := http.Post(taskURL+"/api/v1/tasks/"+taskID+"/complete", "application/json",
+	resp, err := registryClient.Post(taskURL+"/api/v1/tasks/"+url.PathEscape(taskID)+"/complete", "application/json",
 		strings.NewReader(string(payload)))
 	if err != nil {
 		writeError(w, 500, "TASK_COMPLETE_FAILED", err.Error())
@@ -1278,10 +1353,12 @@ func directCompleteTask(w http.ResponseWriter, r *http.Request) {
 // separate wall of secret names to work out what is missing.
 // taskSpecsHandler proxies to the AI service, falling back to the built-in
 // task catalogue when it does not answer.
-func taskSpecsHandler(proxy http.Handler) http.HandlerFunc {
+func taskSpecsHandler(proxy http.Handler, sidecar bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rec := &captureWriter{header: http.Header{}}
-		proxy.ServeHTTP(rec, r)
+		if sidecar {
+			proxy.ServeHTTP(rec, r)
+		}
 		if rec.status > 0 && rec.status < 400 && rec.body.Len() > 0 {
 			for k, vs := range rec.header {
 				for _, v := range vs {
@@ -1301,167 +1378,6 @@ func taskSpecsHandler(proxy http.Handler) http.HandlerFunc {
 		}
 		writeJSON(w, 200, map[string]any{"data": out, "total": len(out), "source": "built-in"})
 	}
-}
-
-// embeddedAIHandler prefers the optional Python AI service and falls back to
-// the in-process decision engine. Desktop distributions therefore retain a
-// working health/config surface even when Python is not installed.
-func embeddedAIHandler(proxy http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		rec := &captureWriter{header: http.Header{}}
-		proxy.ServeHTTP(rec, r)
-		if rec.status > 0 && rec.status < 400 {
-			for k, vs := range rec.header {
-				for _, v := range vs {
-					w.Header().Add(k, v)
-				}
-			}
-			w.WriteHeader(rec.status)
-			w.Write(rec.body.Bytes())
-			return
-		}
-
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/health"):
-			provider := "simulation"
-			if executor != nil && executor.Decider != nil {
-				provider = executor.Decider.Provider()
-			}
-			writeJSON(w, 200, map[string]any{"status": "ok", "service": "ai-decision-engine", "mode": "embedded", "ai_provider": provider})
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/config"):
-			writeJSON(w, 200, embeddedAIConfig())
-		case r.Method == http.MethodPut && strings.HasSuffix(path, "/config"):
-			var patch map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-				writeError(w, 400, "INVALID_REQUEST", err.Error())
-				return
-			}
-			updateEmbeddedAIConfig(patch)
-			writeJSON(w, 200, embeddedAIConfig())
-		case r.Method == http.MethodPost && strings.HasSuffix(path, "/config/test"):
-			var patch map[string]any
-			_ = json.NewDecoder(r.Body).Decode(&patch)
-			writeJSON(w, 200, testEmbeddedAIConfig(patch))
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/ollama/models"):
-			writeJSON(w, 200, embeddedOllamaModels())
-		default:
-			writeError(w, 503, "AI_FEATURE_UNAVAILABLE", "This AI feature requires the optional Python engine; embedded workflow decisions remain online")
-		}
-	}
-}
-
-func embeddedAIConfig() map[string]any {
-	provider, ollamaURL, ollamaModel, anthropic := "auto", "http://localhost:11434", "llama3.1:latest", false
-	active := "simulation"
-	if executor != nil && executor.Decider != nil {
-		cfg := executor.Decider.Config
-		if cfg.Provider != "" {
-			provider = cfg.Provider
-		}
-		if cfg.OllamaBaseURL != "" {
-			ollamaURL = cfg.OllamaBaseURL
-		}
-		if cfg.OllamaModel != "" {
-			ollamaModel = cfg.OllamaModel
-		}
-		anthropic = cfg.AnthropicKey != ""
-		active = executor.Decider.Provider()
-	}
-	return map[string]any{"provider": provider, "active_provider": active, "anthropic_configured": anthropic,
-		"ollama_base_url": ollamaURL, "ollama_model": ollamaModel, "embedded": true}
-}
-
-func updateEmbeddedAIConfig(patch map[string]any) {
-	if executor == nil || executor.Decider == nil {
-		return
-	}
-	cfg := executor.Decider.Config
-	if v := strings.TrimSpace(fmt.Sprint(patch["provider"])); v != "" && v != "<nil>" {
-		cfg.Provider = v
-		_ = db.SetCredential("AI_PROVIDER", v)
-	}
-	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_base_url"])); v != "" && v != "<nil>" {
-		cfg.OllamaBaseURL = v
-		_ = db.SetCredential("OLLAMA_BASE_URL", v)
-	}
-	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_model"])); v != "" && v != "<nil>" {
-		cfg.OllamaModel = v
-		_ = db.SetCredential("OLLAMA_MODEL", v)
-	}
-	if v := strings.TrimSpace(fmt.Sprint(patch["anthropic_api_key"])); v != "" && v != "<nil>" {
-		cfg.AnthropicKey = v
-		_ = db.SetCredential("ANTHROPIC_API_KEY", v)
-	}
-	executor.Decider.Config = cfg
-}
-
-func testEmbeddedAIConfig(patch map[string]any) map[string]any {
-	if executor == nil || executor.Decider == nil {
-		return map[string]any{"ok": false, "detail": "Embedded decision engine is not initialized"}
-	}
-	cfg := executor.Decider.Config
-	if v := strings.TrimSpace(fmt.Sprint(patch["provider"])); v != "" && v != "<nil>" {
-		cfg.Provider = v
-	}
-	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_base_url"])); v != "" && v != "<nil>" {
-		cfg.OllamaBaseURL = v
-	}
-	if v := strings.TrimSpace(fmt.Sprint(patch["ollama_model"])); v != "" && v != "<nil>" {
-		cfg.OllamaModel = v
-	}
-	if v := strings.TrimSpace(fmt.Sprint(patch["anthropic_api_key"])); v != "" && v != "<nil>" {
-		cfg.AnthropicKey = v
-	}
-	probe := decide.New(cfg)
-	switch probe.Provider() {
-	case "simulation":
-		return map[string]any{"ok": true, "detail": "Embedded rule-based decisions are ready", "active_provider": "simulation"}
-	case "ollama":
-		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := client.Get(strings.TrimRight(cfg.OllamaBaseURL, "/") + "/api/tags")
-		if err != nil {
-			return map[string]any{"ok": false, "detail": err.Error()}
-		}
-		defer resp.Body.Close()
-		return map[string]any{"ok": resp.StatusCode < 400, "detail": fmt.Sprintf("Ollama HTTP %d", resp.StatusCode), "active_provider": "ollama"}
-	default:
-		req, _ := http.NewRequest("GET", "https://api.anthropic.com/v1/models?limit=1", nil)
-		req.Header.Set("x-api-key", cfg.AnthropicKey)
-		req.Header.Set("anthropic-version", "2023-06-01")
-		resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
-		if err != nil {
-			return map[string]any{"ok": false, "detail": err.Error()}
-		}
-		defer resp.Body.Close()
-		return map[string]any{"ok": resp.StatusCode < 400, "detail": fmt.Sprintf("Anthropic HTTP %d", resp.StatusCode), "active_provider": "anthropic"}
-	}
-}
-
-func embeddedOllamaModels() map[string]any {
-	base := "http://localhost:11434"
-	if executor != nil && executor.Decider != nil && executor.Decider.Config.OllamaBaseURL != "" {
-		base = executor.Decider.Config.OllamaBaseURL
-	}
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(strings.TrimRight(base, "/") + "/api/tags")
-	if err != nil {
-		return map[string]any{"data": []any{}, "error": err.Error()}
-	}
-	defer resp.Body.Close()
-	var payload map[string]any
-	_ = json.NewDecoder(resp.Body).Decode(&payload)
-	models := []any{}
-	if raw, ok := payload["models"].([]any); ok {
-		for _, item := range raw {
-			if m, ok := item.(map[string]any); ok {
-				models = append(models, m["name"])
-			}
-		}
-	}
-	return map[string]any{"data": models}
 }
 
 // captureWriter buffers a handler's response so it can be discarded in favour of
@@ -1720,13 +1636,17 @@ func systemHealth(w http.ResponseWriter, r *http.Request) {
 		return raw
 	}
 	registryURL := getEnv("REGISTRY_URL", "http://localhost:8001")
-	aiURL := getEnv("AI_DECISION_URL", "http://localhost:8003")
+	aiURL := os.Getenv("AI_DECISION_URL")
+	aiHealth := ""
+	if aiURL != "" {
+		aiHealth = aiURL + "/internal/v1/health"
+	}
 	taskURL := getEnv("HUMAN_TASK_URL", "http://localhost:8004")
 	agentURL := getEnv("AGENT_URL", "http://localhost:8005")
 	services := []svc{
 		{"Workflow Registry", endpoint(registryURL), registryURL + "/api/v1/health", false},
 		{"Execution Engine", r.Host, "self", false},
-		{"AI Decision Engine", endpoint(aiURL), aiURL + "/internal/v1/health", true},
+		{"AI Decision Engine", endpoint(aiURL), aiHealth, true},
 		{"Human Task Service", endpoint(taskURL), taskURL + "/api/v1/health", false},
 		{"Agent Integration", endpoint(agentURL), agentURL + "/api/v1/health", false},
 	}
@@ -1740,7 +1660,13 @@ func systemHealth(w http.ResponseWriter, r *http.Request) {
 			results[i] = entry
 			continue
 		}
-		resp, err := client.Get(s.URL)
+		var (
+			resp *http.Response
+			err  = fmt.Errorf("not configured")
+		)
+		if s.URL != "" {
+			resp, err = client.Get(s.URL)
+		}
 		if err == nil {
 			func() {
 				defer resp.Body.Close()
@@ -2167,6 +2093,9 @@ func newProxy(target string) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		req.Host = u.Host
+		// The origin guard has vetted the browser; the internal services
+		// refuse anything that still looks browser-made.
+		httpx.StripBrowserHeaders(req)
 		proxy.ServeHTTP(w, req)
 	})
 }
@@ -2180,7 +2109,7 @@ func Run() error {
 	dbPath := getEnv2("ENGINE_DB", "DB_PATH", filepath.Join("..", "..", "data", "runs.db"))
 
 	registryURL := getEnv("REGISTRY_URL", "http://localhost:8001")
-	aiDecisionURL := getEnv("AI_DECISION_URL", "http://localhost:8003")
+	aiDecisionURL := os.Getenv("AI_DECISION_URL")
 	humanTaskURL := getEnv("HUMAN_TASK_URL", "http://localhost:8004")
 	agentURL := getEnv("AGENT_URL", "http://localhost:8005")
 	engineURL := getEnv("EXECUTION_ENGINE_URL", "http://localhost:"+port)
@@ -2248,14 +2177,22 @@ func Run() error {
 		AnthropicKey:  storedOrEnv("ANTHROPIC_API_KEY", ""),
 		AnthropicBase: storedOrEnv("ANTHROPIC_BASE_URL", ""),
 		OllamaBaseURL: storedOrEnv("OLLAMA_BASE_URL", ""),
-		OllamaModel:   storedOrEnv("OLLAMA_MODEL", "llama3.1:latest"),
+		OllamaModel:   storedOrEnv("OLLAMA_MODEL", ""),
 		Provider:      storedOrEnv("AI_PROVIDER", "auto"),
+		// A local Ollama is used without configuration unless turned off.
+		DetectOllama: os.Getenv("KNOTT_DETECT_OLLAMA") != "0",
 	})
-	if executor.Decider.Available() {
-		log.Printf("[Engine] Built-in decision engine ready (model-backed)")
-	} else {
-		log.Printf("[Engine] Built-in decision engine ready (rule-based — set ANTHROPIC_API_KEY or OLLAMA_BASE_URL for model-backed decisions)")
-	}
+	go func() {
+		st := executor.Decider.Status(true)
+		switch st.ActiveProvider {
+		case "ollama":
+			log.Printf("[Engine] AI: Ollama at %s, model %s", st.OllamaBaseURL, st.OllamaEffectiveModel)
+		case "anthropic":
+			log.Printf("[Engine] AI: Anthropic")
+		default:
+			log.Printf("[Engine] AI: rule-based decisions (no Ollama found at %s and no Anthropic key)", st.OllamaBaseURL)
+		}
+	}()
 
 	// Resume any runs that were mid-flight before a restart so executions are durable.
 	go func() {
@@ -2277,24 +2214,23 @@ func Run() error {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	// CORS: default remains permissive for local/dev; set CORS_ORIGINS (comma-
-	// separated) in production to restrict which origins may call the API.
-	corsOrigins := []string{"*"}
-	if v := os.Getenv("CORS_ORIGINS"); v != "" {
-		corsOrigins = nil
-		for _, o := range strings.Split(v, ",") {
-			if o = strings.TrimSpace(o); o != "" {
-				corsOrigins = append(corsOrigins, o)
-			}
-		}
+	// Browser-origin protection first: it is what makes an unauthenticated
+	// loopback install safe to run next to a browser. CORS is then off unless
+	// origins are listed — the console is served from this same origin.
+	policy := loadOriginPolicy()
+	r.Use(originGuard(policy))
+	if origins := policy.corsOrigins(); len(origins) > 0 {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins: origins,
+			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-API-Key", "X-KNOTT-Signature"},
+		}))
 	}
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: corsOrigins,
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-API-Key", "X-KNOTT-Signature"},
-	}))
 
-	aiProxy := newProxy(aiDecisionURL)
+	// The Python decision service is optional. With no AI_DECISION_URL the
+	// engine answers every AI endpoint itself.
+	sidecar := aiDecisionURL != ""
+	aiProxy := newProxy(firstNonEmptyStr(aiDecisionURL, "http://127.0.0.1:1"))
 	registryProxy := newProxy(registryURL)
 	tasksProxy := newProxy(humanTaskURL)
 	agentsProxy := newProxy(agentURL)
@@ -2318,6 +2254,7 @@ func Run() error {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 200, map[string]string{"status": "ok", "service": "execution-engine", "port": port})
 		})
+		r.Get("/info", getInfo)
 		r.Get("/stats", getStats)
 		r.Get("/system-health", systemHealth)
 		r.Get("/diagnostics", getDiagnostics)
@@ -2380,16 +2317,18 @@ func Run() error {
 		// built-in catalogue when it is not — otherwise a binary without Python
 		// offers the designer a stale hard-coded list that no longer matches
 		// what the engine can actually decide.
-		r.Handle("/task-specs", taskSpecsHandler(aiProxy))
-		r.Handle("/task-specs/*", taskSpecsHandler(aiProxy))
-		r.Handle("/health", embeddedAIHandler(aiProxy))
+		r.Handle("/task-specs", taskSpecsHandler(aiProxy, sidecar))
+		r.Handle("/task-specs/*", taskSpecsHandler(aiProxy, sidecar))
+		r.Handle("/health", aiHandler(aiProxy, sidecar))
 		// Runtime AI provider configuration (Settings page): get/update config,
 		// test connectivity, and list locally-installed Ollama models.
-		r.Handle("/config", embeddedAIHandler(aiProxy))
-		r.Handle("/config/*", embeddedAIHandler(aiProxy))
-		r.Handle("/ollama/models", embeddedAIHandler(aiProxy))
-		// AI workflow generation (build a workflow from a plain-English prompt).
-		r.Handle("/generate-workflow", aiProxy)
+		r.Handle("/config", aiHandler(aiProxy, sidecar))
+		r.Handle("/config/*", aiHandler(aiProxy, sidecar))
+		r.Handle("/ollama/models", aiHandler(aiProxy, sidecar))
+		// AI workflow generation (build a workflow from a plain-English prompt)
+		// and the prompt playground behind the AI Prompt step's Test button.
+		r.Handle("/generate-workflow", aiHandler(aiProxy, sidecar))
+		r.Post("/complete", embeddedAI)
 	})
 
 	// ── Inbound webhook triggers ───────────────────────────────────────────────
@@ -2417,7 +2356,7 @@ func Run() error {
 	log.Printf("╚══════════════════════════════════════╝")
 	log.Printf("[Engine] Instance %s — run lease TTL %s, up to %d runs at once", instanceID, leaseTTL, MaxConcurrentRuns())
 
-	return http.ListenAndServe(getEnv("ENGINE_BIND_HOST", "")+":"+port, r)
+	return httpx.Listen(getEnv("ENGINE_BIND_HOST", "")+":"+port, r)
 }
 
 var _ = fmt.Sprintf

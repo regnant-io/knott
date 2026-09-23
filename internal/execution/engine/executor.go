@@ -124,12 +124,50 @@ func NewExecutor(services Services) *Executor {
 // precedence over environment variables, so operators can manage secrets from
 // the UI without redeploying. Falls back to env for 12-factor deployments.
 func (e *Executor) secret(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
 	if e.SecretLookup != nil {
 		if v, ok := e.SecretLookup(name); ok && v != "" {
 			return v
 		}
 	}
+	if !EnvSecretAllowed(name) {
+		return ""
+	}
 	return os.Getenv(name)
+}
+
+// platformSecrets are environment variables a workflow must never be able to
+// read. A workflow names credentials by string ("auth_credential":
+// "SLACK_TOKEN") and anyone who can edit workflows chooses that string, so
+// without this an operator key could lift the admin keys or the master
+// encryption key by naming them and sending the value to a server they own.
+var platformSecrets = map[string]bool{
+	"KNOTT_SECRET_KEY": true, "API_KEYS": true, "API_TOKEN": true,
+	"WEBHOOK_SECRET": true, "METRICS_TOKEN": true,
+}
+
+// EnvSecretAllowed reports whether a secret may be taken from the process
+// environment. Stored credentials are always usable — an admin put them there
+// for workflows. The environment also holds the platform's own keys and
+// whatever else the host was started with, so only names that look like
+// credentials (UPPER_SNAKE) and are not the platform's own are read from it,
+// and KNOTT_ENV_SECRETS=off turns the environment fallback off entirely.
+func EnvSecretAllowed(name string) bool {
+	if platformSecrets[name] || strings.HasPrefix(name, "KNOTT_") {
+		return false
+	}
+	if strings.EqualFold(os.Getenv("KNOTT_ENV_SECRETS"), "off") {
+		return false
+	}
+	for _, c := range name {
+		if !(c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *Executor) ExecuteNode(runID string, def *WorkflowDefinition, node *WorkflowStep, ctx map[string]any) (*NodeResult, error) {
@@ -173,6 +211,16 @@ func (e *Executor) ExecuteNode(runID string, def *WorkflowDefinition, node *Work
 		return e.executeMerge(node, ctx)
 	case "sub_workflow", "workflow":
 		return e.executeSubWorkflow(runID, node, ctx)
+	case "llm":
+		return e.executeLLM(node, ctx)
+	case "list":
+		return e.executeList(node, ctx)
+	case "datetime":
+		return e.executeDateTime(node, ctx)
+	case "crypto":
+		return e.executeCrypto(node, ctx)
+	case "stop_error":
+		return e.executeStopError(node, ctx)
 	default:
 		return nil, fmt.Errorf("unknown node type: %s", node.Type)
 	}
@@ -273,7 +321,17 @@ func (e *Executor) executeAIDecision(runID string, node *WorkflowStep, ctx map[s
 	// AI inference (especially local Ollama) can take well over the default 30s
 	// client budget, so give this call a generous timeout and let the resilient
 	// poster retry transient 5xx / network blips with backoff.
-	result, err := e.postJSONResilient(e.Services.AIDecisionURL+"/internal/v1/decisions", payload, 150*time.Second)
+	strict, _ := config["strict_model"].(bool)
+	var (
+		result   map[string]any
+		err      error
+		fallback string
+	)
+	if e.Services.AIDecisionURL != "" {
+		result, err = e.postJSONResilient(e.Services.AIDecisionURL+"/internal/v1/decisions", payload, 150*time.Second)
+	} else {
+		err = fmt.Errorf("no external decision service")
+	}
 	if err != nil && e.Decider != nil {
 		// The Python decision service is an optional sidecar, and a downloaded
 		// binary usually runs without it. Rather than fail the node, decide
@@ -286,8 +344,10 @@ func (e *Executor) executeAIDecision(runID string, node *WorkflowStep, ctx map[s
 			Instructions: str(payload["instructions"]),
 			MaxTokens:    intOr(payload["max_tokens"], 0),
 			Temperature:  floatPtr(payload["temperature"]),
+			Strict:       strict,
 		})
 		if lerr == nil {
+			fallback = local.FallbackReason
 			result, err = map[string]any{
 				"output":      local.Output,
 				"confidence":  local.Confidence,
@@ -324,6 +384,11 @@ func (e *Executor) executeAIDecision(runID string, node *WorkflowStep, ctx map[s
 	output, _ := result["output"].(map[string]any)
 	if output == nil {
 		output = map[string]any{}
+	}
+	if fallback != "" {
+		// Keep the downgrade visible downstream and in the run log: a rule-based
+		// answer standing in for a model is not the same decision.
+		output["fallback_reason"] = fallback
 	}
 	confidence, _ := result["confidence"].(float64)
 	routing, _ := result["routing"].(string)
