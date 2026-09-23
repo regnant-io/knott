@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
+	"github.com/regnant/knott/internal/httpx"
 	"github.com/regnant/knott/internal/registry/handlers"
 	"github.com/regnant/knott/internal/registry/store"
 )
@@ -44,13 +44,7 @@ func Run() error {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
-		AllowCredentials: false,
-		MaxAge:           300,
-	}))
+	r.Use(httpx.InternalOnly)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", healthHandler("workflow-registry", port))
@@ -71,7 +65,7 @@ func Run() error {
 	log.Printf("╚══════════════════════════════════════╝")
 
 	bindHost := getEnv("REGISTRY_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))
-	return http.ListenAndServe(bindHost+":"+port, r)
+	return httpx.Listen(bindHost+":"+port, r)
 }
 
 func healthHandler(service, port string) http.HandlerFunc {

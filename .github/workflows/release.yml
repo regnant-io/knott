@@ -1,25 +1,43 @@
 name: Release
 
+# Builds every distribution of KNOTT and attaches them to a draft GitHub
+# release:
+#
+#   Windows  configurable installer (.exe, x64 and ARM64) and a portable .zip
+#   macOS    KNOTT.app in a drag-to-install .dmg (Apple silicon and Intel)
+#   Linux    knott (server) and knott-desktop packages (.deb, .rpm; x64, ARM64)
+#   Any      the knott command-line server as an archive for six platforms
+#   Docker   ghcr.io image (on tag pushes)
+#
+# The desktop app links each OS's own web view, so it is built on each OS.
+
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g. v0.9.0)'
+        description: 'Version to build (e.g. v1.2.0)'
         required: true
+      publish:
+        description: 'Attach the builds to a draft GitHub release (off = build and keep them as run artifacts only)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
 env:
   VERSION: ${{ github.event.inputs.version || github.ref_name }}
+  GO_VERSION: '1.26.8'
+  NFPM: github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+  WINRES: github.com/tc-hib/go-winres@v0.3.3
 
 jobs:
-  # The console is built once and handed to every platform build, so all six
-  # binaries carry byte-identical assets.
+  # The console is built once and handed to every build, so all artifacts carry
+  # byte-identical assets.
   console:
-    name: Build console
+    name: Console
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,6 +47,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/designer/package-lock.json
       - run: npm --prefix apps/designer ci --no-audit --no-fund
+      - run: npm --prefix apps/designer test
       - run: npm --prefix apps/designer run build
       - uses: actions/upload-artifact@v7
         with:
@@ -36,8 +55,9 @@ jobs:
           path: apps/designer/dist
           retention-days: 1
 
-  binaries:
-    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+  # ── The server / command-line binary ───────────────────────────────────────
+  cli:
+    name: CLI ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: console
     runs-on: ubuntu-latest
     strategy:
@@ -53,8 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
-        with: { go-version: '1.26.8', cache: true }
-
+        with: { go-version: '${{ env.GO_VERSION }}', cache: true }
       - uses: actions/download-artifact@v8
         with: { name: console, path: apps/designer/dist }
 
@@ -68,114 +87,221 @@ jobs:
           make embed
           NAME="knott_${VERSION}_${GOOS}_${GOARCH}"
           EXT=""; [ "$GOOS" = "windows" ] && EXT=".exe"
-          mkdir -p "dist/$NAME/ai-decision-engine"
+          mkdir -p "dist/$NAME"
           go build -trimpath \
             -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${GITHUB_SHA::7} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -o "dist/$NAME/knott$EXT" ./cmd/knott
           cp LICENSE NOTICE README.md "dist/$NAME/"
-          cp services/ai-decision-engine/main.py "dist/$NAME/ai-decision-engine/"
           if [ "$GOOS" = "windows" ]; then
             (cd dist && zip -qr "$NAME.zip" "$NAME")
           else
             tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
           fi
 
-      - name: Linux packages
+      - name: Linux server packages
         if: matrix.goos == 'linux'
         env:
           GOARCH: ${{ matrix.goarch }}
         run: |
           set -euo pipefail
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          # The packager runs here, whatever architecture the package is for.
+          GOARCH= go install "$NFPM"
           mkdir -p dist/pkgroot
           cp "dist/knott_${VERSION}_linux_${GOARCH}/knott" dist/pkgroot/knott
           VERSION="${VERSION#v}" GOARCH="$GOARCH" nfpm package -f build/nfpm.yaml -p deb -t dist/
           VERSION="${VERSION#v}" GOARCH="$GOARCH" nfpm package -f build/nfpm.yaml -p rpm -t dist/
-          rm -rf dist/pkgroot
 
-      - name: AppImage
-        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-        run: |
-          set -euo pipefail
-          curl -fsSL -o /usr/local/bin/appimagetool \
-            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x /usr/local/bin/appimagetool
-          # AppImages need FUSE; extracting sidesteps it on a runner.
-          APPIMAGE_EXTRACT_AND_RUN=1 bash build/linux/make-appimage.sh "$VERSION" x86_64 || \
-            echo "AppImage step failed — continuing without it"
-
-      - name: Prune intermediate directories
-        run: rm -rf dist/knott_*_*/ dist/KNOTT.AppDir
+      - name: Keep only the deliverables
+        run: rm -rf dist/knott_*_*/ dist/pkgroot
 
       - uses: actions/upload-artifact@v7
         with:
-          name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: dist-cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
           retention-days: 5
 
-  macos-app:
-    name: macOS app bundle
-    needs: binaries
-    runs-on: macos-latest
+  # ── Windows desktop app + installer ────────────────────────────────────────
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: console
+    runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
-        goarch: [amd64, arm64]
+        include:
+          - { arch: amd64, label: x64 }
+          - { arch: arm64, label: arm64 }
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/setup-go@v7
         with:
-          name: dist-darwin-${{ matrix.goarch }}
-          path: dist
-      - name: Unpack and assemble KNOTT.app
+          go-version: '${{ env.GO_VERSION }}'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            desktop/go.sum
+      - uses: actions/download-artifact@v8
+        with: { name: console, path: apps/designer/dist }
+
+      - name: Build the app and the CLI
+        env:
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '0'
         run: |
           set -euo pipefail
-          tar -C dist -xzf "dist/knott_${VERSION}_darwin_${{ matrix.goarch }}.tar.gz"
-          bash build/macos/make-app.sh "$VERSION" "${{ matrix.goarch }}"
-          rm -rf dist/knott_*_darwin_*/ dist/KNOTT.app
+          rm -rf internal/ui/dist/assets internal/ui/dist/index.html internal/ui/dist/favicon.svg
+          cp -R apps/designer/dist/. internal/ui/dist/
+          SHORT="${VERSION#v}"; NUM="${SHORT%%-*}.0"
+          LDF="-s -w -X main.version=${VERSION} -X main.commit=${GITHUB_SHA::7}"
+          OUT="$GITHUB_WORKSPACE/dist/win"
+          mkdir -p "$OUT/bin"
+          # go-winres runs on the build machine, whatever GOARCH the app targets.
+          (cd desktop && GOARCH= go run "$WINRES" make --in winres/winres.json --out rsrc --arch "$GOARCH" \
+              --product-version "$NUM" --file-version "$NUM")
+          (cd desktop && go build -trimpath -tags desktop,production -ldflags "$LDF -H windowsgui" -o "$OUT/KNOTT.exe" .)
+          go build -trimpath -ldflags "$LDF -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "$OUT/knott.exe" ./cmd/knott
+          cp "$OUT/knott.exe" "$OUT/bin/knott.exe"
+          cp LICENSE NOTICE README.md "$OUT/"
+
+      - name: Fetch the WebView2 bootstrapper
+        run: curl -fsSL -o build/windows/MicrosoftEdgeWebview2Setup.exe "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+
+      - name: Build the installer
+        run: |
+          set -euo pipefail
+          MAKENSIS="$(command -v makensis || true)"
+          if [ -z "$MAKENSIS" ]; then
+            for c in "/c/Program Files (x86)/NSIS/makensis.exe" "/c/Program Files/NSIS/makensis.exe"; do
+              [ -x "$c" ] && MAKENSIS="$c" && break
+            done
+          fi
+          if [ -z "$MAKENSIS" ]; then
+            choco install nsis -y --no-progress >/dev/null
+            MAKENSIS="/c/Program Files (x86)/NSIS/makensis.exe"
+          fi
+          SHORT="${VERSION#v}"
+          SRC="$(cygpath -w "$GITHUB_WORKSPACE/dist/win")"
+          OUTFILE="$(cygpath -w "$GITHUB_WORKSPACE/dist")\\KNOTT-${SHORT}-windows-${{ matrix.label }}-setup.exe"
+          "$MAKENSIS" -V3 -DVERSION="${SHORT%%-*}" -DARCH=${{ matrix.label }} -DSOURCE="$SRC" -DOUTFILE="$OUTFILE" build/windows/installer.nsi
+
+      - name: Portable zip
+        run: |
+          set -euo pipefail
+          SHORT="${VERSION#v}"
+          P="dist/KNOTT-${SHORT}-windows-${{ matrix.label }}-portable"
+          mkdir -p "$P/bin" "$P/data"
+          cp dist/win/KNOTT.exe "$P/"
+          cp dist/win/knott.exe "$P/bin/"
+          cp LICENSE NOTICE README.md "$P/"
+          # A data folder next to the app keeps everything inside this folder.
+          echo "KNOTT keeps its workflows, runs and credentials here because this copy is portable." > "$P/data/README.txt"
+          (cd dist && 7z a -tzip -bso0 "$(basename "$P").zip" "$(basename "$P")")
+          rm -rf "$P" dist/win
+
       - uses: actions/upload-artifact@v7
         with:
-          name: dist-macos-app-${{ matrix.goarch }}
+          name: dist-windows-${{ matrix.arch }}
+          path: dist/*
+          retention-days: 5
+
+  # ── macOS app bundle + disk image ──────────────────────────────────────────
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: console
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: arm64, clang: arm64 }
+          - { arch: amd64, clang: x86_64 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            desktop/go.sum
+      - uses: actions/download-artifact@v8
+        with: { name: console, path: apps/designer/dist }
+
+      - name: Build and package
+        env:
+          GOARCH: ${{ matrix.arch }}
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
+        run: |
+          set -euo pipefail
+          make embed
+          LDF="-s -w -X main.version=${VERSION} -X main.commit=${GITHUB_SHA::7}"
+          # The runner is Apple silicon; clang cross-compiles the Intel build.
+          (cd desktop && CGO_ENABLED=1 CC="clang -arch ${{ matrix.clang }}" \
+             go build -trimpath -tags desktop,production -ldflags "$LDF" -o "$RUNNER_TEMP/KNOTT" .)
+          CGO_ENABLED=0 go build -trimpath -ldflags "$LDF -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "$RUNNER_TEMP/knott" ./cmd/knott
+          bash build/macos/make-app.sh "$VERSION" "$RUNNER_TEMP/KNOTT" "$RUNNER_TEMP/knott" "${{ matrix.arch }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos-${{ matrix.arch }}
           path: dist/*.dmg
           retention-days: 5
 
-  windows-installer:
-    name: Windows installer
-    needs: binaries
-    runs-on: windows-latest
+  # ── Linux desktop packages ─────────────────────────────────────────────────
+  linux-desktop:
+    name: Linux desktop ${{ matrix.arch }}
+    needs: console
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/setup-go@v7
         with:
-          name: dist-windows-amd64
-          path: dist
-      - name: Build the MSI
-        shell: bash
+          go-version: '${{ env.GO_VERSION }}'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            desktop/go.sum
+      - uses: actions/download-artifact@v8
+        with: { name: console, path: apps/designer/dist }
+
+      - name: Build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-3-dev libwebkit2gtk-4.1-dev >/dev/null
+
+      - name: Build and package
         run: |
           set -euo pipefail
-          cd dist && unzip -q "knott_${VERSION}_windows_amd64.zip" && cd ..
-          # WiX v3 ships with the windows-latest image.
-          WIX="/c/Program Files (x86)/WiX Toolset v3.14/bin"
-          [ -d "$WIX" ] || WIX="/c/Program Files (x86)/WiX Toolset v3.11/bin"
-          # The RTF licence WixUI wants; generated rather than committed.
-          printf '{\\rtf1\\ansi\\deff0 {\\fonttbl{\\f0 Segoe UI;}}\\fs18 ' > build/windows/license.rtf
-          sed 's/[\\{}]/\\&/g; s/$/\\par /' LICENSE >> build/windows/license.rtf
-          printf '}' >> build/windows/license.rtf
-          "$WIX/candle.exe" -arch x64 \
-            -dVersion="${VERSION#v}" \
-            -dSourceDir="dist\\knott_${VERSION}_windows_amd64" \
-            -out knott.wixobj build/windows/knott.wxs
-          "$WIX/light.exe" -ext WixUIExtension -ext WixUtilExtension \
-            -out "dist/KNOTT-${VERSION#v}-x64.msi" knott.wixobj
-          rm -rf "dist/knott_${VERSION}_windows_amd64"
+          make embed
+          mkdir -p dist/pkgroot
+          (cd desktop && CGO_ENABLED=1 go build -trimpath -tags desktop,production,webkit2_41 \
+             -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${GITHUB_SHA::7}" -o ../dist/pkgroot/knott-desktop .)
+          # The packager runs here, whatever architecture the package is for.
+          GOARCH= go install "$NFPM"
+          VERSION="${VERSION#v}" GOARCH="${{ matrix.arch }}" nfpm package -f build/nfpm-desktop.yaml -p deb -t dist/
+          VERSION="${VERSION#v}" GOARCH="${{ matrix.arch }}" nfpm package -f build/nfpm-desktop.yaml -p rpm -t dist/
+          tar -C dist/pkgroot -czf "dist/knott-desktop_${VERSION}_linux_${{ matrix.arch }}.tar.gz" knott-desktop
+          rm -rf dist/pkgroot
+
       - uses: actions/upload-artifact@v7
         with:
-          name: dist-windows-installer
-          path: dist/*.msi
+          name: dist-linux-desktop-${{ matrix.arch }}
+          path: dist/*
           retention-days: 5
 
   publish:
     name: Publish release
-    needs: [binaries, macos-app, windows-installer]
+    needs: [cli, windows, macos, linux-desktop]
+    if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -193,27 +319,32 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.VERSION }}
+          name: KNOTT ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
           files: staging/*
           generate_release_notes: true
           draft: true
           body: |
             ## Install
 
-            **macOS** — download the `.dmg`, drag KNOTT to Applications.
-            **Windows** — download the `.msi`.
-            **Linux** — `.deb`, `.rpm`, or the `.AppImage` to run without installing.
-            **Docker** — `docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/regnant/knott`
-            **Anything else** — grab the archive for your platform; it holds one binary.
+            | | |
+            |---|---|
+            | **Windows** | `KNOTT-…-windows-x64-setup.exe` (or `arm64`). Choose per-user or all users, the folder, shortcuts, the `knott` command and start-at-sign-in. Silent: `/S /CURRENTUSER` or `/S /ALLUSERS`. A `-portable.zip` runs without installing. |
+            | **macOS** | `KNOTT-…-macos-arm64.dmg` (Apple silicon) or `-amd64` (Intel). Drag KNOTT to Applications. The build is not notarised yet: the first time, right-click KNOTT → Open. |
+            | **Linux** | `knott-desktop_…deb` / `.rpm` for the app (needs WebKitGTK 4.1), plus `knott_…deb` / `.rpm`, which it depends on. Servers only need `knott`. |
+            | **Server** | `knott_…_<os>_<arch>` archives: one binary, `knott serve`. |
+            | **Docker** | `docker run -p 8002:8002 -v knott-data:/var/lib/knott ghcr.io/${{ github.repository }}` |
 
-            Then run `knott desktop`, or `knott serve` and open http://localhost:8002.
+            Local AI: install [Ollama](https://ollama.com) and pull any model — KNOTT finds it automatically.
 
-            Verify a download against `SHA256SUMS`.
+            Verify downloads against `SHA256SUMS`.
 
-            > Set `API_KEYS` before binding KNOTT to anything but loopback.
-            > See [SECURITY.md](https://github.com/regnant/knott/blob/main/SECURITY.md).
+            > Set `API_KEYS` before exposing KNOTT beyond this machine. See [SECURITY.md](https://github.com/${{ github.repository }}/blob/main/SECURITY.md).
 
   image:
     name: Container image
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read

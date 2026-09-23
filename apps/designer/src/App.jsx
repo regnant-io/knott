@@ -1,11 +1,9 @@
 // Copyright 2026 Regnant
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Layout, ToastProvider } from './components/Layout.jsx';
-import Dashboard from './pages/Dashboard.jsx';
 import Workflows from './pages/Workflows.jsx';
-import WorkflowDesigner from './pages/WorkflowDesigner.jsx';
 import Runs from './pages/Runs.jsx';
 import Schedules from './pages/Schedules.jsx';
 import Observability from './pages/Observability.jsx';
@@ -13,6 +11,20 @@ import TaskInbox from './pages/TaskInbox.jsx';
 import { AIDecisions, Agents, Settings } from './pages/secondary.jsx';
 import Connectors from './pages/Connectors.jsx';
 import Login from './pages/Login.jsx';
+
+// The two heaviest screens load on demand: the builder brings the canvas
+// library and the overview brings the chart library. Everything else is small
+// enough to ship in the first bundle.
+const WorkflowDesigner = lazy(() => import('./pages/WorkflowDesigner.jsx'));
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
+
+function PageLoading() {
+  return (
+    <div style={{ flex: 1, display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
+      <div className="spinner spinner-lg" />
+    </div>
+  );
+}
 import { tasks as tasksApi, stats as statsApi, checkAuth } from './lib/api.js';
 
 // Theme Management — tri-state: 'system' | 'light' | 'dark'
@@ -122,12 +134,14 @@ export default function App() {
   if (page === 'designer') {
     return (
       <ToastProvider>
-        <WorkflowDesigner
-          workflowId={designerId}
-          onBack={() => { setPage('workflows'); setDesignerId(null); }}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-        />
+        <Suspense fallback={<PageLoading />}>
+          <WorkflowDesigner
+            workflowId={designerId}
+            onBack={() => { setPage('workflows'); setDesignerId(null); }}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        </Suspense>
       </ToastProvider>
     );
   }
@@ -135,7 +149,7 @@ export default function App() {
   return (
     <ToastProvider>
       <Layout page={page} onNav={handleNav} pendingTaskCount={pendingCount} theme={theme} onToggleTheme={toggleTheme} systemStatus={systemStatus}>
-        {page === 'dashboard'   && <Dashboard  onNav={handleNav} />}
+        {page === 'dashboard'   && <Suspense fallback={<PageLoading />}><Dashboard onNav={handleNav} /></Suspense>}
         {page === 'workflows'   && <Workflows  onNav={handleNav} onDesign={handleDesign} />}
         {page === 'runs'        && <Runs />}
         {page === 'schedules'   && <Schedules />}

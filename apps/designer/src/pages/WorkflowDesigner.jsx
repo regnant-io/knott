@@ -1,443 +1,698 @@
 // Copyright 2026 Regnant
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect } from 'react';
-import { Check, CheckSquare, KeyRound, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Check, CheckSquare, KeyRound, X, Play, ChevronDown, Search, ExternalLink } from 'lucide-react';
 import {
   workflows as wfApi,
   connectors as connectorsApi,
   credentials as credsApi,
   triggers as triggersApi,
+  aiComplete,
 } from '../lib/api.js';
 import { useToast } from '../components/Layout.jsx';
+import { AppIcon } from '../components/AppIcon.jsx';
 import { resolveTemplate, hasTemplate } from '../lib/expr.js';
 import { CAN_FAIL_TYPES } from '../designer/nodeCatalog.js';
+import { loadConnectors, connectorBySlug } from '../lib/useConnectors.js';
 import DesignerShell from './WorkflowDesignerShell.jsx';
 
 /**
  * The workflow designer.
  *
  * The canvas — adding steps, wiring them, undo, layout — lives in
- * WorkflowDesignerShell. This file holds the properties panel: the per-node
- * configuration forms, which are the bulk of the surface area and change for
- * entirely different reasons than the canvas does.
+ * WorkflowDesignerShell. This file holds the inspector's forms: what each step
+ * type is configured with, split into Setup (what it does) and Settings (how
+ * it behaves when things go wrong).
  */
 export default function WorkflowDesigner(props) {
   return <DesignerShell {...props} NodePropsEditor={NodePropsEditor} />;
 }
 
-function NodePropsEditor({ node, onChange, connectorOpts = [], agentOpts = [], taskSpecOpts = [], previewCtx = {}, testInput = '{}', setTestInput, workflowId, nodes = [] }) {
-  const d = node.data;
+function Section({ title, children, hint }) {
+  return (
+    <section className="insp-section">
+      {title && <h4 className="insp-section-title">{title}</h4>}
+      {hint && <p className="form-hint" style={{ marginTop: -4 }}>{hint}</p>}
+      {children}
+    </section>
+  );
+}
 
-  // Built-in fallback list used only if the AI engine is unreachable, so the
-  // dropdown is never empty. When reachable, taskSpecOpts drives it dynamically.
+function NodePropsEditor({
+  section = 'setup', node, onChange, connectors = [], agentOpts = [], taskSpecOpts = [],
+  previewCtx = {}, testInput = '{}', setTestInput, workflowId, publicURL, nodes = [],
+}) {
+  const d = node.data;
+  const cfg = d.config || {};
+  const setCfg = (k, v) => onChange({ config: { ...cfg, [k]: v } });
+
+  // Built-in fallback list used only if the task list could not be loaded.
   const FALLBACK_SPECS = [
-    { id: 'fraud_risk_assessment', name: 'Fraud Risk Assessment' },
-    { id: 'credit_risk_assessment', name: 'Credit Risk Assessment' },
-    { id: 'content_moderation', name: 'Content Moderation' },
-    { id: 'document_classification', name: 'Document Classification' },
-    { id: 'sentiment_analysis', name: 'Sentiment Analysis' },
     { id: 'general_decision', name: 'General Decision' },
+    { id: 'fraud_risk_assessment', name: 'Fraud Risk Assessment' },
+    { id: 'content_moderation', name: 'Content Moderation' },
+    { id: 'sentiment_analysis', name: 'Sentiment Analysis' },
   ];
   const specs = taskSpecOpts.length ? taskSpecOpts : FALLBACK_SPECS;
 
-  // A note is an annotation, not a step: it has no id to reference, no routing
-  // and no reliability settings, so it gets its own panel rather than the
-  // generic one with every field disabled.
+  if (section === 'settings') {
+    return (
+      <div className="insp-stack">
+        <Section title="General">
+          <div className="form-group">
+            <label className="form-label">Step name</label>
+            <input className="input" value={d.name || ''} onChange={e => onChange({ name: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Reference</label>
+            <div className="ref-chip"><code>{`{{ steps.${d.id}.output }}`}</code></div>
+            <div className="form-hint">How later steps read this step’s result.</div>
+          </div>
+          {node.type !== 'trigger' && node.type !== 'end' && (
+            <label className="check-row">
+              <input type="checkbox" checked={!!d.disabled} onChange={e => onChange({ disabled: e.target.checked })} />
+              <span>Disable this step — skip it at run time and carry on</span>
+            </label>
+          )}
+          <div className="form-group">
+            <label className="form-label">Notes</label>
+            <textarea className="textarea" rows={3} value={d.notes || ''} placeholder="Why this step exists — the thing the next person will wonder about"
+              onChange={e => onChange({ notes: e.target.value })} />
+          </div>
+        </Section>
+        {CAN_FAIL_TYPES.has(node.type) && <ExecutionPolicyEditor d={d} onChange={onChange} nodeType={node.type} nodes={nodes} />}
+      </div>
+    );
+  }
+
+  // ── Setup ───────────────────────────────────────────────────────────────
   if (node.type === 'note') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Note</label>
-          <textarea
-            className="textarea"
-            rows={8}
-            autoFocus
-            value={d.notes || ''}
-            placeholder="Why this part of the workflow works the way it does — the thing the next person will wonder about."
-            onChange={e => onChange({ notes: e.target.value })}
-          />
-          <div className="form-hint">
-            Notes live on the canvas only. They are never executed and never reach
-            a connector.
-          </div>
-        </div>
+      <div className="form-group">
+        <label className="form-label">Note</label>
+        <textarea className="textarea" rows={8} autoFocus value={d.notes || ''}
+          onChange={e => onChange({ notes: e.target.value })} />
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Name</label>
-        <input className="input" value={d.name || ''} onChange={e => onChange({ name: e.target.value })} />
-      </div>
-
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Node ID</label>
-        <input className="input" value={d.id || ''} readOnly style={{ opacity: 0.5 }} />
-      </div>
-
-      {node.type !== 'trigger' && node.type !== 'end' && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-          <input type="checkbox" checked={!!d.disabled} onChange={e => onChange({ disabled: e.target.checked })} />
-          Disable this node (skipped at runtime — routes straight to Next)
-        </label>
-      )}
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Notes</label>
-        <textarea className="textarea" rows={2} value={d.notes || ''} placeholder="Optional notes for your team"
-          onChange={e => onChange({ notes: e.target.value })} />
-      </div>
-
-      {setTestInput && <TestDataPanel testInput={testInput} setTestInput={setTestInput} previewCtx={previewCtx} />}
-
-      {node.type === 'ai_decision' && (
+    <div className="insp-stack">
+      {node.type === 'trigger' && (
         <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>AI Configuration</div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Task Spec</label>
-            <select className="select" value={d.config?.task || ''} onChange={e => onChange({ config: { ...(d.config || {}), task: e.target.value } })}>
-              <option value="">Select task spec…</option>
-              {specs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Confidence Threshold</label>
-            <input className="input" type="number" min={0} max={1} step={0.05}
-              value={d.config?.confidence_threshold ?? 0.85}
-              onChange={e => onChange({ config: { ...(d.config || {}), confidence_threshold: parseFloat(e.target.value) } })} />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Fallback Node ID</label>
-            <input className="input" value={d.config?.fallback || ''} placeholder="node_id (if low confidence)"
-              onChange={e => onChange({ config: { ...(d.config || {}), fallback: e.target.value } })} />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Model Profile</label>
-            <select className="select" value={d.config?.model_profile || 'default'}
-              onChange={e => onChange({ config: { ...(d.config || {}), model_profile: e.target.value } })}>
-              <optgroup label="Anthropic Claude">
-                <option value="default">Default (Sonnet 4)</option>
-                <option value="high_accuracy">High Accuracy (Opus 4)</option>
-                <option value="fast">Fast (Haiku)</option>
-              </optgroup>
-              <optgroup label="Ollama (local)">
-                <option value="ollama_default">Ollama — configured default</option>
-                <option value="ollama_fast">Ollama — Llama 3.2 (fast)</option>
-                <option value="ollama_large">Ollama — Llama 3.1 70B</option>
-              </optgroup>
-            </select>
-            <div className="form-hint">Anthropic profiles run on Claude; Ollama profiles run on your local instance (set the default model in Settings).</div>
-          </div>
-          <ToolInputsEditor d={d} onChange={onChange} label="Decision Inputs (data sent to the model)" previewCtx={previewCtx} />
-          <AdvancedAIConfig d={d} onChange={onChange} />
-        </>
-      )}
-
-      {node.type === 'human_task' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Task Configuration</div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Task Title</label>
-            <input className="input" value={d.config?.title || ''} placeholder="Displayed to reviewer"
-              onChange={e => onChange({ config: { ...(d.config || {}), title: e.target.value } })} />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Description</label>
-            <input className="input" value={d.config?.description || ''} placeholder="Short summary (supports {{ templates }})"
-              onChange={e => onChange({ config: { ...(d.config || {}), description: e.target.value } })} />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Reviewer Instructions</label>
-            <textarea className="textarea" rows={3} value={d.config?.instructions || ''} placeholder="What should the reviewer check? (shown in the task)"
-              onChange={e => onChange({ config: { ...(d.config || {}), instructions: e.target.value } })} />
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
-              <label className="form-label">SLA (hours)</label>
-              <input className="input" type="number" min={1} value={d.config?.due_hours ?? 24}
-                onChange={e => onChange({ config: { ...(d.config || {}), due_hours: parseInt(e.target.value) } })} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
-              <label className="form-label">Priority</label>
-              <select className="select" value={d.config?.priority || 'NORMAL'}
-                onChange={e => onChange({ config: { ...(d.config || {}), priority: e.target.value } })}>
-                <option value="LOW">Low</option>
-                <option value="NORMAL">Normal</option>
-                <option value="HIGH">High</option>
-                <option value="URGENT">Urgent</option>
-              </select>
-            </div>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Assigned Roles (comma-separated)</label>
-            <input className="input" value={(d.config?.assigned_roles || []).join(', ')} placeholder="analyst, manager"
-              onChange={e => onChange({ config: { ...(d.config || {}), assigned_roles: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
-          </div>
-          <ContextDataEditor d={d} onChange={onChange} previewCtx={previewCtx} />
-        </>
-      )}
-
-      {node.type === 'condition' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Branches</div>
-          <div className="form-hint" style={{ marginTop: -4 }}>
-            The run takes the first branch whose expression is true. Each branch has its
-            own output on the canvas — drag from it, or click its <strong>+</strong>, to
-            say where it goes.
-          </div>
-          {(d.cases || []).map((c, i) => (
-            <div key={i} className="branch-editor">
-              <div className="branch-editor-head">
-                <span className="form-label" style={{ margin: 0 }}>Branch {i + 1}</span>
-                <span className={`badge ${c.next ? 'badge-green' : 'badge-muted'}`} style={{ fontSize: 9 }}>
-                  {c.next ? `→ ${nodeLabel(nodes, c.next)}` : 'not connected'}
-                </span>
-                <button
-                  className="btn btn-ghost btn-icon btn-sm"
-                  title={`Remove branch ${i + 1}`}
-                  aria-label={`Remove branch ${i + 1}`}
-                  onClick={() => onChange({ cases: (d.cases || []).filter((_, j) => j !== i) })}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-              <input
-                className="input"
-                style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}
-                value={c.condition}
-                placeholder="input.amount > 1000"
-                onChange={e => {
-                  const cases = [...(d.cases || [])];
-                  cases[i] = { ...cases[i], condition: e.target.value };
-                  onChange({ cases });
-                }}
-              />
-            </div>
-          ))}
-          <button className="btn btn-ghost btn-sm" style={{ width: '100%' }}
-            onClick={() => onChange({ cases: [...(d.cases || []), { condition: '', next: '' }] })}>
-            + Add a branch
-          </button>
-          <div className="form-hint" style={{ marginTop: 8 }}>
-            Anything that matches no branch takes the <strong>Otherwise</strong> output
-            {d.default ? <> — currently <strong>{nodeLabel(nodes, d.default)}</strong>.</> : ', which is not connected yet.'}
-          </div>
-        </>
-      )}
-
-      {node.type === 'loop' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Loop</div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Items (list expression)</label>
-            <input className="input" value={d.config?.items || ''} placeholder="{{ steps.poll.output.records }}"
-              onChange={e => onChange({ config: { ...(d.config || {}), items: e.target.value } })} />
-            <ExprPreview value={d.config?.items} ctx={previewCtx} />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Body Start Node ID</label>
-            <input className="input" value={d.config?.body || ''} placeholder="first node id of the loop body"
-              onChange={e => onChange({ config: { ...(d.config || {}), body: e.target.value } })} />
-            <div className="form-hint">Each item runs this sub-path with <code style={{ fontFamily: 'var(--font-mono)' }}>{'{{ item }}'}</code> and <code style={{ fontFamily: 'var(--font-mono)' }}>{'{{ loop_index }}'}</code> available.</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
-              <label className="form-label">Item Variable</label>
-              <input className="input" value={d.config?.item_var || ''} placeholder="item"
-                onChange={e => onChange({ config: { ...(d.config || {}), item_var: e.target.value } })} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
-              <label className="form-label">Max Items</label>
-              <input className="input" type="number" min={1} value={d.config?.max_items || 1000}
-                onChange={e => onChange({ config: { ...(d.config || {}), max_items: parseInt(e.target.value) } })} />
-            </div>
-          </div>
-        </>
-      )}
-
-      {node.type === 'code' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Code (Expressions)</div>
-          <div className="form-hint" style={{ marginTop: 0 }}>Each output field is an expression: functions (upper, concat, len, if, dateadd…), operators (+ - * / ?? == &gt;), paths.</div>
-          <AssignmentsEditor d={d} onChange={onChange} configKey="assignments" valuePlaceholder="expression e.g. concat(input.a,' ',input.b)" previewCtx={previewCtx} asExpr />
-        </>
-      )}
-
-      {node.type === 'set' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Set Fields</div>
-          <AssignmentsEditor d={d} onChange={onChange} configKey="fields" valuePlaceholder="value or {{ template }}" previewCtx={previewCtx} />
-        </>
-      )}
-
-      {node.type === 'filter' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Filter</div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Condition</label>
-            <input className="input mono" value={d.config?.condition || ''} placeholder="input.score > 80"
-              style={{ fontFamily: 'var(--font-mono)' }}
-              onChange={e => onChange({ config: { ...(d.config || {}), condition: e.target.value } })} />
-            <div className="form-hint">Passes to Next when true. Otherwise routes to the false node (or ends the branch).</div>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">On False → Node ID (optional)</label>
-            <input className="input" value={d.config?.on_false || ''} placeholder="node id (blank = drop)"
-              onChange={e => onChange({ config: { ...(d.config || {}), on_false: e.target.value } })} />
-          </div>
-        </>
-      )}
-
-      {node.type === 'wait' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wait</div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Mode</label>
-            <select className="select" value={d.config?.mode || 'duration'}
-              onChange={e => onChange({ config: { ...(d.config || {}), mode: e.target.value } })}>
-              <option value="duration">For a duration</option>
-              <option value="until">Until a timestamp</option>
-            </select>
-          </div>
-          {(d.config?.mode || 'duration') === 'duration' ? (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
-                <label className="form-label">Amount</label>
-                <input className="input" type="number" min={1} value={d.config?.seconds || 60}
-                  onChange={e => onChange({ config: { ...(d.config || {}), seconds: parseInt(e.target.value) } })} />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
-                <label className="form-label">Unit</label>
-                <select className="select" value={d.config?.unit || 'seconds'}
-                  onChange={e => onChange({ config: { ...(d.config || {}), unit: e.target.value } })}>
-                  <option value="seconds">seconds</option>
-                  <option value="minutes">minutes</option>
-                  <option value="hours">hours</option>
-                  <option value="days">days</option>
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Until (RFC3339 or expression)</label>
-              <input className="input" value={d.config?.until || ''} placeholder="{{ dateadd($now, 3, 'days') }}"
-                onChange={e => onChange({ config: { ...(d.config || {}), until: e.target.value } })} />
-            </div>
-          )}
-          <div className="form-hint">The run pauses durably and resumes automatically when the time arrives — survives restarts.</div>
-        </>
-      )}
-
-      {node.type === 'merge' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Merge</div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Source Node IDs (comma-separated)</label>
-            <input className="input" value={(d.config?.sources || []).join(', ')} placeholder="nodeA, nodeB"
-              onChange={e => onChange({ config: { ...(d.config || {}), sources: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Mode</label>
-            <select className="select" value={d.config?.mode || 'by_source'}
-              onChange={e => onChange({ config: { ...(d.config || {}), mode: e.target.value } })}>
-              <option value="by_source">Keyed by source id</option>
-              <option value="combine">Combine into one object</option>
-            </select>
-          </div>
-        </>
-      )}
-
-      {node.type === 'transform' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Transform</div>
-          <ToolInputsEditor d={d} onChange={onChange} label="Output Mapping" previewCtx={previewCtx} />
-        </>
-      )}
-
-      {node.type === 'end' && (
-        <>
-          <div className="divider" />
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Outcome Label</label>
-            <select className="select" value={d.outcome || 'COMPLETED'} onChange={e => onChange({ outcome: e.target.value })}>
-              <option value="APPROVED">APPROVED</option>
-              <option value="REJECTED">REJECTED</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="ESCALATED">ESCALATED</option>
-            </select>
-          </div>
+          <TriggerConfigEditor d={d} onChange={onChange} workflowId={workflowId} publicURL={publicURL} previewCtx={previewCtx} />
+          <Section title="Input">
+            <TriggerSchemaEditor d={d} onChange={onChange} />
+          </Section>
         </>
       )}
 
       {node.type === 'tool_call' && (
-        <ToolCallEditor d={d} onChange={onChange} connectorOpts={connectorOpts} previewCtx={previewCtx} />
+        <ToolCallEditor d={d} onChange={onChange} connectors={connectors} previewCtx={previewCtx} />
       )}
 
-      {node.type === 'sub_workflow' && (
-        <SubWorkflowEditor d={d} onChange={onChange} workflowId={workflowId} />
+      {node.type === 'llm' && <LLMEditor d={d} setCfg={setCfg} previewCtx={previewCtx} />}
+
+      {node.type === 'ai_decision' && (
+        <Section title="Decision">
+          <div className="form-group">
+            <label className="form-label">What should the model decide?</label>
+            <select className="select" value={cfg.task || ''} onChange={e => setCfg('task', e.target.value)}>
+              <option value="">Choose a task…</option>
+              {specs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {specs.find(s => s.id === cfg.task)?.description && (
+              <div className="form-hint">{specs.find(s => s.id === cfg.task).description}</div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Confidence needed to act without review — {Math.round((cfg.confidence_threshold ?? 0.85) * 100)}%</label>
+            <input type="range" min={0.5} max={0.99} step={0.01} value={cfg.confidence_threshold ?? 0.85}
+              onChange={e => setCfg('confidence_threshold', parseFloat(e.target.value))} />
+            <div className="form-hint">Below this the decision routes to its low-confidence step instead.</div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">When confidence is low, go to</label>
+            <select className="select" value={cfg.fallback || ''} onChange={e => setCfg('fallback', e.target.value)}>
+              <option value="">Continue as normal</option>
+              {nodes.filter(n => n.id !== d.id && n.type !== 'note' && n.type !== 'trigger').map(n => <option key={n.id} value={n.id}>{n.data?.name || n.id}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Model</label>
+            <select className="select" value={cfg.model_profile || 'default'} onChange={e => setCfg('model_profile', e.target.value)}>
+              <option value="default">Settings default (Ollama or Anthropic)</option>
+              <optgroup label="Anthropic">
+                <option value="high_accuracy">High accuracy</option>
+                <option value="fast">Fast</option>
+              </optgroup>
+              <optgroup label="Ollama (local)">
+                <option value="ollama_default">Configured local model</option>
+                <option value="ollama_fast">Llama 3.2 (small, fast)</option>
+                <option value="ollama_large">Llama 3.1 70B</option>
+              </optgroup>
+            </select>
+            <div className="form-hint">Local models that are not installed fall back to one that is.</div>
+          </div>
+          <label className="check-row">
+            <input type="checkbox" checked={!!cfg.strict_model} onChange={e => setCfg('strict_model', e.target.checked)} />
+            <span>Fail the step if the model is unavailable (instead of using the built-in rules)</span>
+          </label>
+          <ToolInputsEditor d={d} onChange={onChange} label="Data sent to the model" previewCtx={previewCtx} />
+          <AdvancedAIConfig d={d} onChange={onChange} />
+        </Section>
       )}
+
+      {node.type === 'human_task' && (
+        <Section title="Review task">
+          <div className="form-group">
+            <label className="form-label">Title</label>
+            <input className="input" value={cfg.title || ''} placeholder="Approve invoice {{ input.number }}" onChange={e => setCfg('title', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description</label>
+            <input className="input" value={cfg.description || ''} placeholder="Short summary (supports {{ templates }})" onChange={e => setCfg('description', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Instructions for the reviewer</label>
+            <textarea className="textarea" rows={3} value={cfg.instructions || ''} onChange={e => setCfg('instructions', e.target.value)} />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Due within (hours)</label>
+              <input className="input" type="number" min={1} value={cfg.due_hours ?? 24} onChange={e => setCfg('due_hours', parseInt(e.target.value, 10) || 24)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Priority</label>
+              <select className="select" value={cfg.priority || 'NORMAL'} onChange={e => setCfg('priority', e.target.value)}>
+                <option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Who can complete it (roles, comma-separated)</label>
+            <input className="input" value={(cfg.assigned_roles || []).join(', ')} placeholder="finance, manager"
+              onChange={e => setCfg('assigned_roles', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} />
+          </div>
+          <ContextDataEditor d={d} onChange={onChange} previewCtx={previewCtx} />
+        </Section>
+      )}
+
+      {node.type === 'condition' && (
+        <Section title="Branches" hint="The run takes the first branch whose condition is true. Each branch has its own output on the canvas.">
+          {(d.cases || []).map((c, i) => (
+            <div key={i} className="branch-editor">
+              <div className="branch-editor-head">
+                <span className="form-label" style={{ margin: 0 }}>Branch {i + 1}</span>
+                <span className={`badge ${c.next ? 'badge-green' : 'badge-muted'}`}>{c.next ? `→ ${nodeLabel(nodes, c.next)}` : 'not connected'}</span>
+                <button className="icon-btn sm" title={`Remove branch ${i + 1}`} aria-label={`Remove branch ${i + 1}`}
+                  onClick={() => onChange({ cases: (d.cases || []).filter((_, j) => j !== i) })}><X size={12} /></button>
+              </div>
+              <input className="input mono" value={c.condition} placeholder="input.amount > 1000"
+                onChange={e => { const cases = [...(d.cases || [])]; cases[i] = { ...cases[i], condition: e.target.value }; onChange({ cases }); }} />
+              <ExprPreview value={c.condition ? `{{ ${c.condition} }}` : ''} ctx={previewCtx} />
+            </div>
+          ))}
+          <button className="btn btn-ghost btn-sm full" onClick={() => onChange({ cases: [...(d.cases || []), { condition: '', next: '' }] })}>+ Add a branch</button>
+          <div className="form-hint">Anything matching no branch takes <strong>Otherwise</strong>{d.default ? <> — currently <strong>{nodeLabel(nodes, d.default)}</strong>.</> : ', which is not connected yet.'}</div>
+        </Section>
+      )}
+
+      {node.type === 'list' && <ListEditor cfg={cfg} setCfg={setCfg} previewCtx={previewCtx} />}
+      {node.type === 'datetime' && <DateTimeEditor cfg={cfg} setCfg={setCfg} previewCtx={previewCtx} />}
+      {node.type === 'crypto' && <CryptoEditor cfg={cfg} setCfg={setCfg} previewCtx={previewCtx} />}
+
+      {node.type === 'stop_error' && (
+        <Section title="Stop the run">
+          <div className="form-group">
+            <label className="form-label">Error message</label>
+            <textarea className="textarea" rows={3} value={cfg.message || ''} placeholder="Order {{ input.id }} has no customer" onChange={e => setCfg('message', e.target.value)} />
+            <ExprPreview value={cfg.message} ctx={previewCtx} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Error code (optional)</label>
+            <input className="input mono" value={cfg.code || ''} placeholder="MISSING_CUSTOMER" onChange={e => setCfg('code', e.target.value)} />
+          </div>
+        </Section>
+      )}
+
+      {node.type === 'loop' && (
+        <Section title="Loop">
+          <div className="form-group">
+            <label className="form-label">List to loop over</label>
+            <input className="input mono" value={cfg.items || ''} placeholder="{{ steps.fetch.output.items }}" onChange={e => setCfg('items', e.target.value)} />
+            <ExprPreview value={cfg.items} ctx={previewCtx} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">First step of the loop body</label>
+            <select className="select" value={cfg.body || ''} onChange={e => setCfg('body', e.target.value)}>
+              <option value="">Choose a step…</option>
+              {nodes.filter(n => n.id !== d.id && n.type !== 'note' && n.type !== 'trigger').map(n => <option key={n.id} value={n.id}>{n.data?.name || n.id}</option>)}
+            </select>
+            <div className="form-hint">Each item runs that path with <code>{'{{ item }}'}</code> and <code>{'{{ loop_index }}'}</code> available.</div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Item variable</label>
+              <input className="input" value={cfg.item_var || ''} placeholder="item" onChange={e => setCfg('item_var', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Max items</label>
+              <input className="input" type="number" min={1} value={cfg.max_items || 1000} onChange={e => setCfg('max_items', parseInt(e.target.value, 10) || 1000)} />
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {node.type === 'code' && (
+        <Section title="Expressions" hint="Each output field is an expression: functions (upper, concat, len, if, dateadd…), operators (+ - * / ?? == >) and paths.">
+          <AssignmentsEditor d={d} onChange={onChange} configKey="assignments" valuePlaceholder="concat(input.first, ' ', input.last)" previewCtx={previewCtx} asExpr />
+        </Section>
+      )}
+
+      {node.type === 'set' && (
+        <Section title="Fields">
+          <AssignmentsEditor d={d} onChange={onChange} configKey="fields" valuePlaceholder="value or {{ template }}" previewCtx={previewCtx} />
+        </Section>
+      )}
+
+      {node.type === 'filter' && (
+        <Section title="Filter">
+          <div className="form-group">
+            <label className="form-label">Continue only when</label>
+            <input className="input mono" value={cfg.condition || ''} placeholder="input.score > 80" onChange={e => setCfg('condition', e.target.value)} />
+            <ExprPreview value={cfg.condition ? `{{ ${cfg.condition} }}` : ''} ctx={previewCtx} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Otherwise go to</label>
+            <select className="select" value={cfg.on_false || ''} onChange={e => setCfg('on_false', e.target.value)}>
+              <option value="">Stop this branch</option>
+              {nodes.filter(n => n.id !== d.id && n.type !== 'note' && n.type !== 'trigger').map(n => <option key={n.id} value={n.id}>{n.data?.name || n.id}</option>)}
+            </select>
+          </div>
+        </Section>
+      )}
+
+      {node.type === 'wait' && (
+        <Section title="Wait" hint="The run pauses durably and resumes on time — even across restarts.">
+          <div className="seg full">
+            {['duration', 'until'].map(m => (
+              <button key={m} className={(cfg.mode || 'duration') === m ? 'on' : ''} onClick={() => setCfg('mode', m)}>{m === 'duration' ? 'For a while' : 'Until a time'}</button>
+            ))}
+          </div>
+          {(cfg.mode || 'duration') === 'duration' ? (
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Amount</label>
+                <input className="input" type="number" min={1} value={cfg.seconds || 60} onChange={e => setCfg('seconds', parseInt(e.target.value, 10) || 1)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Unit</label>
+                <select className="select" value={cfg.unit || 'seconds'} onChange={e => setCfg('unit', e.target.value)}>
+                  <option value="seconds">seconds</option><option value="minutes">minutes</option><option value="hours">hours</option><option value="days">days</option>
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Until (timestamp or expression)</label>
+              <input className="input mono" value={cfg.until || ''} placeholder="{{ dateadd($now, 3, 'days') }}" onChange={e => setCfg('until', e.target.value)} />
+              <ExprPreview value={cfg.until} ctx={previewCtx} />
+            </div>
+          )}
+        </Section>
+      )}
+
+      {node.type === 'merge' && (
+        <Section title="Merge">
+          <div className="form-group">
+            <label className="form-label">Steps to merge</label>
+            <div className="chip-picker">
+              {nodes.filter(n => n.id !== d.id && n.type !== 'note' && n.type !== 'trigger').map(n => {
+                const on = (cfg.sources || []).includes(n.id);
+                return (
+                  <button key={n.id} type="button" className={`kn-chip ${on ? 'on' : ''}`}
+                    onClick={() => setCfg('sources', on ? cfg.sources.filter(x => x !== n.id) : [...(cfg.sources || []), n.id])}>
+                    {n.data?.name || n.id}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Shape</label>
+            <select className="select" value={cfg.mode || 'by_source'} onChange={e => setCfg('mode', e.target.value)}>
+              <option value="by_source">One key per step</option>
+              <option value="combine">Combine into one object</option>
+            </select>
+          </div>
+        </Section>
+      )}
+
+      {node.type === 'transform' && (
+        <Section title="Output mapping">
+          <ToolInputsEditor d={d} onChange={onChange} label="Fields" previewCtx={previewCtx} />
+        </Section>
+      )}
+
+      {node.type === 'end' && (
+        <Section title="Outcome">
+          <div className="form-group">
+            <label className="form-label">Finish the run as</label>
+            <select className="select" value={d.outcome || 'COMPLETED'} onChange={e => onChange({ outcome: e.target.value })}>
+              {['COMPLETED', 'APPROVED', 'REJECTED', 'ESCALATED', 'SKIPPED'].map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        </Section>
+      )}
+
+      {node.type === 'sub_workflow' && <SubWorkflowEditor d={d} onChange={onChange} workflowId={workflowId} />}
 
       {node.type === 'agent_call' && (
-        <>
-          <div className="divider" />
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Agent Configuration</div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
+        <Section title="Agent">
+          <div className="form-group">
             <label className="form-label">Agent</label>
             {agentOpts.length > 0 ? (
-              <select className="select" value={d.config?.agent_id || ''}
-                onChange={e => onChange({ config: { ...(d.config || {}), agent_id: e.target.value } })}>
-                <option value="">Select a registered agent…</option>
+              <select className="select" value={cfg.agent_id || ''} onChange={e => setCfg('agent_id', e.target.value)}>
+                <option value="">Choose a registered agent…</option>
                 {agentOpts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             ) : (
               <>
-                <input className="input" value={d.config?.agent_id || ''} placeholder="Registered agent id"
-                  onChange={e => onChange({ config: { ...(d.config || {}), agent_id: e.target.value } })} />
-                <div className="form-hint">No agents registered yet. Add one on the Agents page, then select it here.</div>
+                <input className="input" value={cfg.agent_id || ''} placeholder="Registered agent id" onChange={e => setCfg('agent_id', e.target.value)} />
+                <div className="form-hint">No agents registered yet — add one on the Agents page.</div>
               </>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+          <div className="form-row">
+            <div className="form-group">
               <label className="form-label">Timeout (s)</label>
-              <input className="input" type="number" min={1} placeholder="30" value={d.config?.timeout_seconds ?? ''}
-                onChange={e => onChange({ config: { ...(d.config || {}), timeout_seconds: e.target.value === '' ? undefined : parseInt(e.target.value) } })} />
+              <input className="input" type="number" min={1} placeholder="30" value={cfg.timeout_seconds ?? ''}
+                onChange={e => setCfg('timeout_seconds', e.target.value === '' ? undefined : parseInt(e.target.value, 10))} />
             </div>
-            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
-              <label className="form-label">Output Path</label>
-              <input className="input" value={d.config?.output_path || ''} placeholder="result.data"
-                onChange={e => onChange({ config: { ...(d.config || {}), output_path: e.target.value } })} />
+            <div className="form-group">
+              <label className="form-label">Output path</label>
+              <input className="input" value={cfg.output_path || ''} placeholder="result.data" onChange={e => setCfg('output_path', e.target.value)} />
             </div>
           </div>
-          <ToolInputsEditor d={d} onChange={onChange} label="Agent Inputs" previewCtx={previewCtx} />
-        </>
+          <ToolInputsEditor d={d} onChange={onChange} label="Inputs" previewCtx={previewCtx} />
+        </Section>
       )}
 
-      {node.type === 'trigger' && (
-        <>
-          <div className="divider" />
-          <TriggerConfigEditor d={d} onChange={onChange} workflowId={workflowId} previewCtx={previewCtx} />
-          <TriggerSchemaEditor d={d} onChange={onChange} />
-        </>
-      )}
-
-      <div className="divider" />
-      {CAN_FAIL_TYPES.has(node.type) && (
-        <ExecutionPolicyEditor d={d} onChange={onChange} nodeType={node.type} nodes={nodes} />
-      )}
+      {setTestInput && node.type !== 'trigger' && <TestDataPanel testInput={testInput} setTestInput={setTestInput} previewCtx={previewCtx} />}
     </div>
+  );
+}
+
+// ─── AI Prompt ────────────────────────────────────────────────────────────────
+
+function LLMEditor({ d, setCfg, previewCtx }) {
+  const cfg = d.config || {};
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const { toast } = useToast();
+
+  async function test() {
+    const prompt = resolveTemplate(cfg.prompt || '', previewCtx).value;
+    if (!String(prompt).trim()) { toast('Write a prompt first', 'warning'); return; }
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await aiComplete.run({
+        prompt: String(prompt), system: resolveTemplate(cfg.system || '', previewCtx).value,
+        output: cfg.output, model: cfg.model, provider: cfg.provider,
+        temperature: cfg.temperature, max_tokens: cfg.max_tokens,
+      });
+      setResult(r);
+    } catch (e) { setResult({ ok: false, error: e.message }); } finally { setBusy(false); }
+  }
+
+  return (
+    <Section title="Prompt">
+      <div className="form-group">
+        <label className="form-label">Prompt</label>
+        <textarea className="textarea" rows={6} value={cfg.prompt || ''}
+          placeholder={'Summarise this support ticket in two sentences and suggest a reply:\n\n{{ input.body }}'}
+          onChange={e => setCfg('prompt', e.target.value)} />
+        <ExprPreview value={cfg.prompt} ctx={previewCtx} />
+      </div>
+      <div className="form-group">
+        <label className="form-label">Instructions (system prompt)</label>
+        <textarea className="textarea" rows={3} value={cfg.system || ''} placeholder="You are a concise, friendly support agent."
+          onChange={e => setCfg('system', e.target.value)} />
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Reply as</label>
+          <select className="select" value={cfg.output || 'text'} onChange={e => setCfg('output', e.target.value)}>
+            <option value="text">Text</option>
+            <option value="json">JSON object</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Provider</label>
+          <select className="select" value={cfg.provider || ''} onChange={e => setCfg('provider', e.target.value)}>
+            <option value="">Settings default</option>
+            <option value="ollama">Ollama (local)</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Model (optional)</label>
+          <input className="input mono" value={cfg.model || ''} placeholder="default" onChange={e => setCfg('model', e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Temperature</label>
+          <input className="input" type="number" min={0} max={2} step={0.1} placeholder="default" value={cfg.temperature ?? ''}
+            onChange={e => setCfg('temperature', e.target.value === '' ? undefined : parseFloat(e.target.value))} />
+        </div>
+      </div>
+      <div className="form-hint">
+        The reply is <code>{`{{ steps.${d.id}.output.text }}`}</code>{(cfg.output === 'json') && <> and the parsed object <code>{`{{ steps.${d.id}.output.data }}`}</code></>}.
+      </div>
+      <button className="btn btn-secondary btn-sm full" onClick={test} disabled={busy}>
+        {busy ? <span className="spinner-sm" /> : <Play size={13} />} Test prompt
+      </button>
+      {result && (
+        <div className={`kn-test-result ${result.ok ? "ok" : "err"}`}>
+          {result.ok ? (
+            <>
+              <div className="muted">{result.result.model} · {result.result.latency_ms} ms · {result.result.tokens_used} tokens</div>
+              <pre>{result.result.data ? JSON.stringify(result.result.data, null, 2) : result.result.text}</pre>
+            </>
+          ) : <>✗ {result.error}</>}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ─── List, date and crypto steps ──────────────────────────────────────────────
+
+function ListEditor({ cfg, setCfg, previewCtx }) {
+  const op = cfg.operation || 'sort';
+  return (
+    <Section title="List">
+      <div className="form-group">
+        <label className="form-label">Operation</label>
+        <select className="select" value={op} onChange={e => setCfg('operation', e.target.value)}>
+          <option value="sort">Sort</option>
+          <option value="limit">Limit (first / last N)</option>
+          <option value="dedupe">Remove duplicates</option>
+          <option value="filter">Filter items</option>
+          <option value="map">Map items</option>
+          <option value="pluck">Pluck a field</option>
+          <option value="aggregate">Aggregate</option>
+          <option value="flatten">Flatten</option>
+          <option value="reverse">Reverse</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label className="form-label">List</label>
+        <input className="input mono" value={cfg.items || ''} placeholder="{{ steps.fetch.output.items }}" onChange={e => setCfg('items', e.target.value)} />
+        <ExprPreview value={cfg.items} ctx={previewCtx} />
+      </div>
+      {['sort', 'dedupe', 'pluck', 'aggregate'].includes(op) && (
+        <div className="form-group">
+          <label className="form-label">Field {op === 'dedupe' ? '(blank = whole item)' : op === 'aggregate' ? '(to aggregate)' : ''}</label>
+          <input className="input mono" value={cfg.field || ''} placeholder="total" onChange={e => setCfg('field', e.target.value)} />
+        </div>
+      )}
+      {op === 'sort' && (
+        <div className="seg full">
+          {['asc', 'desc'].map(o => <button key={o} className={(cfg.order || 'asc') === o ? 'on' : ''} onClick={() => setCfg('order', o)}>{o === 'asc' ? 'Ascending' : 'Descending'}</button>)}
+        </div>
+      )}
+      {op === 'limit' && (
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Keep</label>
+            <input className="input" type="number" min={0} value={cfg.count ?? 10} onChange={e => setCfg('count', parseInt(e.target.value, 10) || 0)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">From</label>
+            <select className="select" value={cfg.from || 'start'} onChange={e => setCfg('from', e.target.value)}>
+              <option value="start">the start</option><option value="end">the end</option>
+            </select>
+          </div>
+        </div>
+      )}
+      {op === 'filter' && (
+        <div className="form-group">
+          <label className="form-label">Keep items where</label>
+          <input className="input mono" value={cfg.condition || ''} placeholder="item.status == 'open'" onChange={e => setCfg('condition', e.target.value)} />
+          <div className="form-hint">Each item is <code>item</code>; its position is <code>index</code>.</div>
+        </div>
+      )}
+      {op === 'map' && (
+        <div className="form-group">
+          <label className="form-label">Expression for each item</label>
+          <input className="input mono" value={cfg.expression || ''} placeholder="upper(item.name)" onChange={e => setCfg('expression', e.target.value)} />
+        </div>
+      )}
+      {op === 'aggregate' && (
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Function</label>
+            <select className="select" value={cfg.function || 'sum'} onChange={e => setCfg('function', e.target.value)}>
+              {['count', 'sum', 'avg', 'min', 'max', 'join', 'collect', 'first', 'last'].map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Group by (optional)</label>
+            <input className="input mono" value={cfg.group_by || ''} placeholder="region" onChange={e => setCfg('group_by', e.target.value)} />
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function DateTimeEditor({ cfg, setCfg, previewCtx }) {
+  const op = cfg.operation || 'format';
+  return (
+    <Section title="Date & time">
+      <div className="form-group">
+        <label className="form-label">Operation</label>
+        <select className="select" value={op} onChange={e => setCfg('operation', e.target.value)}>
+          <option value="now">Current time</option>
+          <option value="format">Format a date</option>
+          <option value="add">Add to a date</option>
+          <option value="subtract">Subtract from a date</option>
+          <option value="diff">Time between two dates</option>
+          <option value="start_of">Start of day / week / month</option>
+        </select>
+      </div>
+      {op !== 'now' && (
+        <div className="form-group">
+          <label className="form-label">Date (blank = now)</label>
+          <input className="input mono" value={cfg.value || ''} placeholder="{{ input.created_at }}" onChange={e => setCfg('value', e.target.value)} />
+          <ExprPreview value={cfg.value} ctx={previewCtx} />
+        </div>
+      )}
+      {(op === 'add' || op === 'subtract') && (
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Amount</label>
+            <input className="input" type="number" value={cfg.amount ?? 1} onChange={e => setCfg('amount', parseFloat(e.target.value) || 0)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Unit</label>
+            <select className="select" value={cfg.unit || 'days'} onChange={e => setCfg('unit', e.target.value)}>
+              {['minutes', 'hours', 'days', 'weeks', 'months', 'years'].map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+      {op === 'start_of' && (
+        <div className="form-group">
+          <label className="form-label">Start of</label>
+          <select className="select" value={cfg.unit || 'day'} onChange={e => setCfg('unit', e.target.value)}>
+            {['hour', 'day', 'week', 'month', 'year'].map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </div>
+      )}
+      {op === 'diff' && (
+        <div className="form-group">
+          <label className="form-label">Until</label>
+          <input className="input mono" value={cfg.other || ''} placeholder="{{ input.due_date }}" onChange={e => setCfg('other', e.target.value)} />
+        </div>
+      )}
+      {op !== 'diff' && (
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Format</label>
+            <input className="input mono" value={cfg.format || ''} placeholder="YYYY-MM-DD HH:mm" onChange={e => setCfg('format', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Time zone</label>
+            <input className="input" value={cfg.timezone || ''} placeholder="UTC" list="knott-timezones" onChange={e => setCfg('timezone', e.target.value)} />
+            <datalist id="knott-timezones">
+              {['UTC', 'Africa/Nairobi', 'Africa/Lagos', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'].map(z => <option key={z} value={z} />)}
+            </datalist>
+          </div>
+        </div>
+      )}
+      <div className="form-hint">Tokens: YYYY MM DD HH mm ss, or iso, unix, date, time. Output also includes <code>iso</code>, <code>unix</code> and <code>weekday</code>.</div>
+    </Section>
+  );
+}
+
+function CryptoEditor({ cfg, setCfg, previewCtx }) {
+  const op = cfg.operation || 'hash';
+  return (
+    <Section title="Crypto">
+      <div className="form-group">
+        <label className="form-label">Operation</label>
+        <select className="select" value={op} onChange={e => setCfg('operation', e.target.value)}>
+          <option value="hash">Hash</option>
+          <option value="hmac">Sign (HMAC)</option>
+          <option value="base64_encode">Base64 encode</option>
+          <option value="base64_decode">Base64 decode</option>
+          <option value="uuid">Generate UUID</option>
+          <option value="random">Random bytes</option>
+        </select>
+      </div>
+      {!['uuid', 'random'].includes(op) && (
+        <div className="form-group">
+          <label className="form-label">Value</label>
+          <input className="input mono" value={cfg.value || ''} placeholder="{{ input.body }}" onChange={e => setCfg('value', e.target.value)} />
+          <ExprPreview value={cfg.value} ctx={previewCtx} />
+        </div>
+      )}
+      {(op === 'hash' || op === 'hmac') && (
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Algorithm</label>
+            <select className="select" value={cfg.algorithm || 'sha256'} onChange={e => setCfg('algorithm', e.target.value)}>
+              {['sha256', 'sha512', 'sha1', 'md5'].map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Encoding</label>
+            <select className="select" value={cfg.encoding || 'hex'} onChange={e => setCfg('encoding', e.target.value)}>
+              <option value="hex">hex</option><option value="base64">base64</option>
+            </select>
+          </div>
+        </div>
+      )}
+      {op === 'hmac' && (
+        <div className="form-group">
+          <label className="form-label">Key credential</label>
+          <input className="input mono" value={cfg.key_credential || ''} placeholder="SIGNING_SECRET" onChange={e => setCfg('key_credential', e.target.value)} />
+          <div className="form-hint">The <em>name</em> of a stored credential — never the key itself.</div>
+        </div>
+      )}
+      {op === 'random' && (
+        <div className="form-group">
+          <label className="form-label">Bytes</label>
+          <input className="input" type="number" min={1} max={4096} value={cfg.length ?? 32} onChange={e => setCfg('length', parseInt(e.target.value, 10) || 32)} />
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -462,10 +717,7 @@ function SubWorkflowEditor({ d, onChange, workflowId }) {
 
   return (
     <>
-      <div className="divider" />
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-        Sub-workflow
-      </div>
+      <h4 className="insp-section-title">Sub-workflow</h4>
 
       <div className="form-group" style={{ marginBottom: 0 }}>
         <label className="form-label">Workflow to run</label>
@@ -535,12 +787,13 @@ function nodeLabel(nodes, id) {
 function ExecutionPolicyEditor({ d, onChange, nodeType, nodes }) {
   const cfg = d.config || {};
   const set = (k, v) => onChange({ config: { ...cfg, [k]: v } });
-  const defaultRetries = ['ai_decision', 'tool_call', 'agent_call'].includes(nodeType) ? 2 : 0;
-  const defaultTimeout = ['ai_decision', 'tool_call', 'agent_call'].includes(nodeType) ? 45 : 0;
+  const ai = ['ai_decision', 'llm'].includes(nodeType);
+  const network = ['tool_call', 'agent_call'].includes(nodeType);
+  const defaultRetries = ai ? 1 : network ? 2 : 0;
+  const defaultTimeout = ai ? 300 : network ? 45 : 0;
   return (
     <>
-      <div className="divider" />
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Reliability</div>
+      <h4 className="insp-section-title">Reliability & errors</h4>
       <div style={{ display: 'flex', gap: 8 }}>
         <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
           <label className="form-label">Retries</label>
@@ -684,16 +937,16 @@ const TRIGGER_TYPES = [
   { value: 'email',    label: 'Email', hint: 'Started by an inbound email (configured via your mail provider).' },
 ];
 
-function TriggerConfigEditor({ d, onChange, workflowId, previewCtx }) {
+function TriggerConfigEditor({ d, onChange, workflowId, publicURL, previewCtx }) {
   const cfg = d.config || {};
   const tt = cfg.trigger_type || 'manual';
   const set = (k, v) => onChange({ config: { ...cfg, [k]: v } });
   const meta = TRIGGER_TYPES.find(t => t.value === tt) || TRIGGER_TYPES[0];
-  const base = (typeof window !== 'undefined') ? window.location.origin : 'https://your-host';
+  const base = publicURL || ((typeof window !== 'undefined' && window.location.protocol.startsWith('http')) ? window.location.origin : 'http://127.0.0.1:8002');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Trigger</div>
+      <h4 className="insp-section-title">Trigger</h4>
       <div className="form-group" style={{ marginBottom: 0 }}>
         <label className="form-label">How does this workflow start?</label>
         <select className="select" value={tt} onChange={e => set('trigger_type', e.target.value)}>
@@ -1049,386 +1302,6 @@ function TestDataPanel({ testInput, setTestInput, previewCtx }) {
   );
 }
 
-// Maps a connector to (a) the engine connector key and (b) the input fields the
-// operator should fill in. Field values support {{ template }} resolution at runtime.
-// Credentials are NEVER entered here — they come from server-side env vars.
-const CONNECTOR_SCHEMA = {
-  webhook:  { key: 'webhook',  label: 'HTTP / Webhook', fields: [
-    { name: 'url', label: 'URL', placeholder: 'https://api.example.com/path', required: true },
-    { name: 'method', label: 'Method', placeholder: 'POST', type: 'select', options: ['GET','POST','PUT','PATCH','DELETE'] },
-  ], creds: [], http: true },
-  slack:    { key: 'slack',    label: 'Slack', fields: [
-    { name: 'channel', label: 'Channel', placeholder: '#alerts' },
-    { name: 'text', label: 'Message', placeholder: 'Run {{ input.id }} needs review', textarea: true, required: true },
-  ], creds: ['SLACK_WEBHOOK_URL (or SLACK_BOT_TOKEN)'] },
-  sendgrid: { key: 'sendgrid', label: 'SendGrid Email', fields: [
-    { name: 'to', label: 'To', placeholder: 'user@example.com', required: true },
-    { name: 'subject', label: 'Subject', placeholder: 'Notification' },
-    { name: 'body', label: 'Body', placeholder: 'Message body…', textarea: true },
-  ], creds: ['SENDGRID_API_KEY', 'SENDGRID_FROM'] },
-  twilio:   { key: 'twilio',   label: 'Twilio SMS', fields: [
-    { name: 'to', label: 'To Number', placeholder: '+15551234567', required: true },
-    { name: 'body', label: 'Message', placeholder: 'Your code is {{ input.code }}', textarea: true, required: true },
-  ], creds: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM_NUMBER'] },
-  telegram: { key: 'telegram', label: 'Telegram', fields: [
-    { name: 'chat_id', label: 'Chat ID', placeholder: '@channel or numeric id', required: true },
-    { name: 'text', label: 'Message', placeholder: 'Alert: {{ input.summary }}', textarea: true, required: true },
-    { name: 'parse_mode', label: 'Parse Mode', type: 'select', options: ['', 'Markdown', 'HTML'] },
-  ], creds: ['TELEGRAM_BOT_TOKEN'] },
-  discord:  { key: 'discord',  label: 'Discord', fields: [
-    { name: 'content', label: 'Message', placeholder: 'Deploy finished for {{ input.app }}', textarea: true, required: true },
-    { name: 'username', label: 'Override Username', placeholder: 'KNOTT Bot' },
-  ], creds: ['DISCORD_WEBHOOK_URL'] },
-  github:   { key: 'github',   label: 'GitHub', creds: ['GITHUB_TOKEN'], operations: [
-    { value: 'create_issue', label: 'Create Issue', fields: [
-      { name: 'repo', label: 'Repository', placeholder: 'owner/name', required: true },
-      { name: 'title', label: 'Issue Title', placeholder: 'Alert from {{ input.source }}', required: true },
-      { name: 'body', label: 'Issue Body', placeholder: 'Details… (supports {{ templates }})', textarea: true },
-      { name: 'labels', label: 'Labels', placeholder: 'bug, automated (comma-separated)' },
-    ]},
-    { value: 'comment_issue', label: 'Comment on Issue', fields: [
-      { name: 'repo', label: 'Repository', placeholder: 'owner/name', required: true },
-      { name: 'issue_number', label: 'Issue Number', placeholder: '42', required: true },
-      { name: 'body', label: 'Comment', placeholder: 'Update: {{ input.note }}', textarea: true, required: true },
-    ]},
-    { value: 'close_issue', label: 'Close Issue', fields: [
-      { name: 'repo', label: 'Repository', placeholder: 'owner/name', required: true },
-      { name: 'issue_number', label: 'Issue Number', placeholder: '42', required: true },
-    ]},
-    { value: 'get_issue', label: 'Get Issue', fields: [
-      { name: 'repo', label: 'Repository', placeholder: 'owner/name', required: true },
-      { name: 'issue_number', label: 'Issue Number', placeholder: '42', required: true },
-    ]},
-    { value: 'list_issues', label: 'List Issues', fields: [
-      { name: 'repo', label: 'Repository', placeholder: 'owner/name', required: true },
-      { name: 'state', label: 'State', type: 'select', options: ['open', 'closed', 'all'] },
-    ]},
-  ]},
-  jira:     { key: 'jira',     label: 'Jira', creds: ['JIRA_EMAIL', 'JIRA_API_TOKEN', 'JIRA_BASE_URL'], operations: [
-    { value: 'create_issue', label: 'Create Issue', fields: [
-      { name: 'base_url', label: 'Site URL', placeholder: 'https://acme.atlassian.net', required: true },
-      { name: 'project_key', label: 'Project Key', placeholder: 'OPS', required: true },
-      { name: 'summary', label: 'Summary', placeholder: 'Investigate {{ input.id }}', required: true },
-      { name: 'issue_type', label: 'Issue Type', placeholder: 'Task' },
-      { name: 'description', label: 'Description', placeholder: 'Details…', textarea: true },
-    ]},
-    { value: 'comment_issue', label: 'Comment on Issue', fields: [
-      { name: 'base_url', label: 'Site URL', placeholder: 'https://acme.atlassian.net', required: true },
-      { name: 'issue_key', label: 'Issue Key', placeholder: 'OPS-123', required: true },
-      { name: 'body', label: 'Comment', placeholder: '{{ input.note }}', textarea: true, required: true },
-    ]},
-  ]},
-  airtable: { key: 'airtable', label: 'Airtable', creds: ['AIRTABLE_TOKEN'], operations: [
-    { value: 'create_record', label: 'Create Record', fields: [
-      { name: 'base_id', label: 'Base ID', placeholder: 'appXXXXXXXX', required: true },
-      { name: 'table', label: 'Table', placeholder: 'Leads', required: true },
-      { name: 'fields', label: 'Fields (JSON)', placeholder: '{ "Name": "{{ input.name }}", "Score": {{ input.score }} }', textarea: true, required: true },
-    ]},
-    { value: 'update_record', label: 'Update Record', fields: [
-      { name: 'base_id', label: 'Base ID', placeholder: 'appXXXXXXXX', required: true },
-      { name: 'table', label: 'Table', placeholder: 'Leads', required: true },
-      { name: 'record_id', label: 'Record ID', placeholder: 'recXXXXXXXX', required: true },
-      { name: 'fields', label: 'Fields (JSON)', placeholder: '{ "Status": "Won" }', textarea: true, required: true },
-    ]},
-    { value: 'list_records', label: 'List Records', fields: [
-      { name: 'base_id', label: 'Base ID', placeholder: 'appXXXXXXXX', required: true },
-      { name: 'table', label: 'Table', placeholder: 'Leads', required: true },
-      { name: 'max_records', label: 'Max Records', placeholder: '100' },
-    ]},
-  ]},
-  notion:   { key: 'notion',   label: 'Notion', creds: ['NOTION_TOKEN'], operations: [
-    { value: 'create_page', label: 'Create Page', fields: [
-      { name: 'database_id', label: 'Database ID', placeholder: '32-char database id', required: true },
-      { name: 'title', label: 'Page Title', placeholder: '{{ input.title }}', required: true },
-      { name: 'title_property', label: 'Title Property', placeholder: 'Name' },
-    ]},
-    { value: 'query_database', label: 'Query Database', fields: [
-      { name: 'database_id', label: 'Database ID', placeholder: '32-char database id', required: true },
-      { name: 'filter', label: 'Filter (JSON, optional)', placeholder: '{ "property": "Status", "select": { "equals": "Open" } }', textarea: true },
-    ]},
-  ]},
-  hubspot:  { key: 'hubspot',  label: 'HubSpot CRM', creds: ['HUBSPOT_TOKEN'], operations: [
-    { value: 'create_contact', label: 'Create Contact', fields: [
-      { name: 'email', label: 'Email', placeholder: '{{ input.email }}', required: true },
-      { name: 'firstname', label: 'First Name', placeholder: '{{ input.first }}' },
-      { name: 'lastname', label: 'Last Name', placeholder: '{{ input.last }}' },
-      { name: 'properties', label: 'Extra Properties (JSON)', placeholder: '{ "company": "Acme" }', textarea: true },
-    ]},
-    { value: 'create_deal', label: 'Create Deal', fields: [
-      { name: 'dealname', label: 'Deal Name', placeholder: '{{ input.name }}', required: true },
-      { name: 'amount', label: 'Amount', placeholder: '5000' },
-      { name: 'properties', label: 'Extra Properties (JSON)', placeholder: '{ "dealstage": "qualified" }', textarea: true },
-    ]},
-  ]},
-  google_sheets: { key: 'google_sheets', label: 'Google Sheets', creds: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN (or GOOGLE_ACCESS_TOKEN)'], operations: [
-    { value: 'append_row', label: 'Append Row', fields: [
-      { name: 'spreadsheet_id', label: 'Spreadsheet ID', placeholder: 'long sheet id from URL', required: true },
-      { name: 'range', label: 'Range', placeholder: 'Sheet1!A1' },
-      { name: 'values', label: 'Row Values (JSON array)', placeholder: '["{{ input.name }}", {{ input.score }}]', textarea: true, required: true },
-    ]},
-    { value: 'read_range', label: 'Read Range', fields: [
-      { name: 'spreadsheet_id', label: 'Spreadsheet ID', placeholder: 'long sheet id from URL', required: true },
-      { name: 'range', label: 'Range', placeholder: 'Sheet1!A1:C10', required: true },
-    ]},
-  ]},
-  google_calendar: { key: 'google_calendar', label: 'Google Calendar', creds: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN'], fields: [
-    { name: 'calendar_id', label: 'Calendar ID', placeholder: 'primary' },
-    { name: 'summary', label: 'Event Title', placeholder: '{{ input.title }}', required: true },
-    { name: 'start', label: 'Start (RFC3339)', placeholder: '2026-07-01T10:00:00Z', required: true },
-    { name: 'end', label: 'End (RFC3339)', placeholder: '2026-07-01T10:30:00Z' },
-    { name: 'description', label: 'Description', textarea: true },
-  ]},
-  teams: { key: 'teams', label: 'Microsoft Teams', creds: ['TEAMS_WEBHOOK_URL'], fields: [
-    { name: 'title', label: 'Title', placeholder: 'Deployment' },
-    { name: 'text', label: 'Message', placeholder: 'Build {{ input.id }} succeeded', textarea: true, required: true },
-  ]},
-  stripe: { key: 'stripe', label: 'Stripe', creds: ['STRIPE_SECRET_KEY'], operations: [
-    { value: 'create_customer', label: 'Create Customer', fields: [
-      { name: 'email', label: 'Email', placeholder: '{{ input.email }}' },
-      { name: 'name', label: 'Name', placeholder: '{{ input.name }}' },
-    ]},
-    { value: 'create_charge', label: 'Create Charge', fields: [
-      { name: 'amount', label: 'Amount (cents)', placeholder: '2000', required: true },
-      { name: 'currency', label: 'Currency', placeholder: 'usd' },
-      { name: 'customer', label: 'Customer ID', placeholder: 'cus_...' },
-    ]},
-  ]},
-  database: { key: 'database', label: 'Database (SQL)', creds: ['DATABASE_DSN'], operations: [
-    { value: 'query', label: 'Query (SELECT)', fields: [
-      { name: 'driver', label: 'Driver', type: 'select', options: ['sqlite', 'postgres', 'mysql'] },
-      { name: 'sql', label: 'SQL', placeholder: 'SELECT * FROM leads WHERE score > ?', textarea: true, required: true },
-      { name: 'params', label: 'Params (JSON array)', placeholder: '[80]' },
-    ]},
-    { value: 'exec', label: 'Execute (INSERT/UPDATE/DELETE)', fields: [
-      { name: 'driver', label: 'Driver', type: 'select', options: ['sqlite', 'postgres', 'mysql'] },
-      { name: 'sql', label: 'SQL', placeholder: 'INSERT INTO leads(name, score) VALUES(?, ?)', textarea: true, required: true },
-      { name: 'params', label: 'Params (JSON array)', placeholder: '["{{ input.name }}", {{ input.score }}]' },
-    ]},
-  ]},
-
-  // ── Broadened connector coverage ──────────────────────────────────────────
-  linear:   { key: 'linear',   label: 'Linear', creds: ['LINEAR_API_KEY'], fields: [
-    { name: 'team_id', label: 'Team ID', placeholder: 'team UUID', required: true },
-    { name: 'title', label: 'Title', placeholder: 'Bug: {{ input.summary }}', required: true },
-    { name: 'description', label: 'Description', placeholder: 'Details…', textarea: true },
-  ]},
-  trello:   { key: 'trello',   label: 'Trello', creds: ['TRELLO_KEY', 'TRELLO_TOKEN'], fields: [
-    { name: 'list_id', label: 'List ID', placeholder: 'list id', required: true },
-    { name: 'name', label: 'Card Name', placeholder: 'New card {{ input.id }}', required: true },
-    { name: 'desc', label: 'Description', placeholder: 'Details…', textarea: true },
-  ]},
-  asana:    { key: 'asana',    label: 'Asana', creds: ['ASANA_TOKEN'], fields: [
-    { name: 'project_id', label: 'Project ID', placeholder: 'project gid' },
-    { name: 'name', label: 'Task Name', placeholder: 'Follow up with {{ input.name }}', required: true },
-    { name: 'notes', label: 'Notes', placeholder: 'Details…', textarea: true },
-  ]},
-  clickup:  { key: 'clickup',  label: 'ClickUp', creds: ['CLICKUP_TOKEN'], fields: [
-    { name: 'list_id', label: 'List ID', placeholder: 'list id', required: true },
-    { name: 'name', label: 'Task Name', placeholder: 'New task', required: true },
-    { name: 'description', label: 'Description', placeholder: 'Details…', textarea: true },
-  ]},
-  pagerduty:{ key: 'pagerduty', label: 'PagerDuty', creds: ['PAGERDUTY_ROUTING_KEY'], fields: [
-    { name: 'summary', label: 'Summary', placeholder: 'Incident: {{ input.summary }}', required: true },
-    { name: 'severity', label: 'Severity', type: 'select', options: ['critical', 'error', 'warning', 'info'] },
-    { name: 'source', label: 'Source', placeholder: 'KNOTT' },
-  ]},
-  mattermost:{ key: 'mattermost', label: 'Mattermost', creds: ['MATTERMOST_WEBHOOK_URL'], fields: [
-    { name: 'text', label: 'Message', placeholder: 'Alert: {{ input.summary }}', textarea: true, required: true },
-    { name: 'channel', label: 'Channel (optional)', placeholder: 'town-square' },
-  ]},
-  zendesk:  { key: 'zendesk',  label: 'Zendesk', creds: ['ZENDESK_EMAIL', 'ZENDESK_API_TOKEN', 'ZENDESK_BASE_URL'], fields: [
-    { name: 'base_url', label: 'Site URL', placeholder: 'https://acme.zendesk.com', required: true },
-    { name: 'subject', label: 'Subject', placeholder: 'Issue from {{ input.customer }}', required: true },
-    { name: 'comment', label: 'Body', placeholder: 'Ticket details…', textarea: true, required: true },
-    { name: 'priority', label: 'Priority', type: 'select', options: ['', 'low', 'normal', 'high', 'urgent'] },
-  ]},
-  shopify:  { key: 'shopify',  label: 'Shopify', creds: ['SHOPIFY_ACCESS_TOKEN', 'SHOPIFY_STORE_URL'], operations: [
-    { value: 'list_products', label: 'List Products', fields: [
-      { name: 'base_url', label: 'Store URL', placeholder: 'https://store.myshopify.com', required: true },
-    ]},
-    { value: 'create_customer', label: 'Create Customer', fields: [
-      { name: 'base_url', label: 'Store URL', placeholder: 'https://store.myshopify.com', required: true },
-      { name: 'email', label: 'Email', placeholder: '{{ input.email }}', required: true },
-      { name: 'firstname', label: 'First Name', placeholder: '{{ input.first }}' },
-      { name: 'lastname', label: 'Last Name', placeholder: '{{ input.last }}' },
-    ]},
-  ]},
-  mailchimp:{ key: 'mailchimp', label: 'Mailchimp', creds: ['MAILCHIMP_API_KEY'], fields: [
-    { name: 'list_id', label: 'Audience ID', placeholder: 'list id', required: true },
-    { name: 'email', label: 'Email', placeholder: '{{ input.email }}', required: true },
-    { name: 'status', label: 'Status', type: 'select', options: ['subscribed', 'pending'] },
-  ]},
-  openai:   { key: 'openai',   label: 'OpenAI', creds: ['OPENAI_API_KEY'], fields: [
-    { name: 'model', label: 'Model', placeholder: 'gpt-4o-mini' },
-    { name: 'system', label: 'System Prompt', placeholder: 'You are a helpful assistant.', textarea: true },
-    { name: 'prompt', label: 'Prompt', placeholder: 'Summarize: {{ input.text }}', textarea: true, required: true },
-  ]},
-  pushover: { key: 'pushover', label: 'Pushover', creds: ['PUSHOVER_TOKEN', 'PUSHOVER_USER'], fields: [
-    { name: 'title', label: 'Title', placeholder: 'KNOTT Alert' },
-    { name: 'message', label: 'Message', placeholder: '{{ input.summary }}', textarea: true, required: true },
-  ]},
-  graphql:  { key: 'graphql',  label: 'GraphQL', creds: [], fields: [
-    { name: 'url', label: 'Endpoint URL', placeholder: 'https://api.example.com/graphql', required: true },
-    { name: 'query', label: 'Query', placeholder: '{ viewer { login } }', textarea: true, required: true },
-    { name: 'variables', label: 'Variables (JSON)', placeholder: '{"id": "{{ input.id }}"}' },
-    { name: 'auth_token', label: 'Bearer Token (optional)', placeholder: 'secret://MY_TOKEN' },
-  ]},
-  gitlab:   { key: 'gitlab',   label: 'GitLab', creds: ['GITLAB_TOKEN'], fields: [
-    { name: 'project_id', label: 'Project ID', placeholder: '12345', required: true },
-    { name: 'title', label: 'Issue Title', placeholder: 'Bug: {{ input.summary }}', required: true },
-    { name: 'description', label: 'Description', placeholder: 'Details…', textarea: true },
-  ]},
-  monday:   { key: 'monday',   label: 'Monday.com', creds: ['MONDAY_TOKEN'], fields: [
-    { name: 'board_id', label: 'Board ID', placeholder: '1234567', required: true },
-    { name: 'item_name', label: 'Item Name', placeholder: 'New item {{ input.id }}', required: true },
-  ]},
-  freshdesk:{ key: 'freshdesk', label: 'Freshdesk', creds: ['FRESHDESK_API_KEY', 'FRESHDESK_BASE_URL'], fields: [
-    { name: 'base_url', label: 'Site URL', placeholder: 'https://acme.freshdesk.com', required: true },
-    { name: 'subject', label: 'Subject', placeholder: 'Issue: {{ input.summary }}', required: true },
-    { name: 'description', label: 'Description', placeholder: 'Details…', textarea: true, required: true },
-    { name: 'email', label: 'Requester Email', placeholder: '{{ input.email }}', required: true },
-  ]},
-  intercom: { key: 'intercom', label: 'Intercom', creds: ['INTERCOM_TOKEN'], fields: [
-    { name: 'email', label: 'Email', placeholder: '{{ input.email }}', required: true },
-    { name: 'name', label: 'Name', placeholder: '{{ input.name }}' },
-  ]},
-  ms_graph: { key: 'ms_graph', label: 'Microsoft Outlook', creds: ['MS_GRAPH_TOKEN'], fields: [
-    { name: 'to', label: 'To', placeholder: '{{ input.email }}', required: true },
-    { name: 'subject', label: 'Subject', placeholder: 'Notification', required: true },
-    { name: 'body', label: 'Body', placeholder: 'Message…', textarea: true },
-  ]},
-  whatsapp: { key: 'whatsapp', label: 'WhatsApp', creds: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID'], fields: [
-    { name: 'phone_number_id', label: 'Phone Number ID', placeholder: 'from Meta dashboard' },
-    { name: 'to', label: 'To (number)', placeholder: '15551234567', required: true },
-    { name: 'text', label: 'Message', placeholder: 'Hi {{ input.name }}', textarea: true, required: true },
-  ]},
-  coda:     { key: 'coda',     label: 'Coda', creds: ['CODA_TOKEN'], fields: [
-    { name: 'doc_id', label: 'Doc ID', placeholder: 'doc id', required: true },
-    { name: 'table_id', label: 'Table ID', placeholder: 'grid-xxxx', required: true },
-    { name: 'cells', label: 'Cells (JSON)', placeholder: '{"Name":"{{ input.name }}"}', textarea: true, required: true },
-  ]},
-  close:    { key: 'close',    label: 'Close CRM', creds: ['CLOSE_API_KEY'], fields: [
-    { name: 'name', label: 'Lead Name', placeholder: '{{ input.company }}', required: true },
-  ]},
-  calendly: { key: 'calendly', label: 'Calendly', creds: ['CALENDLY_TOKEN'], fields: [] },
-  servicenow:{ key: 'servicenow', label: 'ServiceNow', creds: ['SERVICENOW_USER', 'SERVICENOW_PASSWORD', 'SERVICENOW_BASE_URL'], fields: [
-    { name: 'base_url', label: 'Instance URL', placeholder: 'https://acme.service-now.com', required: true },
-    { name: 'short_description', label: 'Short Description', placeholder: 'Incident: {{ input.summary }}', required: true },
-    { name: 'description', label: 'Description', placeholder: 'Details…', textarea: true },
-  ]},
-
-  // ── Expanded connector catalog ────────────────────────────────────────────
-  anthropic: { key: 'anthropic', label: 'Anthropic', creds: ['ANTHROPIC_API_KEY'], fields: [
-    { name: 'model', label: 'Model', placeholder: 'claude-3-5-haiku-latest' },
-    { name: 'system', label: 'System Prompt', textarea: true },
-    { name: 'prompt', label: 'Prompt', placeholder: 'Summarize {{ input.text }}', textarea: true, required: true },
-  ]},
-  gemini: { key: 'gemini', label: 'Google Gemini', creds: ['GEMINI_API_KEY'], fields: [
-    { name: 'model', label: 'Model', placeholder: 'gemini-2.0-flash' },
-    { name: 'prompt', label: 'Prompt', placeholder: 'Analyze {{ input.text }}', textarea: true, required: true },
-  ]},
-  groq: { key: 'groq', label: 'Groq', creds: ['GROQ_API_KEY'], fields: [
-    { name: 'model', label: 'Model', placeholder: 'llama-3.3-70b-versatile' },
-    { name: 'prompt', label: 'Prompt', textarea: true, required: true },
-  ]},
-  cohere: { key: 'cohere', label: 'Cohere', creds: ['COHERE_API_KEY'], fields: [
-    { name: 'model', label: 'Model', placeholder: 'command-r-plus' },
-    { name: 'prompt', label: 'Prompt', textarea: true, required: true },
-  ]},
-  dropbox: { key: 'dropbox', label: 'Dropbox', creds: ['DROPBOX_ACCESS_TOKEN'], fields: [
-    { name: 'path', label: 'Folder Path', placeholder: '/Reports (blank for root)' },
-  ]},
-  box: { key: 'box', label: 'Box', creds: ['BOX_ACCESS_TOKEN'], fields: [
-    { name: 'folder_id', label: 'Folder ID', placeholder: '0' },
-  ]},
-  google_drive: { key: 'google_drive', label: 'Google Drive', creds: ['GOOGLE_ACCESS_TOKEN (or GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_REFRESH_TOKEN)'], fields: [
-    { name: 'query', label: 'Drive Query', placeholder: "mimeType='application/pdf'" },
-  ]},
-  onedrive: { key: 'onedrive', label: 'Microsoft OneDrive', creds: ['MS_GRAPH_TOKEN'], fields: [] },
-  cloudflare: { key: 'cloudflare', label: 'Cloudflare', creds: ['CLOUDFLARE_API_TOKEN'], fields: [] },
-  digitalocean: { key: 'digitalocean', label: 'DigitalOcean', creds: ['DIGITALOCEAN_TOKEN'], fields: [] },
-  datadog: { key: 'datadog', label: 'Datadog', creds: ['DATADOG_API_KEY', 'DATADOG_APP_KEY'], fields: [
-    { name: 'title', label: 'Event Title', placeholder: 'KNOTT event' },
-    { name: 'text', label: 'Event Text', textarea: true, required: true },
-  ]},
-  newrelic: { key: 'newrelic', label: 'New Relic', creds: ['NEW_RELIC_API_KEY'], fields: [
-    { name: 'query', label: 'NerdGraph Query', placeholder: '{ actor { account(id: 1) { name } } }', textarea: true },
-  ]},
-  sentry: { key: 'sentry', label: 'Sentry', creds: ['SENTRY_AUTH_TOKEN'], fields: [] },
-  grafana: { key: 'grafana', label: 'Grafana', creds: ['GRAFANA_URL', 'GRAFANA_TOKEN'], fields: [
-    { name: 'query', label: 'Dashboard Search', placeholder: '{{ input.dashboard }}' },
-  ]},
-  elasticsearch: { key: 'elasticsearch', label: 'Elasticsearch', creds: ['ELASTICSEARCH_URL', 'ELASTICSEARCH_API_KEY'], fields: [
-    { name: 'index', label: 'Index', placeholder: 'logs-*', required: true },
-    { name: 'query', label: 'Query DSL (JSON)', placeholder: '{"query":{"match_all":{}}}', textarea: true },
-  ]},
-  supabase: { key: 'supabase', label: 'Supabase', creds: ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'], operations: [
-    { value: 'select', label: 'Select Rows', fields: [
-      { name: 'table', label: 'Table', placeholder: 'customers', required: true },
-      { name: 'select', label: 'Columns', placeholder: '*' },
-    ]},
-    { value: 'insert', label: 'Insert Row', fields: [
-      { name: 'table', label: 'Table', placeholder: 'customers', required: true },
-      { name: 'record', label: 'Record (JSON)', placeholder: '{"email":"{{ input.email }}"}', textarea: true, required: true },
-    ]},
-  ]},
-  mongodb_atlas: { key: 'mongodb_atlas', label: 'MongoDB Atlas Data API', creds: ['MONGODB_DATA_API_URL', 'MONGODB_DATA_API_KEY'], fields: [
-    { name: 'data_source', label: 'Data Source', placeholder: 'Cluster0', required: true },
-    { name: 'database', label: 'Database', placeholder: 'app', required: true },
-    { name: 'collection', label: 'Collection', placeholder: 'customers', required: true },
-    { name: 'filter', label: 'Filter (JSON)', placeholder: '{"email":"{{ input.email }}"}', textarea: true },
-  ]},
-  rabbitmq: { key: 'rabbitmq', label: 'RabbitMQ', creds: ['RABBITMQ_URL', 'RABBITMQ_USER', 'RABBITMQ_PASSWORD'], fields: [
-    { name: 'vhost', label: 'Virtual Host', placeholder: '/' },
-    { name: 'exchange', label: 'Exchange', placeholder: 'amq.default' },
-    { name: 'routing_key', label: 'Routing Key', placeholder: 'jobs', required: true },
-    { name: 'payload', label: 'Payload', placeholder: '{"id":"{{ input.id }}"}', textarea: true, required: true },
-  ]},
-  kafka_rest: { key: 'kafka_rest', label: 'Kafka REST Proxy', creds: ['KAFKA_REST_URL'], fields: [
-    { name: 'topic', label: 'Topic', placeholder: 'events', required: true },
-    { name: 'key', label: 'Key', placeholder: '{{ input.id }}' },
-    { name: 'value', label: 'Value (JSON)', placeholder: '{"event":"{{ input.event }}"}', textarea: true, required: true },
-  ]},
-  zoom: { key: 'zoom', label: 'Zoom', creds: ['ZOOM_ACCESS_TOKEN'], operations: [
-    { value: 'list_users', label: 'List Users', fields: [] },
-    { value: 'create_meeting', label: 'Create Meeting', fields: [
-      { name: 'user_id', label: 'Host User ID', placeholder: 'me' },
-      { name: 'topic', label: 'Topic', placeholder: '{{ input.title }}', required: true },
-      { name: 'start_time', label: 'Start Time', placeholder: '2026-10-01T10:00:00Z' },
-    ]},
-  ]},
-  typeform: { key: 'typeform', label: 'Typeform', creds: ['TYPEFORM_TOKEN'], fields: [
-    { name: 'form_id', label: 'Form ID (blank lists forms)', placeholder: 'AbCdEf' },
-  ]},
-  surveymonkey: { key: 'surveymonkey', label: 'SurveyMonkey', creds: ['SURVEYMONKEY_TOKEN'], fields: [] },
-  wordpress: { key: 'wordpress', label: 'WordPress', creds: ['WORDPRESS_URL', 'WORDPRESS_USER', 'WORDPRESS_APP_PASSWORD'], operations: [
-    { value: 'list_posts', label: 'List Posts', fields: [] },
-    { value: 'create_post', label: 'Create Post', fields: [
-      { name: 'title', label: 'Title', placeholder: '{{ input.title }}', required: true },
-      { name: 'content', label: 'Content', textarea: true },
-      { name: 'status', label: 'Status', type: 'select', options: ['draft', 'publish', 'private'] },
-    ]},
-  ]},
-  woocommerce: { key: 'woocommerce', label: 'WooCommerce', creds: ['WOOCOMMERCE_URL', 'WOOCOMMERCE_KEY', 'WOOCOMMERCE_SECRET'], fields: [] },
-  quickbooks: { key: 'quickbooks', label: 'QuickBooks Online', creds: ['QUICKBOOKS_ACCESS_TOKEN', 'QUICKBOOKS_REALM_ID'], fields: [
-    { name: 'query', label: 'QuickBooks Query', placeholder: 'select * from Customer maxresults 100', textarea: true },
-  ]},
-  x_twitter: { key: 'x_twitter', label: 'X / Twitter', creds: ['X_BEARER_TOKEN'], fields: [
-    { name: 'query', label: 'Recent Search Query', placeholder: 'from:openai -is:retweet', required: true },
-  ]},
-};
-
-// Best-effort mapping from an installed connector record to a schema key.
-// Resolve the active field list for a connector schema + selected operation.
-function fieldsForOperation(schema, action) {
-  if (!schema) return [];
-  if (schema.operations) {
-    const op = schema.operations.find(o => o.value === action) || schema.operations[0];
-    return op ? op.fields : [];
-  }
-  return schema.fields || [];
-}
-
 // Generic key/value editor used for query params and headers. Stores into the
 // given config key as a flat object. Values support {{ templates }}.
 function KVEditor({ label, obj, onSet, previewCtx, valuePlaceholder = 'value or {{ template }}' }) {
@@ -1536,103 +1409,176 @@ function HttpAdvancedEditor({ cfg, setField, onChange, previewCtx }) {
   );
 }
 
-function ToolCallEditor({ d, onChange, connectorOpts, previewCtx }) {
+// The app-action form, rendered from the connector's own definition: its
+// actions, each action's fields and types, and the credentials it needs. The
+// console holds no per-app knowledge, so a connector added on the server is
+// fully usable here with no console change.
+function ToolCallEditor({ d, onChange, connectors, previewCtx }) {
   const cfg = d.config || {};
-  // Build the selectable connector list: installed connectors that we can execute,
-  // falling back to the full executable set if none are installed yet.
-  // The registry returns each connector's stable slug, which is what the
-  // executor dispatches on — no need to guess it from the display name.
-  const installable = (connectorOpts || [])
-    .map(c => ({ ...c, key: c.slug, name: c.name, ready: c.credentials_ready }))
-    .filter(c => c.key && CONNECTOR_SCHEMA[c.key]);
-  const available = installable.length
-    ? installable
-    : Object.values(CONNECTOR_SCHEMA).map(s => ({ key: s.key, name: s.label }));
+  const slug = cfg.connector_id || cfg.connector || '';
+  const connector = connectorBySlug(connectors, slug);
+  const actions = connector?.actions || [];
+  const action = actions.find(a => a.id === (cfg.action || '')) || actions[0];
+  const [picking, setPicking] = useState(!slug);
 
-  const schema = CONNECTOR_SCHEMA[cfg.connector_id];
-  const connectorMeta = installable.find(c => c.key === cfg.connector_id);
-  const fields = fieldsForOperation(schema, cfg.action);
+  const setField = (name, value) => onChange({ config: { ...cfg, [name]: value } });
 
-  function setField(name, value) {
-    onChange({ config: { ...cfg, [name]: value } });
+  function chooseApp(c) {
+    const first = c.actions?.[0];
+    const next = { connector_id: c.slug, action: first?.id || '' };
+    for (const f of first?.fields || []) if (f.default !== undefined) next[f.name] = f.default;
+    // Keep reliability settings when switching apps.
+    for (const k of ['retries', 'retry_delay', 'timeout', 'continue_on_error', 'on_error', 'output_path']) if (cfg[k] !== undefined) next[k] = cfg[k];
+    onChange({ config: next, name: d.name && !/: /.test(d.name) ? d.name : `${c.name}: ${first?.label || 'Action'}` });
+    setPicking(false);
+  }
+
+  function chooseAction(id) {
+    const a = actions.find(x => x.id === id);
+    const next = { ...cfg, action: id };
+    for (const f of a?.fields || []) if (f.default !== undefined && next[f.name] === undefined) next[f.name] = f.default;
+    onChange({ config: next });
+  }
+
+  if (picking || !connector) {
+    return (
+      <Section title="App">
+        <AppPicker connectors={connectors} current={slug} onPick={chooseApp} onCancel={slug ? () => setPicking(false) : null} />
+        {slug && !connector && <div className="form-hint error">This step uses “{slug}”, which this server does not know.</div>}
+      </Section>
+    );
   }
 
   return (
     <>
-      <div className="divider" />
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Connector</div>
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Connector</label>
-        <select className="select" value={cfg.connector_id || ''}
-          onChange={e => {
-            const newSchema = CONNECTOR_SCHEMA[e.target.value];
-            const firstOp = newSchema && newSchema.operations ? newSchema.operations[0].value : '';
-            onChange({ config: { connector_id: e.target.value, action: firstOp } });
-          }}>
-          <option value="">Select connector…</option>
-          {available.map(c => <option key={c.key} value={c.key}>{c.name}</option>)}
-        </select>
-        {installable.length === 0 && (
-          <div className="form-hint">No connectors installed yet — showing built-in connectors. Install connectors on the Connectors page.</div>
-        )}
-      </div>
-
-      {schema && schema.operations && (
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Operation</label>
-          <select className="select" value={cfg.action || schema.operations[0].value}
-            onChange={e => setField('action', e.target.value)}>
-            {schema.operations.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
-          </select>
+      <Section>
+        <div className="app-current">
+          <AppIcon connector={connector} size={36} />
+          <div className="app-current-text">
+            <strong>{connector.name}</strong>
+            <span className="muted">{connector.category}{connector.kind === 'declarative' ? ' · defined by data' : ''}</span>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setPicking(true)}>Change</button>
         </div>
-      )}
-
-      {fields.map(f => (
-        <div key={f.name} className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">{f.label}{f.required ? ' *' : ''}</label>
-          {f.type === 'select' ? (
-            <select className="select" value={cfg[f.name] || f.options[0]} onChange={e => setField(f.name, e.target.value)}>
-              {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+        {actions.length > 1 && (
+          <div className="form-group">
+            <label className="form-label">Action</label>
+            <select className="select" value={action?.id || ''} onChange={e => chooseAction(e.target.value)}>
+              {actions.map(a => <option key={a.id || 'default'} value={a.id}>{a.label}</option>)}
             </select>
-          ) : f.textarea ? (
-            <textarea className="textarea" rows={3} value={cfg[f.name] || ''} placeholder={f.placeholder}
-              onChange={e => setField(f.name, e.target.value)} />
-          ) : (
-            <input className="input" value={cfg[f.name] || ''} placeholder={f.placeholder}
-              onChange={e => setField(f.name, e.target.value)} />
-          )}
-          <ExprPreview value={cfg[f.name]} ctx={previewCtx} />
+            {action?.description && <div className="form-hint">{action.description}</div>}
+          </div>
+        )}
+      </Section>
+
+      <Section title="Parameters">
+        {(action?.fields || []).length === 0 && <div className="form-hint">This action takes no parameters.</div>}
+        {(action?.fields || []).map(f => (
+          <FieldInput key={f.name} field={f} value={cfg[f.name]} onChange={v => setField(f.name, v)} previewCtx={previewCtx} />
+        ))}
+        {connector.ui === 'http' && <HttpAdvancedEditor cfg={cfg} setField={setField} onChange={onChange} previewCtx={previewCtx} />}
+        <div className="form-group">
+          <label className="form-label">Keep only (optional)</label>
+          <input className="input mono" value={cfg.output_path || ''} placeholder="response.data.0.id" onChange={e => setField('output_path', e.target.value)} />
+          <div className="form-hint">Extract part of the response; later steps read it as <code>{`{{ steps.${d.id || 'node'}.output.value }}`}</code>.</div>
         </div>
-      ))}
+      </Section>
 
-      {schema && schema.http && <HttpAdvancedEditor cfg={cfg} setField={setField} onChange={onChange} previewCtx={previewCtx} />}
-
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Output Path (optional)</label>
-        <input className="input" value={cfg.output_path || ''} placeholder="e.g. response.data.0.id"
-          onChange={e => setField('output_path', e.target.value)} />
-        <div className="form-hint">Extract a sub-value from the response. Downstream: <code style={{ fontFamily: 'var(--font-mono)' }}>{'{{ steps.' + (d.id || 'node') + '.output.value }}'}</code></div>
-      </div>
-
-      {schema && ((connectorMeta?.credentials?.length || 0) > 0 || (schema.creds?.length || 0) > 0) && (
+      {(connector.credentials || []).length > 0 && (
         <ConnectorCredentialPanel
-          creds={connectorMeta?.credentials || schema.creds}
-          connectorLabel={schema.label}
-          ready={connectorMeta?.credentials_ready}
+          creds={connector.credentials}
+          connectorLabel={connector.name}
+          ready={connector.credentials_ready}
+          docsURL={connector.docs_url}
         />
       )}
       <ConnectorTester cfg={cfg} previewCtx={previewCtx} />
-      <div className="form-hint">
-        Field values support templates like <code style={{ fontFamily: 'var(--font-mono)' }}>{'{{ input.email }}'}</code> and <code style={{ fontFamily: 'var(--font-mono)' }}>{'{{ steps.node_id.output.field }}'}</code>. Credentials are stored encrypted in KNOTT, never in the workflow.
-      </div>
     </>
   );
+}
+
+/** A searchable list of every app, connected ones first. */
+function AppPicker({ connectors, current, onPick, onCancel }) {
+  const [q, setQ] = useState('');
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return connectors
+      .filter(c => !s || c.name.toLowerCase().includes(s) || (c.category || '').toLowerCase().includes(s) || (c.description || '').toLowerCase().includes(s))
+      .sort((a, b) => Number(b.credentials_ready) - Number(a.credentials_ready) || a.name.localeCompare(b.name));
+  }, [connectors, q]);
+  return (
+    <div className="app-picker">
+      <div className="creator-search">
+        <Search size={14} />
+        <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={`Search ${connectors.length} apps…`} aria-label="Search apps" />
+        {onCancel && <button className="icon-btn sm" onClick={onCancel} aria-label="Cancel"><X size={13} /></button>}
+      </div>
+      <div className="app-picker-list">
+        {list.map(c => (
+          <button key={c.slug} type="button" className={`app-row ${c.slug === current ? 'on' : ''}`} onClick={() => onPick(c)}>
+            <AppIcon connector={c} size={26} />
+            <span className="app-row-name">{c.name}</span>
+            <span className="app-row-cat">{c.credentials_ready ? <span className="mini-badge ok">ready</span> : c.category}</span>
+          </button>
+        ))}
+        {list.length === 0 && <div className="form-hint">No app matches “{q}”. The HTTP Request step can call any API.</div>}
+      </div>
+    </div>
+  );
+}
+
+/** One connector field, rendered by its declared type. */
+function FieldInput({ field, value, onChange, previewCtx }) {
+  const label = <label className="form-label">{field.label}{field.required ? <span className="req"> *</span> : ''}</label>;
+  const hint = field.help ? <div className="form-hint">{field.help}</div> : null;
+  const shown = value === undefined || value === null ? '' : typeof value === 'string' ? value : JSON.stringify(value);
+  switch (field.type) {
+    case 'select':
+      return (
+        <div className="form-group">
+          {label}
+          <select className="select" value={shown || ''} onChange={e => onChange(e.target.value)}>
+            {!field.required && <option value="">—</option>}
+            {(field.options || []).map(o => <option key={o} value={o}>{o || '(none)'}</option>)}
+          </select>
+          {hint}
+        </div>
+      );
+    case 'boolean':
+      return (
+        <label className="check-row">
+          <input type="checkbox" checked={value === true || value === 'true'} onChange={e => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    case 'textarea':
+    case 'json':
+      return (
+        <div className="form-group">
+          {label}
+          <textarea className={`textarea${field.type === 'json' ? ' mono' : ''}`} rows={field.type === 'json' ? 4 : 3} value={shown}
+            placeholder={field.placeholder} onChange={e => onChange(e.target.value)} spellCheck={field.type !== 'json'} />
+          <ExprPreview value={shown} ctx={previewCtx} />
+          {hint}
+        </div>
+      );
+    default:
+      return (
+        <div className="form-group">
+          {label}
+          <input className="input" value={shown} placeholder={field.placeholder ?? (field.type === 'number' ? '0' : '')}
+            inputMode={field.type === 'number' ? 'decimal' : undefined} onChange={e => onChange(e.target.value)} />
+          <ExprPreview value={shown} ctx={previewCtx} />
+          {hint}
+        </div>
+      );
+  }
 }
 
 // Shows live credential readiness for the selected connector and lets the user
 // fill missing secrets inline (stored encrypted via the credentials API), so a
 // workflow can be wired end-to-end without leaving the builder.
-function ConnectorCredentialPanel({ creds, connectorLabel, ready }) {
+function ConnectorCredentialPanel({ creds, connectorLabel, ready, docsURL }) {
   const [status, setStatus] = useState(null); // { name: configured }
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState('');
@@ -1647,6 +1593,8 @@ function ConnectorCredentialPanel({ creds, connectorLabel, ready }) {
         primary: entry.name,
         alts: [entry.name],
         label: entry.label,
+        help: entry.help,
+        secret: entry.secret,
         optional: !!entry.optional,
         requiredNow: !!entry.required_now,
       };
@@ -1678,6 +1626,7 @@ function ConnectorCredentialPanel({ creds, connectorLabel, ready }) {
       toast(`${name} saved`, 'success');
       setDrafts(d => ({ ...d, [name]: '' }));
       await load();
+      loadConnectors(true);
     } catch (e) { toast('Save failed', 'error', e.message); }
     finally { setSaving(''); }
   }
@@ -1687,35 +1636,39 @@ function ConnectorCredentialPanel({ creds, connectorLabel, ready }) {
     .every(({ alts }) => alts.some(k => status[k])));
 
   return (
-    <div className="card" style={{ marginTop: 8, padding: '12px 14px', borderColor: allReady ? 'var(--green)' : 'var(--amber)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 12, fontWeight: 650 }}>
-        <KeyRound size={13} color={allReady ? 'var(--green)' : 'var(--amber)'} />
-        {allReady ? `${connectorLabel} credentials ready` : `${connectorLabel} needs credentials`}
+    <section className={`cred-panel ${allReady ? 'ready' : 'missing'}`}>
+      <div className="cred-panel-head">
+        <KeyRound size={14} />
+        <span>{allReady ? `${connectorLabel} is connected` : `Connect ${connectorLabel}`}</span>
+        {docsURL && <a className="cred-docs" href={docsURL} target="_blank" rel="noreferrer">Docs <ExternalLink size={11} /></a>}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {keyEntries.map(({ entry, primary, alts, label, optional }) => {
+      <div className="cred-fields">
+        {keyEntries.map(({ entry, primary, alts, label, optional, help, secret }) => {
           const ok = status && alts.some(k => status[k]);
           return (
-            <div key={entry} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ flex: '0 0 150px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-                {label || primary}{optional ? ' (optional)' : ''}
+            <div key={entry} className="cred-field">
+              <div className="cred-label">
+                <span>{label || primary}{optional ? <span className="muted"> · optional</span> : ''}</span>
+                {ok && <span className="mini-badge ok"><Check size={10} /> saved</span>}
               </div>
-              {ok ? (
-                <span className="badge badge-green" style={{ fontSize: 10 }}><Check size={10} /> set</span>
-              ) : (
-                <>
-                  <input className="input" type="password" autoComplete="off" placeholder="paste secret…"
+              {!ok && (
+                <div className="cred-input">
+                  <input className="input" type={secret === false ? 'text' : 'password'} autoComplete="off"
+                    placeholder={secret === false ? 'value' : 'paste secret…'}
                     value={drafts[primary] || ''} onChange={e => setDrafts(d => ({ ...d, [primary]: e.target.value }))}
-                    style={{ flex: 1, fontSize: 11, padding: '4px 8px' }} />
-                  <button className="btn btn-secondary btn-sm" disabled={saving === primary}
-                    onClick={() => save(primary)}>{saving === primary ? '…' : 'Save'}</button>
-                </>
+                    onKeyDown={e => { if (e.key === 'Enter') save(primary); }} />
+                  <button className="btn btn-secondary btn-sm" disabled={saving === primary} onClick={() => save(primary)}>
+                    {saving === primary ? '…' : 'Save'}
+                  </button>
+                </div>
               )}
+              {!ok && help && <div className="form-hint">{help}</div>}
             </div>
           );
         })}
       </div>
-    </div>
+      <div className="form-hint">Stored encrypted on this machine and never shown again.</div>
+    </section>
   );
 }
 

@@ -1,0 +1,220 @@
+[
+  {
+    "slug": "salesforce", "name": "Salesforce", "category": "CRM", "color": "#00A1E0", "icon": "cloud",
+    "description": "Create, update and query any Salesforce object with SOQL",
+    "docs_url": "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/",
+    "credentials": [
+      {"name": "SALESFORCE_INSTANCE_URL", "label": "Instance URL", "placeholder": "https://acme.my.salesforce.com", "help": "Your org's My Domain URL."},
+      {"name": "SALESFORCE_ACCESS_TOKEN", "label": "Access token", "secret": true, "help": "An OAuth access token from a Connected App (or `sf org display`)."}
+    ],
+    "http": {
+      "base_url": "{cred:SALESFORCE_INSTANCE_URL}/services/data/v62.0",
+      "auth": {"type": "bearer", "credential": "SALESFORCE_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "List objects", "method": "GET", "path": "/sobjects", "fields": []}
+    },
+    "actions": [
+      {"id": "create_record", "label": "Create record", "method": "POST", "path": "/sobjects/{object}", "body": "{fields}",
+       "fields": [
+         {"name": "object", "label": "Object", "placeholder": "Lead", "required": true},
+         {"name": "fields", "label": "Fields (JSON)", "type": "json", "required": true, "placeholder": "{ \"LastName\": \"{{ input.last_name }}\", \"Company\": \"{{ input.company }}\" }"}
+       ]},
+      {"id": "update_record", "label": "Update record", "method": "PATCH", "path": "/sobjects/{object}/{record_id}", "body": "{fields}",
+       "fields": [
+         {"name": "object", "label": "Object", "placeholder": "Opportunity", "required": true},
+         {"name": "record_id", "label": "Record ID", "required": true},
+         {"name": "fields", "label": "Fields (JSON)", "type": "json", "required": true, "placeholder": "{ \"StageName\": \"Closed Won\" }"}
+       ]},
+      {"id": "get_record", "label": "Get record", "method": "GET", "path": "/sobjects/{object}/{record_id}",
+       "fields": [
+         {"name": "object", "label": "Object", "placeholder": "Account", "required": true},
+         {"name": "record_id", "label": "Record ID", "required": true}
+       ]},
+      {"id": "query", "label": "Run SOQL query", "method": "GET", "path": "/query", "query": {"q": "{soql}"}, "items_path": "records",
+       "fields": [
+         {"name": "soql", "label": "SOQL", "type": "textarea", "required": true, "placeholder": "SELECT Id, Name FROM Account WHERE CreatedDate = TODAY"}
+       ]}
+    ]
+  },
+  {
+    "slug": "pipedrive", "name": "Pipedrive", "category": "CRM", "color": "#1A1A1A", "icon": "target",
+    "description": "Manage people, deals, activities and notes in Pipedrive",
+    "docs_url": "https://developers.pipedrive.com/docs/api/v1",
+    "credentials": [
+      {"name": "PIPEDRIVE_API_TOKEN", "label": "API token", "secret": true, "help": "Pipedrive → Personal preferences → API."}
+    ],
+    "http": {
+      "base_url": "https://api.pipedrive.com/v1",
+      "auth": {"type": "query", "param": "api_token", "credential": "PIPEDRIVE_API_TOKEN"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "create_person", "label": "Create person", "method": "POST", "path": "/persons",
+       "body": {"name": "{name}", "email": "{email}", "phone": "{phone}", "org_id": "{org_id}"},
+       "fields": [
+         {"name": "name", "label": "Name", "required": true, "placeholder": "{{ input.name }}"},
+         {"name": "email", "label": "Email", "placeholder": "{{ input.email }}"},
+         {"name": "phone", "label": "Phone"},
+         {"name": "org_id", "label": "Organization ID", "type": "number"}
+       ]},
+      {"id": "create_deal", "label": "Create deal", "method": "POST", "path": "/deals",
+       "body": {"title": "{title}", "value": "{value}", "currency": "{currency}", "person_id": "{person_id}", "stage_id": "{stage_id}"},
+       "fields": [
+         {"name": "title", "label": "Title", "required": true},
+         {"name": "value", "label": "Value", "type": "number"},
+         {"name": "currency", "label": "Currency", "placeholder": "USD"},
+         {"name": "person_id", "label": "Person ID", "type": "number"},
+         {"name": "stage_id", "label": "Stage ID", "type": "number"}
+       ]},
+      {"id": "list_deals", "label": "List deals", "method": "GET", "path": "/deals", "query": {"status": "{status}", "limit": "{limit}"}, "items_path": "data",
+       "fields": [
+         {"name": "status", "label": "Status", "type": "select", "options": ["open", "won", "lost", "all_not_deleted"]},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]},
+      {"id": "add_note", "label": "Add note", "method": "POST", "path": "/notes",
+       "body": {"content": "{content}", "deal_id": "{deal_id}", "person_id": "{person_id}"},
+       "fields": [
+         {"name": "content", "label": "Note", "type": "textarea", "required": true},
+         {"name": "deal_id", "label": "Deal ID", "type": "number"},
+         {"name": "person_id", "label": "Person ID", "type": "number"}
+       ]}
+    ]
+  },
+  {
+    "slug": "zoho_crm", "name": "Zoho CRM", "category": "CRM", "color": "#E42527", "icon": "users",
+    "description": "Create and search leads, contacts and deals in Zoho CRM",
+    "docs_url": "https://www.zoho.com/crm/developer/docs/api/v7/",
+    "credentials": [
+      {"name": "ZOHO_API_DOMAIN", "label": "API domain", "placeholder": "https://www.zohoapis.com", "help": "Depends on your data centre: .com, .eu, .in, .com.au, .jp."},
+      {"name": "ZOHO_ACCESS_TOKEN", "label": "OAuth access token", "secret": true, "help": "From the Zoho API Console (self client) with the ZohoCRM.modules scope."}
+    ],
+    "http": {
+      "base_url": "{cred:ZOHO_API_DOMAIN}/crm/v7",
+      "auth": {"type": "header", "header": "Authorization", "prefix": "Zoho-oauthtoken ", "credential": "ZOHO_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/users", "query": {"type": "CurrentUser"}, "fields": []}
+    },
+    "actions": [
+      {"id": "create_record", "label": "Create record", "method": "POST", "path": "/{module}", "body": {"data": ["{record}"]},
+       "fields": [
+         {"name": "module", "label": "Module", "type": "select", "options": ["Leads", "Contacts", "Accounts", "Deals", "Tasks"], "required": true},
+         {"name": "record", "label": "Record (JSON)", "type": "json", "required": true, "placeholder": "{ \"Last_Name\": \"{{ input.last_name }}\", \"Email\": \"{{ input.email }}\" }"}
+       ]},
+      {"id": "search_records", "label": "Search records", "method": "GET", "path": "/{module}/search", "query": {"email": "{email}", "word": "{word}", "criteria": "{criteria}"}, "items_path": "data",
+       "fields": [
+         {"name": "module", "label": "Module", "type": "select", "options": ["Leads", "Contacts", "Accounts", "Deals"], "required": true},
+         {"name": "email", "label": "Email"},
+         {"name": "word", "label": "Keyword"},
+         {"name": "criteria", "label": "Criteria", "placeholder": "(Last_Name:equals:Burns)"}
+       ]}
+    ]
+  },
+  {
+    "slug": "attio", "name": "Attio", "category": "CRM", "color": "#0F172A", "icon": "database",
+    "description": "Create and query records in Attio's flexible CRM",
+    "docs_url": "https://developers.attio.com/reference",
+    "credentials": [
+      {"name": "ATTIO_API_KEY", "label": "Access token", "secret": true, "help": "Attio → Workspace settings → Developers → Access tokens."}
+    ],
+    "http": {
+      "base_url": "https://api.attio.com/v2",
+      "auth": {"type": "bearer", "credential": "ATTIO_API_KEY"},
+      "test": {"id": "test", "label": "Identify token", "method": "GET", "path": "/self", "fields": []}
+    },
+    "actions": [
+      {"id": "create_record", "label": "Create record", "method": "POST", "path": "/objects/{object}/records", "body": {"data": {"values": "{values}"}},
+       "fields": [
+         {"name": "object", "label": "Object", "placeholder": "people", "required": true},
+         {"name": "values", "label": "Values (JSON)", "type": "json", "required": true, "placeholder": "{ \"email_addresses\": [\"{{ input.email }}\"] }"}
+       ]},
+      {"id": "query_records", "label": "Query records", "method": "POST", "path": "/objects/{object}/records/query", "body": {"filter": "{filter}", "limit": "{limit}"}, "items_path": "data",
+       "fields": [
+         {"name": "object", "label": "Object", "placeholder": "companies", "required": true},
+         {"name": "filter", "label": "Filter (JSON)", "type": "json", "placeholder": "{ \"domains\": \"acme.com\" }"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 25}
+       ]}
+    ]
+  },
+  {
+    "slug": "copper", "name": "Copper", "category": "CRM", "color": "#FF6B35", "icon": "users",
+    "description": "Add people and opportunities to Copper CRM",
+    "docs_url": "https://developer.copper.com/",
+    "credentials": [
+      {"name": "COPPER_API_KEY", "label": "API key", "secret": true, "help": "Copper → Settings → Integrations → API Keys."},
+      {"name": "COPPER_USER_EMAIL", "label": "User email", "placeholder": "you@company.com", "help": "The email of the user who owns the key."}
+    ],
+    "http": {
+      "base_url": "https://api.copper.com/developer_api/v1",
+      "auth": {"type": "header", "header": "X-PW-AccessToken", "credential": "COPPER_API_KEY"},
+      "headers": {"X-PW-Application": "developer_api", "X-PW-UserEmail": "{cred:COPPER_USER_EMAIL}"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "create_person", "label": "Create person", "method": "POST", "path": "/people",
+       "body": {"name": "{name}", "emails": [{"email": "{email}", "category": "work"}], "title": "{title}"},
+       "fields": [
+         {"name": "name", "label": "Name", "required": true},
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "title", "label": "Job title"}
+       ]},
+      {"id": "create_opportunity", "label": "Create opportunity", "method": "POST", "path": "/opportunities",
+       "body": {"name": "{name}", "monetary_value": "{value}", "primary_contact_id": "{contact_id}"},
+       "fields": [
+         {"name": "name", "label": "Name", "required": true},
+         {"name": "value", "label": "Value", "type": "number"},
+         {"name": "contact_id", "label": "Primary contact ID", "type": "number"}
+       ]}
+    ]
+  },
+  {
+    "slug": "freshsales", "name": "Freshsales", "category": "CRM", "color": "#F26722", "icon": "users",
+    "description": "Create contacts and deals in Freshsales (Freshworks CRM)",
+    "docs_url": "https://developers.freshworks.com/crm/api/",
+    "credentials": [
+      {"name": "FRESHSALES_DOMAIN", "label": "Bundle alias", "placeholder": "acme", "help": "The part before .myfreshworks.com in your Freshsales URL."},
+      {"name": "FRESHSALES_API_KEY", "label": "API key", "secret": true, "help": "Profile settings → API settings."}
+    ],
+    "http": {
+      "base_url": "https://{cred:FRESHSALES_DOMAIN}.myfreshworks.com/crm/sales/api",
+      "auth": {"type": "header", "header": "Authorization", "prefix": "Token token=", "credential": "FRESHSALES_API_KEY"}
+    },
+    "actions": [
+      {"id": "create_contact", "label": "Create contact", "method": "POST", "path": "/contacts",
+       "body": {"contact": {"first_name": "{first_name}", "last_name": "{last_name}", "email": "{email}", "mobile_number": "{phone}"}},
+       "fields": [
+         {"name": "first_name", "label": "First name"},
+         {"name": "last_name", "label": "Last name", "required": true},
+         {"name": "email", "label": "Email"},
+         {"name": "phone", "label": "Mobile"}
+       ]},
+      {"id": "create_deal", "label": "Create deal", "method": "POST", "path": "/deals",
+       "body": {"deal": {"name": "{name}", "amount": "{amount}"}},
+       "fields": [
+         {"name": "name", "label": "Name", "required": true},
+         {"name": "amount", "label": "Amount", "type": "number"}
+       ]}
+    ]
+  },
+  {
+    "slug": "capsule", "name": "Capsule CRM", "category": "CRM", "color": "#2D6BE4", "icon": "users",
+    "description": "Add people and organisations to Capsule",
+    "docs_url": "https://developer.capsulecrm.com/v2/",
+    "credentials": [
+      {"name": "CAPSULE_TOKEN", "label": "API token", "secret": true, "help": "Capsule → My Preferences → API Authentication Tokens."}
+    ],
+    "http": {
+      "base_url": "https://api.capsulecrm.com/api/v2",
+      "auth": {"type": "bearer", "credential": "CAPSULE_TOKEN"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/users/current", "fields": []}
+    },
+    "actions": [
+      {"id": "create_person", "label": "Create person", "method": "POST", "path": "/parties",
+       "body": {"party": {"type": "person", "firstName": "{first_name}", "lastName": "{last_name}", "emailAddresses": [{"address": "{email}"}]}},
+       "fields": [
+         {"name": "first_name", "label": "First name", "required": true},
+         {"name": "last_name", "label": "Last name"},
+         {"name": "email", "label": "Email", "required": true}
+       ]},
+      {"id": "list_parties", "label": "List people & organisations", "method": "GET", "path": "/parties", "query": {"perPage": "{per_page}"}, "items_path": "parties",
+       "fields": [{"name": "per_page", "label": "Per page", "type": "number", "default": 50}]}
+    ]
+  }
+]

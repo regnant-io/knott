@@ -1,9 +1,9 @@
 # KNOTT — one image, one process, one port.
 #
 # The console is built and compiled into the binary, so the runtime stage carries
-# no static-file directory and no Node. The optional Python AI engine ships with
-# it; KNOTT falls back to deterministic rule-based decisions when it is absent,
-# so the image works either way.
+# no static-file directory, no Node and no Python: AI decisions, prompts and
+# workflow generation run inside the binary, against Ollama (OLLAMA_HOST) or
+# Anthropic when configured and deterministic rules otherwise.
 #
 #   docker build -f build/docker/Dockerfile -t knott .
 #   docker run -p 8002:8002 -v knott-data:/var/lib/knott \
@@ -32,7 +32,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
       -o /out/knott ./cmd/knott
 
 # ─── Runtime ──────────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+FROM debian:bookworm-slim
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -41,7 +41,6 @@ RUN apt-get update \
  && install -d -o knott -g knott -m 0750 /var/lib/knott
 
 COPY --from=build /out/knott /usr/local/bin/knott
-COPY services/ai-decision-engine/main.py /usr/local/bin/ai-decision-engine/main.py
 COPY LICENSE NOTICE /usr/share/doc/knott/
 
 USER knott

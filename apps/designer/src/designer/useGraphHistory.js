@@ -37,6 +37,19 @@ export function useGraphHistory(getSnapshot, applySnapshot) {
     sync();
   }, [getSnapshot]);
 
+  /**
+   * Record a snapshot taken earlier — used for drags, where the restore point
+   * is the graph before the drag but only worth keeping if something moved.
+   */
+  const record = useCallback(snap => {
+    const top = past.current[past.current.length - 1];
+    if (!snap || (top && top === snap)) return;
+    past.current.push(snap);
+    if (past.current.length > LIMIT) past.current.shift();
+    future.current = [];
+    sync();
+  }, []);
+
   const undo = useCallback(() => {
     if (!past.current.length) return false;
     const snap = past.current.pop();
@@ -61,5 +74,5 @@ export function useGraphHistory(getSnapshot, applySnapshot) {
     sync();
   }, []);
 
-  return { commit, undo, redo, reset, canUndo: counts.undo > 0, canRedo: counts.redo > 0 };
+  return { commit, record, undo, redo, reset, canUndo: counts.undo > 0, canRedo: counts.redo > 0 };
 }

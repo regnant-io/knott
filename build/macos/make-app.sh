@@ -4,96 +4,91 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #
-# Assemble KNOTT.app and, when hdiutil is available, a .dmg to ship it in.
+# Assemble KNOTT.app and a drag-to-install .dmg.
 #
-# A macOS user should be able to drag KNOTT to Applications and double-click it,
-# not open a terminal to run a binary. The bundle wraps the same `knott desktop`
-# command the CLI exposes.
+# The bundle's executable is the native desktop app (desktop/, built with
+# Wails): a real Cocoa window over WKWebView, not a script that opens a
+# browser. The command-line tool rides along in Contents/Resources/bin — it
+# cannot sit beside the app binary because "KNOTT" and "knott" are the same
+# name on a case-insensitive volume.
 #
-# Usage:  build/macos/make-app.sh <version> [arch]
+# Usage:  build/macos/make-app.sh <version> <desktop-binary> <cli-binary> [arch]
 #
-# Requires a universal or per-arch knott binary in dist/. Code signing and
-# notarisation are left to the release workflow, which holds the credentials.
+# The bundle is signed ad hoc so Apple silicon will run it. A Developer ID
+# signature and notarisation are applied by the release workflow when its
+# signing secrets are configured.
 
 set -euo pipefail
 
-VERSION="${1:?usage: make-app.sh <version> [arch]}"
-ARCH="${2:-$(uname -m)}"
+VERSION="${1:?usage: make-app.sh <version> <desktop-binary> <cli-binary> [arch]}"
+DESKTOP_BIN="${2:?desktop binary required}"
+CLI_BIN="${3:?cli binary required}"
+ARCH="${4:-$(uname -m)}"
 case "$ARCH" in
-  x86_64|amd64) GOARCH=amd64 ;;
-  arm64|aarch64) GOARCH=arm64 ;;
-  *) GOARCH="$ARCH" ;;
+  x86_64|amd64) ARCH=amd64 ;;
+  arm64|aarch64) ARCH=arm64 ;;
 esac
+SHORT="${VERSION#v}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DIST="$ROOT/dist"
-APP="$DIST/KNOTT.app"
-BIN_SRC="$DIST/knott_${VERSION}_darwin_${GOARCH}/knott"
+STAGE="$DIST/macos-$ARCH"
+APP="$STAGE/KNOTT.app"
 
-if [ ! -x "$BIN_SRC" ]; then
-  # Fall back to a locally built binary so the script is usable outside a release.
-  BIN_SRC="$ROOT/bin/knott"
-fi
-if [ ! -x "$BIN_SRC" ]; then
-  echo "make-app.sh: no knott binary found — run 'make release' or 'make build' first" >&2
-  exit 1
-fi
+echo "Assembling KNOTT.app ($SHORT, $ARCH)"
+rm -rf "$STAGE"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/bin"
 
-echo "Assembling KNOTT.app ($VERSION, $GOARCH)"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-
-cp "$BIN_SRC" "$APP/Contents/MacOS/knott"
-chmod +x "$APP/Contents/MacOS/knott"
-
-# The optional AI engine travels inside the bundle; knott finds it next to the
-# executable.
-mkdir -p "$APP/Contents/MacOS/ai-decision-engine"
-cp "$ROOT/services/ai-decision-engine/main.py" "$APP/Contents/MacOS/ai-decision-engine/"
-
+install -m 0755 "$DESKTOP_BIN" "$APP/Contents/MacOS/KNOTT"
+install -m 0755 "$CLI_BIN" "$APP/Contents/Resources/bin/knott"
 cp "$ROOT/brand/icons/knott.icns" "$APP/Contents/Resources/knott.icns"
-
-# The launcher: open KNOTT in its own window rather than a terminal.
-cat > "$APP/Contents/MacOS/KNOTT" <<'LAUNCHER'
-#!/bin/sh
-exec "$(dirname "$0")/knott" desktop
-LAUNCHER
-chmod +x "$APP/Contents/MacOS/KNOTT"
+cp "$ROOT/LICENSE" "$ROOT/NOTICE" "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key>              <string>KNOTT</string>
-  <key>CFBundleDisplayName</key>       <string>KNOTT</string>
-  <key>CFBundleIdentifier</key>        <string>io.regnant.knott</string>
-  <key>CFBundleVersion</key>           <string>${VERSION#v}</string>
-  <key>CFBundleShortVersionString</key><string>${VERSION#v}</string>
-  <key>CFBundleExecutable</key>        <string>KNOTT</string>
-  <key>CFBundleIconFile</key>          <string>knott</string>
-  <key>CFBundlePackageType</key>       <string>APPL</string>
-  <key>LSMinimumSystemVersion</key>    <string>11.0</string>
-  <key>LSApplicationCategoryType</key> <string>public.app-category.developer-tools</string>
-  <key>NSHighResolutionCapable</key>   <true/>
-  <key>NSHumanReadableCopyright</key>  <string>Copyright Regnant. Licensed under the Apache License 2.0.</string>
+  <key>CFBundleName</key>               <string>KNOTT</string>
+  <key>CFBundleDisplayName</key>        <string>KNOTT</string>
+  <key>CFBundleIdentifier</key>         <string>io.regnant.knott</string>
+  <key>CFBundleVersion</key>            <string>${SHORT}</string>
+  <key>CFBundleShortVersionString</key> <string>${SHORT}</string>
+  <key>CFBundleExecutable</key>         <string>KNOTT</string>
+  <key>CFBundleIconFile</key>           <string>knott</string>
+  <key>CFBundlePackageType</key>        <string>APPL</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>LSMinimumSystemVersion</key>     <string>11.0</string>
+  <key>LSApplicationCategoryType</key>  <string>public.app-category.developer-tools</string>
+  <key>NSHighResolutionCapable</key>    <true/>
+  <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+  <key>NSHumanReadableCopyright</key>   <string>Copyright 2026 Regnant. Apache License 2.0.</string>
+  <!-- The window talks to KNOTT's own engine on the loopback interface. -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key><true/>
+  </dict>
 </dict>
 </plist>
 PLIST
 
-echo "  $APP"
+# Ad-hoc signature: required for arm64, harmless on Intel. Replaced by a real
+# Developer ID signature when one is available.
+if command -v codesign >/dev/null 2>&1; then
+  if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+    codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$APP"
+  else
+    codesign --force --deep --sign - "$APP"
+  fi
+fi
 
-# A .dmg only if we are actually on macOS.
 if command -v hdiutil >/dev/null 2>&1; then
-  DMG="$DIST/KNOTT_${VERSION}_${GOARCH}.dmg"
-  STAGE="$(mktemp -d)"
-  cp -R "$APP" "$STAGE/"
-  ln -s /Applications "$STAGE/Applications"
+  DMG="$DIST/KNOTT-${SHORT}-macos-${ARCH}.dmg"
   rm -f "$DMG"
-  hdiutil create -volname "KNOTT $VERSION" -srcfolder "$STAGE" \
-                 -ov -format UDZO "$DMG" >/dev/null
-  rm -rf "$STAGE"
-  echo "  $DMG"
+  # A folder with the app and an Applications shortcut: drag one onto the other.
+  ln -s /Applications "$STAGE/Applications"
+  hdiutil create -volname "KNOTT ${SHORT}" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+  echo "Built $DMG"
 else
-  echo "  (hdiutil unavailable — skipping the .dmg)"
+  echo "hdiutil not found; KNOTT.app is in $STAGE"
 fi

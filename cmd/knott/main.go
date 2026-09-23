@@ -6,22 +6,17 @@
 // One executable, one port, no runtime dependencies: it runs the workflow
 // registry, execution engine, human-task service and agent registry inside a
 // single process, serves the embedded web console, and keeps its state in a
-// per-user directory it creates on first run. That is what makes a KNOTT
-// release a file you download and run on Windows, macOS or Linux rather than a
-// stack you deploy.
+// per-user directory it creates on first run.
 //
-// The same code still supports a distributed deployment: run the per-service
-// binaries (knott-registry, knott-engine, knott-tasks, knott-agents) and point
-// them at each other with the documented environment variables.
+// The native desktop application (cmd/knott-desktop in the desktop module)
+// embeds the same platform behind a real window; this binary is the headless
+// server for machines, containers and anyone who prefers a browser.
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -32,19 +27,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/regnant/knott/internal/agents"
-	"github.com/regnant/knott/internal/execution"
-	"github.com/regnant/knott/internal/humantask"
+	"github.com/regnant/knott/internal/app"
 	"github.com/regnant/knott/internal/platform"
-	"github.com/regnant/knott/internal/registry"
 )
 
 // Build metadata, stamped by the release build with -ldflags -X.
 var (
-	version        = "dev"
-	commit         = "none"
-	date           = "unknown"
-	defaultCommand = "serve" // release GUI builds stamp this to "desktop"
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 const banner = "\n" +
@@ -57,7 +48,7 @@ const helpText = `Usage:
 
 Commands:
   serve      Run the platform and print the console URL (default)
-  desktop    Run the platform and open it in a dedicated app window
+  desktop    Open the KNOTT desktop app (or the console in a browser)
   version    Print version and build information
   home       Print the directory KNOTT stores its data in
   help       Show this message
@@ -67,20 +58,21 @@ Flags:
   --host string      Address to bind (default 127.0.0.1; use 0.0.0.0 to expose)
   --home string      State directory (default: per-OS app data, or $KNOTT_HOME)
   --open             Open the console in a browser once it is ready
-  --no-ai            Do not start the optional AI decision engine
+  --ai-sidecar       Also start the optional Python AI service
 
 Environment:
   API_KEYS           key:role pairs, e.g. "s3cr3t:admin,ro-key:viewer"
   KNOTT_SECRET_KEY   Encryption key for stored credentials (generated if unset)
   WEBHOOK_SECRET     HMAC secret required on inbound webhooks
+  OLLAMA_HOST        Where a local Ollama listens (default 127.0.0.1:11434)
 
-Documentation: https://github.com/regnant/knott
+Documentation: https://github.com/regnant-io/knott
 `
 
 func main() {
 	log.SetFlags(log.Ltime)
 
-	cmd := defaultCommand
+	cmd := "serve"
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
 		cmd = os.Args[1]
 		os.Args = append(os.Args[:1], os.Args[2:]...)
@@ -92,6 +84,10 @@ func main() {
 			log.Fatalf("knott: %v", err)
 		}
 	case "desktop", "app":
+		if launchDesktopApp() {
+			return
+		}
+		log.Printf("The KNOTT desktop app is not installed next to this binary — opening the console in your browser instead.")
 		if err := serve(true); err != nil {
 			log.Fatalf("knott: %v", err)
 		}
@@ -113,274 +109,79 @@ func main() {
 	}
 }
 
-func serve(desktop bool) error {
+func serve(openBrowser bool) error {
 	var (
-		port  = flag.Int("port", envInt("PORT", envInt("ENGINE_PORT", 8002)), "console and API port")
-		host  = flag.String("host", envStr("KNOTT_BIND_HOST", "127.0.0.1"), "bind address")
-		home  = flag.String("home", "", "state directory")
-		open  = flag.Bool("open", false, "open the console in a browser once ready")
-		noAI  = flag.Bool("no-ai", false, "do not start the AI decision engine")
-		quiet = flag.Bool("quiet", false, "suppress the startup banner")
+		port      = flag.Int("port", envInt("PORT", envInt("ENGINE_PORT", 8002)), "console and API port")
+		host      = flag.String("host", envStr("KNOTT_BIND_HOST", "127.0.0.1"), "bind address")
+		home      = flag.String("home", "", "state directory")
+		open      = flag.Bool("open", false, "open the console in a browser once ready")
+		aiSidecar = flag.Bool("ai-sidecar", os.Getenv("KNOTT_AI_SIDECAR") == "1", "start the optional Python AI service")
+		quiet     = flag.Bool("quiet", false, "suppress the startup banner")
+		_         = flag.Bool("no-ai", false, "deprecated: the Python AI service no longer starts by default")
 	)
 	flag.Parse()
-	os.Setenv("KNOTT_VERSION", version)
-	if desktop {
-		os.Setenv("KNOTT_RUNTIME", "desktop")
-	} else {
-		os.Setenv("KNOTT_RUNTIME", "server")
-	}
-
-	if *home != "" {
-		os.Setenv("KNOTT_HOME", *home)
-	}
-	stateDir, err := platform.Home()
-	if err != nil {
-		return fmt.Errorf("resolve state directory: %w", err)
-	}
-	dataDir := filepath.Join(stateDir, "data")
-	if err := os.MkdirAll(dataDir, 0o750); err != nil {
-		return fmt.Errorf("create data directory: %w", err)
-	}
-	key, err := platform.EnsureSecretKey(stateDir)
-	if err != nil {
-		return fmt.Errorf("provision secret key: %w", err)
-	}
-	os.Setenv("KNOTT_SECRET_KEY", key)
-
-	// Internal services bind to loopback on ports chosen at startup, so nothing
-	// but the console port is reachable and two KNOTT instances on one machine
-	// do not collide.
-	internal, err := reserveLoopbackPorts(4)
-	if err != nil {
-		return fmt.Errorf("reserve internal ports: %w", err)
-	}
-	registryPort, taskPort, agentPort, aiPort := internal[0], internal[1], internal[2], internal[3]
-
-	setDefault("REGISTRY_DB", filepath.Join(dataDir, "workflows.db"))
-	setDefault("ENGINE_DB", filepath.Join(dataDir, "runs.db"))
-	setDefault("TASK_DB", filepath.Join(dataDir, "tasks.db"))
-	setDefault("AGENT_DB", filepath.Join(dataDir, "agents.db"))
-
-	os.Setenv("REGISTRY_PORT", strconv.Itoa(registryPort))
-	os.Setenv("TASK_PORT", strconv.Itoa(taskPort))
-	os.Setenv("AGENT_PORT", strconv.Itoa(agentPort))
-	os.Setenv("ENGINE_PORT", strconv.Itoa(*port))
-	os.Setenv("ENGINE_BIND_HOST", *host)
-	os.Setenv("REGISTRY_URL", fmt.Sprintf("http://127.0.0.1:%d", registryPort))
-	os.Setenv("HUMAN_TASK_URL", fmt.Sprintf("http://127.0.0.1:%d", taskPort))
-	os.Setenv("AGENT_URL", fmt.Sprintf("http://127.0.0.1:%d", agentPort))
-	setDefault("AI_DECISION_URL", fmt.Sprintf("http://127.0.0.1:%d", aiPort))
-	setDefault("EXECUTION_ENGINE_URL", fmt.Sprintf("http://127.0.0.1:%d", *port))
 
 	if !*quiet {
 		fmt.Print(banner)
 	}
-
-	failures := make(chan error, 4)
-	start := func(name string, run func() error) {
-		go func() {
-			if err := run(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				failures <- fmt.Errorf("%s: %w", name, err)
-			}
-		}()
+	inst, err := app.Start(app.Options{
+		Port: *port, Host: *host, Home: *home, Runtime: "server",
+		Version: version, AISidecar: *aiSidecar,
+	})
+	if err != nil {
+		return err
 	}
-	start("workflow-registry", registry.Run)
-	start("human-task-service", humantask.Run)
-	start("agent-integration", agents.Run)
-
-	var aiCmd *exec.Cmd
-	if !*noAI {
-		aiCmd = startAIEngine(aiPort, dataDir)
-	}
-
-	// Let the internal services bind before the engine starts proxying to them.
-	waitForPorts([]int{registryPort, taskPort, agentPort}, 8*time.Second)
-	start("execution-engine", execution.Run)
-
-	consoleURL := fmt.Sprintf("http://%s:%d", displayHost(*host), *port)
-	if !waitForPorts([]int{*port}, 15*time.Second) {
-		shutdownAI(aiCmd)
-		select {
-		case err := <-failures:
-			return err
-		default:
-			return errors.New("execution engine did not start listening")
-		}
-	}
-
-	log.Printf("KNOTT %s ready → %s", version, consoleURL)
-	log.Printf("State directory: %s", stateDir)
-	if os.Getenv("API_KEYS") == "" && os.Getenv("API_TOKEN") == "" && *host != "127.0.0.1" {
-		log.Printf("⚠  Bound to %s with no API_KEYS set — the API is open to the network.", *host)
-	}
-
-	if desktop {
-		profile := filepath.Join(stateDir, "app-window")
-		if !platform.OpenAppWindow(consoleURL, profile) {
-			_ = platform.OpenBrowser(consoleURL)
-		}
-	} else if *open {
-		_ = platform.OpenBrowser(consoleURL)
+	if *open || openBrowser {
+		_ = platform.OpenBrowser(inst.URL)
 	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	select {
-	case err := <-failures:
-		shutdownAI(aiCmd)
+	case err := <-inst.Failures():
+		inst.Shutdown(5 * time.Second)
 		return err
 	case <-stop:
-		log.Printf("Shutting down — waiting for in-flight runs…")
-		// Runs are checkpointed, so anything still going at the deadline resumes
-		// on the next start. Draining first simply avoids the wait.
-		if !execution.WaitForBackgroundRuns(20 * time.Second) {
-			log.Printf("Some runs were still in flight; they will resume on next start.")
-		}
-		shutdownAI(aiCmd)
+		inst.Shutdown(20 * time.Second)
 		return nil
 	}
 }
 
-// startAIEngine launches the optional Python AI decision engine when a suitable
-// interpreter is present. KNOTT runs without it — the engine falls back to its
-// deterministic rule-based decisions — so a missing interpreter is logged and
-// never fatal.
-func startAIEngine(port int, dataDir string) *exec.Cmd {
-	script := findAIScript()
-	if script == "" {
-		return nil
+// launchDesktopApp starts the native desktop application when it sits next to
+// this binary (as it does in every installer), reporting whether it did.
+func launchDesktopApp() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
 	}
-	python := findPython()
-	if python == "" {
-		log.Printf("AI decision engine: no Python interpreter found — using built-in rule-based decisions")
-		return nil
+	// The installers put this binary in a bin/ folder beneath the app, because
+	// "KNOTT.exe" and "knott.exe" cannot share a directory on the
+	// case-insensitive file systems of Windows and macOS.
+	dir := filepath.Dir(exe)
+	var candidates []string
+	switch runtime.GOOS {
+	case "windows":
+		candidates = []string{filepath.Join(dir, "..", "KNOTT.exe")}
+	case "darwin":
+		candidates = []string{filepath.Join(dir, "..", "..", "MacOS", "KNOTT"), "/Applications/KNOTT.app"}
+	default:
+		candidates = []string{filepath.Join(dir, "knott-desktop"), "/usr/bin/knott-desktop", "/opt/knott/knott-desktop"}
 	}
-	cmd := exec.Command(python, script)
-	cmd.Env = append(os.Environ(),
-		"AI_PORT="+strconv.Itoa(port),
-		"PORT="+strconv.Itoa(port),
-		"AI_CONFIG_PATH="+filepath.Join(dataDir, "ai-config.json"),
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		log.Printf("AI decision engine: %v — using built-in rule-based decisions", err)
-		return nil
-	}
-	return cmd
-}
-
-func shutdownAI(cmd *exec.Cmd) {
-	if cmd == nil || cmd.Process == nil {
-		return
-	}
-	_ = cmd.Process.Kill()
-	_, _ = cmd.Process.Wait()
-}
-
-// findAIScript locates the optional Python decision engine.
-//
-// Each packaging format puts it somewhere different — beside the binary in a
-// release archive and in the macOS bundle, under /usr/share in the Linux
-// packages, in services/ in a checkout — so all of them are checked rather than
-// each format having to set an environment variable. KNOTT_AI_SCRIPT overrides
-// the search for anyone who puts it somewhere else entirely.
-func findAIScript() string {
-	if v := strings.TrimSpace(os.Getenv("KNOTT_AI_SCRIPT")); v != "" {
-		if _, err := os.Stat(v); err == nil {
-			return v
-		}
-		log.Printf("KNOTT_AI_SCRIPT points at %s, which does not exist — searching the usual places", v)
-	}
-
-	candidates := []string{
-		filepath.Join("services", "ai-decision-engine", "main.py"),
-		filepath.Join("..", "services", "ai-decision-engine", "main.py"),
-	}
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		candidates = append(candidates,
-			// Release archive, container image, macOS bundle.
-			filepath.Join(dir, "ai-decision-engine", "main.py"),
-			// Linux .deb / .rpm: /usr/bin/knott with the script under /usr/share.
-			filepath.Join(dir, "..", "share", "knott", "ai-decision-engine", "main.py"),
-			filepath.Join(dir, "services", "ai-decision-engine", "main.py"),
-			filepath.Join(dir, "..", "services", "ai-decision-engine", "main.py"),
-		)
-	}
-	candidates = append(candidates,
-		filepath.Join("/usr", "share", "knott", "ai-decision-engine", "main.py"),
-		filepath.Join("/usr", "local", "share", "knott", "ai-decision-engine", "main.py"),
-	)
-
 	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			if abs, err := filepath.Abs(c); err == nil {
-				return abs
-			}
-			return c
+		if _, err := os.Stat(c); err != nil {
+			continue
+		}
+		var cmd *exec.Cmd
+		if strings.HasSuffix(c, ".app") {
+			cmd = exec.Command("open", c)
+		} else {
+			cmd = exec.Command(c)
+		}
+		if cmd.Start() == nil {
+			return true
 		}
 	}
-	return ""
-}
-
-func findPython() string {
-	for _, name := range []string{"python3", "python"} {
-		if p, err := exec.LookPath(name); err == nil {
-			return p
-		}
-	}
-	return ""
-}
-
-// reserveLoopbackPorts asks the OS for n free loopback ports. They are released
-// immediately and re-bound by the services a moment later; the race is
-// acceptable on a loopback interface and avoids hard-coding ports that a second
-// KNOTT instance would fight over.
-func reserveLoopbackPorts(n int) ([]int, error) {
-	ports := make([]int, 0, n)
-	listeners := make([]net.Listener, 0, n)
-	defer func() {
-		for _, l := range listeners {
-			l.Close()
-		}
-	}()
-	for i := 0; i < n; i++ {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			return nil, err
-		}
-		listeners = append(listeners, l)
-		ports = append(ports, l.Addr().(*net.TCPAddr).Port)
-	}
-	return ports, nil
-}
-
-// waitForPorts blocks until every port accepts a connection, or the deadline
-// passes. It reports whether all of them came up.
-func waitForPorts(ports []int, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for _, p := range ports {
-		addr := fmt.Sprintf("127.0.0.1:%d", p)
-		for {
-			conn, err := net.DialTimeout("tcp", addr, 400*time.Millisecond)
-			if err == nil {
-				conn.Close()
-				break
-			}
-			if time.Now().After(deadline) {
-				return false
-			}
-			time.Sleep(75 * time.Millisecond)
-		}
-	}
-	return true
-}
-
-func setDefault(key, value string) {
-	if os.Getenv(key) == "" {
-		os.Setenv(key, value)
-	}
+	return false
 }
 
 func envStr(key, fallback string) string {
@@ -397,12 +198,4 @@ func envInt(key string, fallback int) int {
 		}
 	}
 	return fallback
-}
-
-// displayHost turns a wildcard bind address into something a person can click.
-func displayHost(bind string) string {
-	if bind == "" || bind == "0.0.0.0" || bind == "::" {
-		return "localhost"
-	}
-	return bind
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,8 +18,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/google/uuid"
+	"github.com/regnant/knott/internal/httpx"
 	_ "modernc.org/sqlite"
 )
 
@@ -329,6 +330,14 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		dueAt = &t
 	}
 
+	if req.CallbackURL != "" && !trustedCallback(req.CallbackURL) {
+		// The task service POSTs to this URL when the task is completed. Left
+		// open, anyone able to create a task could make KNOTT send requests to
+		// any address it can reach — cloud metadata endpoints included.
+		writeError(w, 400, "INVALID_CALLBACK", "callback_url must point at the KNOTT engine's task-complete endpoint")
+		return
+	}
+
 	ctxJSON := string(req.ContextData)
 	if ctxJSON == "" {
 		ctxJSON = "{}"
@@ -363,6 +372,26 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	notifyWebhook("task.created", fmt.Sprintf("🔔 KNOTT: new human task awaiting review — %s (run %s)", req.Title, req.RunID),
 		map[string]any{"task_id": id, "run_id": req.RunID, "title": req.Title, "priority": priority})
 	writeJSON(w, 201, t)
+}
+
+// trustedCallback reports whether a callback URL targets the engine's
+// task-complete endpoint.
+func trustedCallback(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	if !strings.HasPrefix(u.Path, "/internal/v1/task-complete/") {
+		return false
+	}
+	engine := strings.TrimSpace(os.Getenv("EXECUTION_ENGINE_URL"))
+	if engine == "" {
+		// Distributed deployment without the variable: accept the documented
+		// path on any host, which still rules out arbitrary endpoints.
+		return true
+	}
+	e, err := url.Parse(engine)
+	return err == nil && strings.EqualFold(e.Host, u.Host)
 }
 
 func completeTask(w http.ResponseWriter, r *http.Request) {
@@ -491,11 +520,7 @@ func Run() error {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
-	}))
+	r.Use(httpx.InternalOnly)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -513,7 +538,7 @@ func Run() error {
 	log.Printf("║   Port: %-5s  DB: %-16s  ║", port, filepath.Base(dbPath))
 	log.Printf("╚══════════════════════════════════════╝")
 
-	return http.ListenAndServe(getEnv("HUMAN_TASK_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))+":"+port, r)
+	return httpx.Listen(getEnv("HUMAN_TASK_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))+":"+port, r)
 }
 
 func getEnv(key, fallback string) string {
