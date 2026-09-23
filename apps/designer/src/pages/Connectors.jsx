@@ -19,6 +19,7 @@ import { connectors as connectorsApi, credentials as credsApi } from '../lib/api
 import { loadConnectors } from '../lib/useConnectors.js';
 import { AppIcon } from '../components/AppIcon.jsx';
 import { useToast } from '../components/Layout.jsx';
+import { useKnottDialog } from '../components/KnottDialog.jsx';
 
 const STATUS = [
   ['all', 'All'],
@@ -225,6 +226,7 @@ function CredentialForm({ connector: c, fields, onSaved }) {
   const [busy, setBusy] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const { toast } = useToast();
+  const { confirm } = useKnottDialog();
 
   const dirty = Object.entries(drafts).filter(([, v]) => v.trim() !== '');
 
@@ -244,7 +246,7 @@ function CredentialForm({ connector: c, fields, onSaved }) {
   }
 
   async function remove(name, label) {
-    if (!confirm(`Delete the stored ${label}? ${c.name} will stop working until it is replaced.`)) return;
+    if (!await confirm(`Delete the stored ${label}? ${c.name} will stop working until it is replaced.`, { title: 'Remove credential', action: 'Remove', destructive: true })) return;
     setBusy(name);
     try {
       await credsApi.delete(name);

@@ -5,9 +5,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
+import DesktopChrome, { isWindowsDesktop } from './components/DesktopChrome.jsx';
+import { DialogProvider } from './components/KnottDialog.jsx';
 import './index.css';
 import './styles/designer.css';
 import './styles/console.css';
+import './styles/desktop.css';
 
 // In the desktop app, links to the outside world (API docs, provider consoles)
 // belong in the user's browser, not in a second app window.
@@ -23,8 +26,10 @@ document.addEventListener('click', e => {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <DialogProvider>
+      <ErrorBoundary>
+        {isWindowsDesktop() ? <DesktopChrome><App /></DesktopChrome> : <App />}
+      </ErrorBoundary>
+    </DialogProvider>
   </React.StrictMode>
 );

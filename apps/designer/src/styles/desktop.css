@@ -1,0 +1,13 @@
+/* The Wails title strip takes 42px of the viewport. All app screens must
+   measure against the remaining flex area, not 100vh/100dvh. */
+.desktop-content > .console-shell,
+.desktop-content > .designer-shell,
+.desktop-content > .login-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.desktop-content .studio {
+  height: 100%;
+  min-height: 0;
+}

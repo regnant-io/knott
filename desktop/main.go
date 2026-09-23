@@ -36,6 +36,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/regnant/knott/internal/app"
@@ -65,8 +66,10 @@ const (
 
 // Desktop holds the running platform and the window's context.
 type Desktop struct {
-	ctx  context.Context
-	inst *app.Instance
+	ctx       context.Context
+	inst      *app.Instance
+	quitting  atomic.Bool
+	trayReady atomic.Bool
 }
 
 func main() {
@@ -78,6 +81,9 @@ func main() {
 	log.Printf("KNOTT desktop %s (%s) starting on %s/%s", version, commit, runtime.GOOS, runtime.GOARCH)
 
 	d := &Desktop{}
+	d.startTray()
+	window := initialWindowBounds()
+	log.Printf("window size %dx%d (minimum %dx%d)", window.Width, window.Height, window.MinWidth, window.MinHeight)
 	var handler http.Handler
 	inst, err := app.Start(app.Options{
 		// The usual port keeps webhook URLs stable between launches; when
@@ -95,15 +101,25 @@ func main() {
 
 	err = wails.Run(&options.App{
 		Title:            "KNOTT",
-		Width:            1440,
-		Height:           920,
-		MinWidth:         960,
-		MinHeight:        640,
+		Width:            window.Width,
+		Height:           window.Height,
+		MinWidth:         window.MinWidth,
+		MinHeight:        window.MinHeight,
+		Frameless:        runtime.GOOS == "windows", // KNOTT's integrated Windows title strip
 		BackgroundColour: &options.RGBA{R: 250, G: 251, B: 249, A: 255},
 		AssetServer:      &assetserver.Options{Handler: handler},
 		Menu:             d.menu(),
+		Bind:             []interface{}{d},
 		OnStartup:        func(ctx context.Context) { d.ctx = ctx },
+		OnBeforeClose: func(ctx context.Context) bool {
+			if runtime.GOOS != "windows" || d.quitting.Load() || !d.trayReady.Load() {
+				return false
+			}
+			wruntime.WindowHide(ctx)
+			return true
+		},
 		OnShutdown: func(context.Context) {
+			d.stopTray()
 			if d.inst != nil {
 				d.inst.Shutdown(20 * time.Second)
 			}
@@ -121,9 +137,11 @@ func main() {
 		},
 		EnableDefaultContextMenu: true, // cut, copy and paste in text fields
 		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-			Theme:                windows.SystemDefault,
+			WebviewIsTransparent:              false,
+			WindowIsTranslucent:               false,
+			DisableWindowIcon:                 false,
+			DisableFramelessWindowDecorations: false,
+			Theme:                             windows.SystemDefault,
 			// Keep the web view's cache and storage with KNOTT's data rather
 			// than next to the executable, which may be read-only.
 			WebviewUserDataPath: filepath.Join(home, "webview"),
@@ -215,6 +233,9 @@ func setupLogging(home string) *os.File {
 
 // menu builds the native menu bar.
 func (d *Desktop) menu() *menu.Menu {
+	if runtime.GOOS == "windows" {
+		return nil // the same actions live beside KNOTT's window controls
+	}
 	m := menu.NewMenu()
 	if runtime.GOOS == "darwin" {
 		m.Append(menu.AppMenu())
