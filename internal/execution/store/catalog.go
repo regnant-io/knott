@@ -193,7 +193,7 @@ func nativeCatalog() []CatalogEntry {
 
 		// ── Developer ────────────────────────────────────────────────────────
 		{
-			Slug: "github", Name: "GitHub", Category: "Developer", Icon: "layers", Enabled: true,
+			Slug: "github", Name: "GitHub", Category: "Developer Tools", Icon: "layers", Enabled: true,
 			Description: "Create, comment on and close GitHub issues",
 			DocsURL:     "https://github.com/settings/tokens",
 			Credentials: []CredentialSpec{
@@ -201,7 +201,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "gitlab", Name: "GitLab", Category: "Developer", Icon: "layers", Enabled: true,
+			Slug: "gitlab", Name: "GitLab", Category: "Developer Tools", Icon: "layers", Enabled: true,
 			Description: "Create issues in GitLab projects",
 			DocsURL:     "https://gitlab.com/-/user_settings/personal_access_tokens",
 			Credentials: []CredentialSpec{
@@ -209,7 +209,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "linear", Name: "Linear", Category: "Developer", Icon: "layers", Enabled: true,
+			Slug: "linear", Name: "Linear", Category: "Developer Tools", Icon: "layers", Enabled: true,
 			Description: "Create issues in Linear",
 			DocsURL:     "https://linear.app/settings/api",
 			Credentials: []CredentialSpec{
@@ -219,7 +219,7 @@ func nativeCatalog() []CatalogEntry {
 
 		// ── Ticketing & support ──────────────────────────────────────────────
 		{
-			Slug: "jira", Name: "Jira", Category: "Ticketing", Icon: "layers", Enabled: true,
+			Slug: "jira", Name: "Jira", Category: "Customer Support", Icon: "layers", Enabled: true,
 			Description: "Create and comment on Jira issues",
 			DocsURL:     "https://id.atlassian.com/manage-profile/security/api-tokens",
 			Credentials: []CredentialSpec{
@@ -229,7 +229,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "zendesk", Name: "Zendesk", Category: "Ticketing", Icon: "layers", Enabled: true,
+			Slug: "zendesk", Name: "Zendesk", Category: "Customer Support", Icon: "layers", Enabled: true,
 			Description: "Create support tickets in Zendesk",
 			Credentials: []CredentialSpec{
 				plain("ZENDESK_BASE_URL", "Site URL", "Your Zendesk subdomain.", "https://acme.zendesk.com"),
@@ -238,7 +238,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "freshdesk", Name: "Freshdesk", Category: "Ticketing", Icon: "layers", Enabled: true,
+			Slug: "freshdesk", Name: "Freshdesk", Category: "Customer Support", Icon: "layers", Enabled: true,
 			Description: "Create support tickets in Freshdesk",
 			Credentials: []CredentialSpec{
 				plain("FRESHDESK_BASE_URL", "Site URL", "Your Freshdesk domain.", "https://acme.freshdesk.com"),
@@ -246,7 +246,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "servicenow", Name: "ServiceNow", Category: "Operations", Icon: "zap", Enabled: true,
+			Slug: "servicenow", Name: "ServiceNow", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "Create incidents in ServiceNow",
 			Credentials: []CredentialSpec{
 				plain("SERVICENOW_BASE_URL", "Instance URL", "Your ServiceNow instance.", "https://acme.service-now.com"),
@@ -255,7 +255,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "pagerduty", Name: "PagerDuty", Category: "Operations", Icon: "zap", Enabled: true,
+			Slug: "pagerduty", Name: "PagerDuty", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "Trigger incidents through the Events API",
 			DocsURL:     "https://support.pagerduty.com/docs/services-and-integrations",
 			Credentials: []CredentialSpec{
@@ -368,7 +368,7 @@ func nativeCatalog() []CatalogEntry {
 
 		// ── Data ─────────────────────────────────────────────────────────────
 		{
-			Slug: "airtable", Name: "Airtable", Category: "Database", Icon: "database", Enabled: true,
+			Slug: "airtable", Name: "Airtable", Category: "Databases", Icon: "database", Enabled: true,
 			Description: "Create, update and list Airtable records",
 			DocsURL:     "https://airtable.com/create/tokens",
 			Credentials: []CredentialSpec{
@@ -376,7 +376,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "database", Name: "SQL Database", Category: "Database", Icon: "database", Enabled: true,
+			Slug: "database", Name: "SQL Database", Category: "Databases", Icon: "database", Enabled: true,
 			Description: "Run SQL queries against SQLite, PostgreSQL or MySQL",
 			Credentials: []CredentialSpec{
 				secret("DATABASE_DSN", "Connection String", "e.g. postgres://user:pass@host:5432/db?sslmode=require"),
@@ -385,7 +385,7 @@ func nativeCatalog() []CatalogEntry {
 
 		// ── Commerce & marketing ─────────────────────────────────────────────
 		{
-			Slug: "stripe", Name: "Stripe", Category: "Payments", Icon: "credit-card", Enabled: true,
+			Slug: "stripe", Name: "Stripe", Category: "Finance", Icon: "credit-card", Enabled: true,
 			Description: "Create customers, charges and refunds in Stripe",
 			DocsURL:     "https://dashboard.stripe.com/apikeys",
 			Credentials: []CredentialSpec{
@@ -440,17 +440,17 @@ func nativeCatalog() []CatalogEntry {
 
 		// ── Storage & files ────────────────────────────────────────────────────
 		{
-			Slug: "dropbox", Name: "Dropbox", Category: "Storage", Icon: "archive", Enabled: true,
+			Slug: "dropbox", Name: "Dropbox", Category: "Files & Storage", Icon: "archive", Enabled: true,
 			Description: "List and upload files in Dropbox", DocsURL: "https://www.dropbox.com/developers/apps",
 			Credentials: []CredentialSpec{secret("DROPBOX_ACCESS_TOKEN", "Access Token", "Dropbox App Console → OAuth 2 → Generated access token.")},
 		},
 		{
-			Slug: "box", Name: "Box", Category: "Storage", Icon: "archive", Enabled: true,
+			Slug: "box", Name: "Box", Category: "Files & Storage", Icon: "archive", Enabled: true,
 			Description: "List folders and upload files in Box", DocsURL: "https://developer.box.com/guides/authentication/",
 			Credentials: []CredentialSpec{secret("BOX_ACCESS_TOKEN", "Access Token", "A Box OAuth 2 access token for the target enterprise or user.")},
 		},
 		{
-			Slug: "google_drive", Name: "Google Drive", Category: "Storage", Icon: "archive", Enabled: true,
+			Slug: "google_drive", Name: "Google Drive", Category: "Files & Storage", Icon: "archive", Enabled: true,
 			Description: "List and create files in Google Drive", DocsURL: "https://console.cloud.google.com/apis/credentials",
 			Credentials: []CredentialSpec{
 				secret("GOOGLE_CLIENT_ID", "OAuth Client ID", "Google Cloud Console → APIs & Services → Credentials."),
@@ -461,24 +461,24 @@ func nativeCatalog() []CatalogEntry {
 			CredentialSets: [][]string{{"GOOGLE_ACCESS_TOKEN"}, {"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"}},
 		},
 		{
-			Slug: "onedrive", Name: "Microsoft OneDrive", Category: "Storage", Icon: "archive", Enabled: true,
+			Slug: "onedrive", Name: "Microsoft OneDrive", Category: "Files & Storage", Icon: "archive", Enabled: true,
 			Description: "List and create files in OneDrive through Microsoft Graph",
 			Credentials: []CredentialSpec{secret("MS_GRAPH_TOKEN", "Microsoft Graph Token", "An OAuth token with Files.ReadWrite permissions.")},
 		},
 
 		// ── Infrastructure & observability ─────────────────────────────────────
 		{
-			Slug: "cloudflare", Name: "Cloudflare", Category: "Operations", Icon: "cloud", Enabled: true,
+			Slug: "cloudflare", Name: "Cloudflare", Category: "Developer Tools", Icon: "cloud", Enabled: true,
 			Description: "Manage Cloudflare zones and DNS records", DocsURL: "https://dash.cloudflare.com/profile/api-tokens",
 			Credentials: []CredentialSpec{secret("CLOUDFLARE_API_TOKEN", "API Token", "Cloudflare → My Profile → API Tokens.")},
 		},
 		{
-			Slug: "digitalocean", Name: "DigitalOcean", Category: "Operations", Icon: "cloud", Enabled: true,
+			Slug: "digitalocean", Name: "DigitalOcean", Category: "Developer Tools", Icon: "cloud", Enabled: true,
 			Description: "List and manage DigitalOcean resources", DocsURL: "https://cloud.digitalocean.com/account/api/tokens",
 			Credentials: []CredentialSpec{secret("DIGITALOCEAN_TOKEN", "Personal Access Token", "DigitalOcean → API → Tokens/Keys.")},
 		},
 		{
-			Slug: "datadog", Name: "Datadog", Category: "Operations", Icon: "zap", Enabled: true,
+			Slug: "datadog", Name: "Datadog", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "Submit events and query Datadog", DocsURL: "https://app.datadoghq.com/organization-settings/api-keys",
 			Credentials: []CredentialSpec{
 				secret("DATADOG_API_KEY", "API Key", "Datadog → Organization Settings → API Keys."),
@@ -487,17 +487,17 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "newrelic", Name: "New Relic", Category: "Operations", Icon: "zap", Enabled: true,
+			Slug: "newrelic", Name: "New Relic", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "Query New Relic NerdGraph", DocsURL: "https://one.newrelic.com/api-keys",
 			Credentials: []CredentialSpec{secret("NEW_RELIC_API_KEY", "User API Key", "New Relic → API keys. Use a User key.")},
 		},
 		{
-			Slug: "sentry", Name: "Sentry", Category: "Operations", Icon: "zap", Enabled: true,
+			Slug: "sentry", Name: "Sentry", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "List projects and inspect issues in Sentry", DocsURL: "https://sentry.io/settings/account/api/auth-tokens/",
 			Credentials: []CredentialSpec{secret("SENTRY_AUTH_TOKEN", "Auth Token", "Sentry → User settings → Auth tokens.")},
 		},
 		{
-			Slug: "grafana", Name: "Grafana", Category: "Operations", Icon: "zap", Enabled: true,
+			Slug: "grafana", Name: "Grafana", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "Search dashboards and call the Grafana API",
 			Credentials: []CredentialSpec{
 				plain("GRAFANA_URL", "Grafana URL", "The root URL of your Grafana instance.", "https://grafana.example.com"),
@@ -505,7 +505,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "elasticsearch", Name: "Elasticsearch", Category: "Database", Icon: "database", Enabled: true,
+			Slug: "elasticsearch", Name: "Elasticsearch", Category: "Databases", Icon: "database", Enabled: true,
 			Description: "Search and index Elasticsearch documents",
 			Credentials: []CredentialSpec{
 				plain("ELASTICSEARCH_URL", "Cluster URL", "Elasticsearch endpoint.", "https://cluster.example.com"),
@@ -515,7 +515,7 @@ func nativeCatalog() []CatalogEntry {
 
 		// ── Data platforms ─────────────────────────────────────────────────────
 		{
-			Slug: "supabase", Name: "Supabase", Category: "Database", Icon: "database", Enabled: true,
+			Slug: "supabase", Name: "Supabase", Category: "Databases", Icon: "database", Enabled: true,
 			Description: "Read and write Supabase tables through PostgREST", DocsURL: "https://supabase.com/dashboard/project/_/settings/api",
 			Credentials: []CredentialSpec{
 				plain("SUPABASE_URL", "Project URL", "Supabase project settings → API.", "https://project.supabase.co"),
@@ -523,7 +523,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "mongodb_atlas", Name: "MongoDB Atlas Data API", Category: "Database", Icon: "database", Enabled: true,
+			Slug: "mongodb_atlas", Name: "MongoDB Atlas Data API", Category: "Databases", Icon: "database", Enabled: true,
 			Description: "Find and insert MongoDB Atlas documents through the Data API",
 			Credentials: []CredentialSpec{
 				plain("MONGODB_DATA_API_URL", "Data API URL", "Atlas App Services Data API endpoint.", "https://data.mongodb-api.com/app/data-xxxxx/endpoint/data/v1"),
@@ -531,7 +531,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "rabbitmq", Name: "RabbitMQ", Category: "Messaging", Icon: "message-square", Enabled: true,
+			Slug: "rabbitmq", Name: "RabbitMQ", Category: "Communication", Icon: "message-square", Enabled: true,
 			Description: "Publish messages through the RabbitMQ Management API",
 			Credentials: []CredentialSpec{
 				plain("RABBITMQ_URL", "Management URL", "RabbitMQ management endpoint.", "https://rabbitmq.example.com"),
@@ -540,7 +540,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "kafka_rest", Name: "Kafka REST Proxy", Category: "Messaging", Icon: "message-square", Enabled: true,
+			Slug: "kafka_rest", Name: "Kafka REST Proxy", Category: "Communication", Icon: "message-square", Enabled: true,
 			Description: "Produce records through a Kafka REST Proxy",
 			Credentials: []CredentialSpec{
 				plain("KAFKA_REST_URL", "REST Proxy URL", "Confluent or self-hosted REST Proxy root URL.", "https://kafka.example.com"),
@@ -555,17 +555,17 @@ func nativeCatalog() []CatalogEntry {
 			Credentials: []CredentialSpec{secret("ZOOM_ACCESS_TOKEN", "Access Token", "A Zoom OAuth access token with meeting scopes.")},
 		},
 		{
-			Slug: "typeform", Name: "Typeform", Category: "Forms", Icon: "layers", Enabled: true,
+			Slug: "typeform", Name: "Typeform", Category: "Productivity", Icon: "layers", Enabled: true,
 			Description: "List forms and retrieve Typeform responses", DocsURL: "https://www.typeform.com/developers/get-started/personal-access-token/",
 			Credentials: []CredentialSpec{secret("TYPEFORM_TOKEN", "Personal Access Token", "Typeform account → Personal tokens.")},
 		},
 		{
-			Slug: "surveymonkey", Name: "SurveyMonkey", Category: "Forms", Icon: "layers", Enabled: true,
+			Slug: "surveymonkey", Name: "SurveyMonkey", Category: "Productivity", Icon: "layers", Enabled: true,
 			Description: "List surveys and retrieve responses", DocsURL: "https://developer.surveymonkey.com/api/v3/",
 			Credentials: []CredentialSpec{secret("SURVEYMONKEY_TOKEN", "Access Token", "SurveyMonkey developer app credentials.")},
 		},
 		{
-			Slug: "wordpress", Name: "WordPress", Category: "Content", Icon: "layers", Enabled: true,
+			Slug: "wordpress", Name: "WordPress", Category: "Productivity", Icon: "layers", Enabled: true,
 			Description: "Create and list WordPress posts through the REST API",
 			Credentials: []CredentialSpec{
 				plain("WORDPRESS_URL", "Site URL", "WordPress site root URL.", "https://example.com"),
@@ -583,7 +583,7 @@ func nativeCatalog() []CatalogEntry {
 			},
 		},
 		{
-			Slug: "quickbooks", Name: "QuickBooks Online", Category: "Accounting", Icon: "credit-card", Enabled: true,
+			Slug: "quickbooks", Name: "QuickBooks Online", Category: "Finance", Icon: "credit-card", Enabled: true,
 			Description: "Query customers and invoices in QuickBooks Online",
 			Credentials: []CredentialSpec{
 				secret("QUICKBOOKS_ACCESS_TOKEN", "OAuth Access Token", "Intuit OAuth 2 access token."),
@@ -598,11 +598,11 @@ func nativeCatalog() []CatalogEntry {
 
 		// ── Generic ──────────────────────────────────────────────────────────
 		{
-			Slug: "webhook", Name: "HTTP / Webhook", Category: "Custom", Icon: "zap", Enabled: true,
+			Slug: "webhook", Name: "HTTP / Webhook", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "Call any HTTP endpoint — REST, webhooks, internal services",
 		},
 		{
-			Slug: "graphql", Name: "GraphQL", Category: "Custom", Icon: "zap", Enabled: true,
+			Slug: "graphql", Name: "GraphQL", Category: "Developer Tools", Icon: "zap", Enabled: true,
 			Description: "Call any GraphQL API endpoint",
 		},
 	}

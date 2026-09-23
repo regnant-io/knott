@@ -272,7 +272,7 @@ func layoutMissing(steps []map[string]any) {
 		}
 		r := row[d]
 		row[d]++
-		s["position"] = map[string]any{"x": 80 + d*280, "y": 200 + r*160}
+		s["position"] = map[string]any{"x": 80 + d*340, "y": 200 + r*170}
 	}
 }
 

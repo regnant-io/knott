@@ -6,7 +6,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send request",
     "fields": [
      {
       "name": "url",
@@ -37,7 +37,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send message",
     "fields": [
      {
       "name": "channel",
@@ -61,7 +61,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send email",
     "fields": [
      {
       "name": "to",
@@ -90,7 +90,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send SMS",
     "fields": [
      {
       "name": "to",
@@ -115,7 +115,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send message",
     "fields": [
      {
       "name": "chat_id",
@@ -150,7 +150,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send message",
     "fields": [
      {
       "name": "content",
@@ -595,7 +595,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create event",
     "fields": [
      {
       "name": "calendar_id",
@@ -634,7 +634,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send message",
     "fields": [
      {
       "name": "title",
@@ -764,7 +764,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create issue",
     "fields": [
      {
       "name": "team_id",
@@ -794,7 +794,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create card",
     "fields": [
      {
       "name": "list_id",
@@ -824,7 +824,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create task",
     "fields": [
      {
       "name": "project_id",
@@ -853,7 +853,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create task",
     "fields": [
      {
       "name": "list_id",
@@ -883,7 +883,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Trigger incident",
     "fields": [
      {
       "name": "summary",
@@ -917,7 +917,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send message",
     "fields": [
      {
       "name": "text",
@@ -941,7 +941,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create ticket",
     "fields": [
      {
       "name": "base_url",
@@ -1030,7 +1030,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Add subscriber",
     "fields": [
      {
       "name": "list_id",
@@ -1063,7 +1063,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Generate text",
     "fields": [
      {
       "name": "model",
@@ -1093,7 +1093,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send notification",
     "fields": [
      {
       "name": "title",
@@ -1117,7 +1117,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Run query",
     "fields": [
      {
       "name": "url",
@@ -1152,7 +1152,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create issue",
     "fields": [
      {
       "name": "project_id",
@@ -1182,7 +1182,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create item",
     "fields": [
      {
       "name": "board_id",
@@ -1206,7 +1206,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create ticket",
     "fields": [
      {
       "name": "base_url",
@@ -1243,7 +1243,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create contact",
     "fields": [
      {
       "name": "email",
@@ -1266,7 +1266,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send email",
     "fields": [
      {
       "name": "to",
@@ -1296,7 +1296,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Send message",
     "fields": [
      {
       "name": "phone_number_id",
@@ -1326,7 +1326,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Add row",
     "fields": [
      {
       "name": "doc_id",
@@ -1357,7 +1357,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create lead",
     "fields": [
      {
       "name": "name",
@@ -1375,7 +1375,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Get current user",
     "fields": []
    }
   ]
@@ -1386,7 +1386,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Create incident",
     "fields": [
      {
       "name": "base_url",
@@ -1416,7 +1416,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Generate text",
     "fields": [
      {
       "name": "model",
@@ -1445,7 +1445,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Generate text",
     "fields": [
      {
       "name": "model",
@@ -1469,7 +1469,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Generate text",
     "fields": [
      {
       "name": "model",
@@ -1492,7 +1492,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Generate text",
     "fields": [
      {
       "name": "model",
@@ -1515,7 +1515,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List folder",
     "fields": [
      {
       "name": "path",
@@ -1532,7 +1532,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List folder",
     "fields": [
      {
       "name": "folder_id",
@@ -1549,7 +1549,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Search files",
     "fields": [
      {
       "name": "query",
@@ -1566,7 +1566,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List files",
     "fields": []
    }
   ]
@@ -1577,7 +1577,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List zones",
     "fields": []
    }
   ]
@@ -1588,7 +1588,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List droplets",
     "fields": []
    }
   ]
@@ -1599,7 +1599,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Post event",
     "fields": [
      {
       "name": "title",
@@ -1622,7 +1622,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Run NerdGraph query",
     "fields": [
      {
       "name": "query",
@@ -1640,7 +1640,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List projects",
     "fields": []
    }
   ]
@@ -1651,7 +1651,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Search dashboards",
     "fields": [
      {
       "name": "query",
@@ -1668,7 +1668,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Search index",
     "fields": [
      {
       "name": "index",
@@ -1734,7 +1734,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Find documents",
     "fields": [
      {
       "name": "data_source",
@@ -1770,7 +1770,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Publish message",
     "fields": [
      {
       "name": "vhost",
@@ -1805,7 +1805,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Produce record",
     "fields": [
      {
       "name": "topic",
@@ -1868,7 +1868,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List responses",
     "fields": [
      {
       "name": "form_id",
@@ -1885,7 +1885,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List surveys",
     "fields": []
    }
   ]
@@ -1934,7 +1934,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "List orders",
     "fields": []
    }
   ]
@@ -1945,7 +1945,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Run query",
     "fields": [
      {
       "name": "query",
@@ -1963,7 +1963,7 @@
   "actions": [
    {
     "id": "",
-    "label": "Run",
+    "label": "Search recent posts",
     "fields": [
      {
       "name": "query",

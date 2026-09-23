@@ -2,6 +2,7 @@
   "name": "knott-console",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,12 +12,12 @@
     "brand": "python ../../tools/brand/generate.py"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.6",
     "date-fns": "^4.1.0",
     "js-yaml": "^4.1.0",
     "lucide-react": "^0.453.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "reactflow": "^11.11.4",
     "recharts": "^2.13.3"
   },
   "devDependencies": {
@@ -27,6 +28,6 @@
     "vite": "^8.3.0",
     "vitest": "^5.0.1"
   },
-  "description": "KNOTT web console — workflow designer, run monitor and operations UI",
+  "description": "KNOTT web console \u00e2\u20ac\u201d workflow designer, run monitor and operations UI",
   "license": "Apache-2.0"
 }

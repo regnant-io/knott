@@ -3,12 +3,24 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-// Pointer capture keeps the drag alive across React Flow panes, nodes and overlays.
-// Unlike HTML drag-and-drop, this also works with pen/touch and embedded browsers.
-export default function PaletteItem({ spec, canvasRef, onPlace, onAdd, onDragging }) {
+/**
+ * A row that adds a step when chosen, or places it where it is dropped when
+ * dragged onto the canvas.
+ *
+ * Pointer capture keeps the drag alive across React Flow panes, nodes and
+ * overlays. Unlike HTML drag-and-drop it also works with pen and touch and in
+ * the desktop app's embedded web view.
+ *
+ * `spec.key` (falling back to `spec.type`) is what the callbacks receive.
+ */
+export default function PaletteItem({
+  spec, canvasRef, onPlace, onAdd, onDragging,
+  className = 'palette-node', children, title, active, onHover, rowRef,
+}) {
   const gesture = useRef(null);
   const [preview, setPreview] = useState(null);
   const Icon = spec.icon;
+  const key = spec.key ?? spec.type;
   function finish(e, cancelled = false) {
     const drag = gesture.current;
     if (!drag || drag.id !== e.pointerId) return;
@@ -16,15 +28,22 @@ export default function PaletteItem({ spec, canvasRef, onPlace, onAdd, onDraggin
     setPreview(null);
     onDragging(false);
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    if (cancelled || !drag.moved) return;
+    if (cancelled) return;
+    if (!drag.moved) {
+      // A plain click adds the step in the default place.
+      if (e.pointerType !== undefined && e.button === 0) onAdd(key);
+      return;
+    }
     const bounds = canvasRef.current?.getBoundingClientRect();
     if (bounds && e.clientX >= bounds.left && e.clientX <= bounds.right && e.clientY >= bounds.top && e.clientY <= bounds.bottom) {
-      onPlace(spec.type, { x: e.clientX, y: e.clientY });
+      onPlace(key, { x: e.clientX, y: e.clientY });
     }
   }
   return <>
-    <button type="button" className="palette-node" title={`${spec.summary}. Drag onto the canvas or press Enter to add.`}
-      aria-label={`Add ${spec.label}`} draggable={false}
+    <button type="button" ref={rowRef} className={`${className}${active ? ' active' : ''}`}
+      title={title ?? `${spec.summary || spec.label}. Drag onto the canvas or press Enter to add.`}
+      aria-label={`Add ${spec.label}`} draggable={false} data-active={active ? 'true' : undefined}
+      onMouseEnter={onHover}
       onPointerDown={e => {
         if (e.button !== 0) return;
         gesture.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
@@ -40,9 +59,12 @@ export default function PaletteItem({ spec, canvasRef, onPlace, onAdd, onDraggin
       }}
       onPointerUp={e => finish(e)} onPointerCancel={e => finish(e, true)} onLostPointerCapture={e => finish(e, true)}
       onKeyDown={e => { if (e.key === 'Escape') { gesture.current = null; setPreview(null); onDragging(false); } }}
-      onClick={e => { if (e.detail === 0) onAdd(spec.type); }} onDoubleClick={() => onAdd(spec.type)}>
-      <Icon size={14} style={{ color: spec.color }} />{spec.label}
+      onClick={e => { if (e.detail === 0) onAdd(key); }}>
+      {children ?? <><Icon size={14} style={{ color: spec.color }} />{spec.label}</>}
     </button>
-    {preview && createPortal(<div className="palette-drag-preview" style={{ left: preview.x + 14, top: preview.y + 14 }} aria-hidden="true"><Icon size={16} />{spec.label}</div>, document.body)}
+    {preview && createPortal(
+      <div className="palette-drag-preview" style={{ left: preview.x + 14, top: preview.y + 14 }} aria-hidden="true">
+        {Icon ? <Icon size={16} /> : null}{spec.label}
+      </div>, document.body)}
   </>;
 }
