@@ -140,7 +140,7 @@ export const taskSpecs = {
 
 // ─── AI Provider Config (AI engine, proxied via engine) ───────────────────────
 export const aiConfig = {
-  get:          ()     => req(`${BASE.ai}/config`),
+  get:          (refresh) => req(`${BASE.ai}/config${refresh ? '?refresh=1' : ''}`),
   update:       (body) => req(`${BASE.ai}/config`, { method: 'PUT', body }),
   test:         (body) => req(`${BASE.ai}/config/test`, { method: 'POST', body: body || {} }),
   ollamaModels: ()     => req(`${BASE.ai}/ollama/models`),
@@ -150,4 +150,14 @@ export const aiConfig = {
 export const aiGenerate = {
   workflow: (prompt, context) =>
     req(`${BASE.ai}/generate-workflow`, { method: 'POST', body: { prompt, context } }),
+};
+
+// ─── Server info (public URL for webhooks, runtime, auth) ─────────────────────
+export const info = {
+  get: () => req(`${BASE.engine}/info`),
+};
+
+// ─── AI prompt playground (the AI Prompt step's Test button) ──────────────────
+export const aiComplete = {
+  run: (body) => req(`${BASE.ai}/complete`, { method: 'POST', body }),
 };

@@ -174,14 +174,21 @@ func TestDecideFallsBackWhenTheProviderFails(t *testing.T) {
 func TestDecideCallsOllamaAndRetriesAnEmptyReply(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			json.NewEncoder(w).Encode(map[string]any{"models": []any{map[string]any{"name": "llama3.1:latest"}}})
+			return
+		}
+		if r.URL.Path != "/api/chat" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
 		calls++
 		if calls == 1 {
 			// A cold local model routinely drops the first response.
-			json.NewEncoder(w).Encode(map[string]any{"response": ""})
+			json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"content": ""}})
 			return
 		}
 		json.NewEncoder(w).Encode(map[string]any{
-			"response":          `{"decision":"APPROVE","confidence":0.88,"reasoning":"Looks fine"}`,
+			"message":           map[string]any{"role": "assistant", "content": `{"decision":"APPROVE","confidence":0.88,"reasoning":"Looks fine"}`},
 			"eval_count":        40,
 			"prompt_eval_count": 60,
 		})

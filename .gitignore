@@ -35,3 +35,13 @@ Thumbs.db
 /.scratch/
 /dist/
 app-window/
+
+# Generated on first run in a checkout
+/secret.key
+
+# Desktop build output (resources are generated per build with the version)
+/desktop/rsrc_windows_*.syso
+/desktop/knott-desktop
+/desktop/KNOTT
+/build/windows/MicrosoftEdgeWebview2Setup.exe
+/build/windows/license.rtf

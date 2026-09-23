@@ -6,6 +6,95 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-23
+
+A native desktop app, a rebuilt workflow builder, local AI that works out of
+the box, 113 new integrations, and a security pass.
+
+### Added
+
+- **A native desktop app** (`desktop/`, Wails). A real window over the
+  operating system's own web view — WebView2, WKWebView, WebKitGTK — with
+  native menus, a single-instance lock, logs in the data folder, and a clean
+  shutdown that lets in-flight runs finish. It replaces launching Chrome or
+  Edge in `--app` mode, which depended on a browser being installed and
+  looked like one.
+- **Installers.** Windows: a configurable installer (per-user or all users,
+  install folder, `knott` command and PATH, shortcuts, start at sign-in,
+  WebView2 bootstrap, silent `/S` installs) for x64 and ARM64, plus a portable
+  zip. macOS: `KNOTT.app` in a drag-to-install disk image for Apple silicon and
+  Intel. Linux: `knott-desktop` .deb/.rpm for x64 and ARM64, alongside the
+  server package. Built on each platform by the release workflow.
+- **A redesigned builder.** Full-bleed canvas; a node creator that slides in
+  beside the canvas instead of a modal, browsing by category, drilling from an
+  app into its actions, searching steps, apps and actions together, and
+  dragging results onto the canvas; + and × on every connection to insert or
+  remove a step; an inspector with Setup, Settings and Output tabs; drafting a
+  workflow from a description on the empty canvas.
+- **New steps:** AI Prompt (free-form prompts with text or JSON output and a
+  Test button), Sort, Limit, Remove duplicates, Filter items, Map items,
+  Aggregate (with group by), Date & time, Crypto (hash, HMAC, base64, UUID),
+  Stop and error, and presets for webhook, schedule and polling triggers and
+  HTTP Request.
+- **Declarative connectors.** Integrations are JSON definitions the engine
+  runs generically and the console renders; see `docs/connectors.md`.
+  113 new connectors across CRM, marketing, e-commerce, logistics, finance,
+  developer tools, databases, AI, communication, support, productivity, HR,
+  healthcare (FHIR), education, legal, maps and data, smart home and social
+  media — 177 in total.
+- **Workflow generation and a prompt playground in the binary** — no Python.
+- `GET /api/v1/info` reports the public URL (for webhook addresses), runtime
+  and whether a key is required.
+
+### Changed
+
+- **Local AI works without configuration.** KNOTT detects a running Ollama
+  (honouring `OLLAMA_HOST`), uses an installed model when the configured one
+  is missing, talks to it over `/api/chat`, keeps it loaded between steps, and
+  gives AI steps five minutes rather than 45 seconds. A model failure that
+  falls back to rules is now recorded as such on the decision.
+- The Python AI sidecar is opt-in (`--ai-sidecar`); the container image no
+  longer carries Python.
+- The Connectors page is a searchable grid with a category rail and a drawer
+  per app.
+- Moved to `@xyflow/react` 12 (React Flow 11 is superseded); the builder and
+  the overview load on demand, cutting the initial bundle from 988 kB to 289 kB.
+
+### Security
+
+- **Browser-origin protection.** An unauthenticated loopback API could be
+  driven by any web page the user visited — create a workflow that posts the
+  stored credentials elsewhere, then run it. Cross-origin requests are now
+  refused and, on a loopback bind, so are foreign host names (DNS rebinding).
+  CORS is off unless origins are listed.
+- **Workflows can no longer read the platform's own secrets** from the
+  environment (`KNOTT_SECRET_KEY`, `API_KEYS`, …) by naming them as a
+  credential.
+- **Human-task callbacks must target the engine**, closing a server-side
+  request forgery through `callback_url`.
+- The internal services refuse browser-made requests, and every listener has
+  header and idle timeouts.
+- `golang.org/x/sys` 0.46 (GO-2026-5024).
+- The dev start scripts no longer disable Go module checksum verification.
+
+### Fixed
+
+- Clicking a step marked the workflow as unsaved; drags created an undo step
+  even when nothing moved.
+- Per-run locks were never released, growing memory for the life of the
+  process.
+- Registry calls had no timeout and leaked response bodies when a workflow was
+  missing.
+- Settings reported Ollama as configured when the engine was not using it.
+
+### Removed
+
+- The legacy per-service Go modules under `services/` (superseded by
+  `internal/` and missing its fixes), the WiX v3 MSI, and the browser-based
+  AppImage.
+
+## [0.9.0] — 2026-09-22
+
 The release that makes KNOTT something you can hand to someone else.
 
 ### Added

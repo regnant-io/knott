@@ -358,166 +358,158 @@ export function Settings({ theme = 'system', onSetTheme }) {
   );
 }
 
-// Interactive AI provider configuration — switch provider, set keys/models, and
-// test connectivity at runtime (persisted server-side, survives restarts).
+// AI provider configuration. The engine detects a local Ollama by itself, so
+// this page mostly reports what is in effect — which provider, which model,
+// and why — and lets the operator override it.
 function AIProviderSettings({ toast }) {
   const [cfg, setCfg]         = useState(null);
   const [form, setForm]       = useState({ provider: 'auto', anthropic_api_key: '', ollama_base_url: '', ollama_model: '' });
-  const [models, setModels]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [testing, setTesting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
-  async function load() {
-    try {
-      const c = await aiConfigApi.get();
-      setCfg(c);
-      setForm(f => ({
-        provider: c.provider || 'auto',
-        anthropic_api_key: '',           // never echo secrets back; blank means "unchanged"
-        ollama_base_url: c.ollama_base_url || 'http://localhost:11434',
-        ollama_model: c.ollama_model || 'llama3.1:latest',
-      }));
-    } catch (e) {
-      // AI engine offline — show a clear hint rather than crashing the page.
-      setCfg({ offline: true });
-    } finally { setLoading(false); }
+  function adopt(c) {
+    setCfg(c);
+    setForm({
+      provider: c.provider || 'auto',
+      anthropic_api_key: '',               // never echoed back; blank means unchanged
+      ollama_base_url: c.ollama_configured_url || '',
+      ollama_model: c.ollama_model || '',
+    });
   }
 
+  async function load(refresh = false) {
+    try { adopt(await aiConfigApi.get(refresh)); }
+    catch { setCfg({ offline: true, models: [] }); }
+    finally { setLoading(false); setRefreshing(false); }
+  }
   useEffect(() => { load(); }, []);
 
-  async function loadModels() {
-    try {
-      const r = await aiConfigApi.ollamaModels();
-      setModels(r.data || []);
-      if (!(r.data || []).length) toast('No Ollama models found. Run: ollama pull llama3.1', 'warning');
-    } catch (e) { toast('Could not reach Ollama', 'error', e.message); setModels([]); }
+  function patch() {
+    const p = { provider: form.provider, ollama_base_url: form.ollama_base_url.trim(), ollama_model: form.ollama_model };
+    if (form.anthropic_api_key.trim()) p.anthropic_api_key = form.anthropic_api_key.trim();
+    return p;
   }
 
   async function save() {
     setSaving(true);
     try {
-      const patch = { provider: form.provider, ollama_base_url: form.ollama_base_url, ollama_model: form.ollama_model };
-      if (form.anthropic_api_key.trim()) patch.anthropic_api_key = form.anthropic_api_key.trim();
-      const c = await aiConfigApi.update(patch);
-      setCfg(c);
-      setForm(f => ({ ...f, anthropic_api_key: '' }));
-      toast('AI configuration saved', 'success', `Active provider: ${c.active_provider}`);
+      const c = await aiConfigApi.update(patch());
+      adopt(c);
+      toast('AI settings saved', 'success', describeActive(c));
     } catch (e) { toast('Save failed', 'error', e.message); }
     finally { setSaving(false); }
   }
 
   async function test() {
     setTesting(true); setTestResult(null);
-    try {
-      const patch = { provider: form.provider, ollama_base_url: form.ollama_base_url, ollama_model: form.ollama_model };
-      if (form.anthropic_api_key.trim()) patch.anthropic_api_key = form.anthropic_api_key.trim();
-      const r = await aiConfigApi.test(patch);
-      setTestResult(r);
-      toast(r.ok ? 'Connection OK' : 'Connection failed', r.ok ? 'success' : 'error', r.detail);
-      if (r.models) setModels(r.models);
-    } catch (e) { setTestResult({ ok: false, detail: e.message }); toast('Test failed', 'error', e.message); }
+    try { setTestResult(await aiConfigApi.test(patch())); }
+    catch (e) { setTestResult({ ok: false, detail: e.message }); }
     finally { setTesting(false); }
+  }
+
+  async function clearKey() {
+    try { adopt(await aiConfigApi.update({ clear_anthropic_key: true })); toast('Anthropic key removed', 'info'); }
+    catch (e) { toast('Could not remove the key', 'error', e.message); }
   }
 
   if (loading) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading AI configuration…</div>;
 
+  const models = (cfg?.models || []).filter(m => !m.embedding);
+  const local = models.filter(m => !m.remote);
+  const cloud = models.filter(m => m.remote);
+  const active = cfg?.active_provider || 'simulation';
+
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <Key size={14} />
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>AI Provider Configuration</span>
-        {cfg?.active_provider && (
-          <span className={`badge badge-${cfg.active_provider === 'simulation' ? 'muted' : 'green'}`} style={{ marginLeft: 'auto' }}>
-            Active: {cfg.active_provider}
-          </span>
-        )}
+    <div className="ai-settings">
+      <div className={`ai-status ${active}`}>
+        <div className="ai-status-icon">{active === 'simulation' ? <Server size={18} /> : active === 'ollama' ? <Cpu size={18} /> : <Cloud size={18} />}</div>
+        <div className="ai-status-text">
+          <strong>{active === 'ollama' ? 'Local AI with Ollama' : active === 'anthropic' ? 'Anthropic Claude' : 'Built-in rules (no AI model)'}</strong>
+          <span>{describeActive(cfg)}</span>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => { setRefreshing(true); load(true); }} disabled={refreshing} title="Check again">
+          {refreshing ? <span className="spinner-sm" /> : <Refresh size={13} />} Recheck
+        </button>
       </div>
 
-      {cfg?.offline && (
-        <div style={{ fontSize: 12, color: 'var(--yellow)', marginBottom: 12 }}>
-          AI Decision Engine is offline. Start it to manage provider settings; you can still edit and save below once it’s reachable.
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {/* Provider selector */}
-        <div className="form-group" style={{ marginBottom: 0 }}>
+      <div className="ai-grid">
+        <div className="form-group">
           <label className="form-label">Provider</label>
           <select className="select" value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
-            <option value="auto">Auto (Anthropic → Ollama → Simulation)</option>
+            <option value="auto">Automatic — Anthropic if a key is set, else local Ollama, else rules</option>
+            <option value="ollama">Ollama (local, private)</option>
             <option value="anthropic">Anthropic Claude (cloud)</option>
-            <option value="ollama">Ollama (local / sovereign)</option>
-            <option value="simulation">Simulation (rule-based, offline)</option>
+            <option value="simulation">Built-in rules only (no model)</option>
           </select>
-          <div className="form-hint">Choose how AI decisions are made. Sovereign deployments use Ollama for full data isolation.</div>
         </div>
 
-        {/* Anthropic key */}
-        <div className="form-group" style={{ marginBottom: 0 }}>
+        <div className="form-group">
           <label className="form-label">
-            <Cloud size={12} style={{ display: 'inline', marginRight: 4 }} />
-            Anthropic API Key {cfg?.anthropic_configured && <span style={{ color: 'var(--green)', fontWeight: 400 }}>· configured</span>}
+            Ollama address {cfg?.ollama_reachable
+              ? <span className="ok-text">· reachable{cfg.ollama_detected ? ' (detected)' : ''}</span>
+              : <span className="muted">· not reachable</span>}
           </label>
-          <input className="input" type="password" autoComplete="off"
-            placeholder={cfg?.anthropic_configured ? '•••••••• (leave blank to keep)' : 'sk-ant-...'}
-            value={form.anthropic_api_key}
-            onChange={e => setForm(f => ({ ...f, anthropic_api_key: e.target.value }))} />
-          <div className="form-hint">Stored server-side. Leave blank to keep the existing key.</div>
+          <input className="input" placeholder={`${cfg?.ollama_base_url || 'http://127.0.0.1:11434'} (detected automatically)`}
+            value={form.ollama_base_url} onChange={e => setForm(f => ({ ...f, ollama_base_url: e.target.value }))} />
+          <div className="form-hint">Leave blank to use the local Ollama (honours <code>OLLAMA_HOST</code>).</div>
         </div>
 
-        {/* Ollama base URL */}
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">
-            <Cpu size={12} style={{ display: 'inline', marginRight: 4 }} />Ollama Base URL
-            {cfg?.ollama_reachable
-              ? <span style={{ color: 'var(--green)', fontWeight: 400 }}> · reachable</span>
-              : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · not detected</span>}
-          </label>
-          <input className="input" placeholder="http://localhost:11434"
-            value={form.ollama_base_url}
-            onChange={e => setForm(f => ({ ...f, ollama_base_url: e.target.value }))} />
-        </div>
-
-        {/* Ollama model */}
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Ollama Model</label>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {models.length > 0 ? (
-              <select className="select" value={form.ollama_model} onChange={e => setForm(f => ({ ...f, ollama_model: e.target.value }))}>
-                {!models.includes(form.ollama_model) && <option value={form.ollama_model}>{form.ollama_model}</option>}
-                {models.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            ) : (
-              <input className="input" placeholder="llama3.1:latest"
-                value={form.ollama_model}
-                onChange={e => setForm(f => ({ ...f, ollama_model: e.target.value }))} />
-            )}
-            <button className="btn btn-secondary btn-sm" onClick={loadModels} title="List installed Ollama models">
-              <Refresh size={13} />
-            </button>
+        <div className="form-group">
+          <label className="form-label">Ollama model</label>
+          <select className="select" value={form.ollama_model} onChange={e => setForm(f => ({ ...f, ollama_model: e.target.value }))}>
+            <option value="">Automatic{cfg?.ollama_effective_model ? ` — ${cfg.ollama_effective_model}` : ' — first installed model'}</option>
+            {form.ollama_model && !models.some(m => m.name === form.ollama_model) && <option value={form.ollama_model}>{form.ollama_model} (not installed)</option>}
+            {local.length > 0 && <optgroup label="On this machine">{local.map(m => <option key={m.name} value={m.name}>{m.name}{m.parameter_size ? ` · ${m.parameter_size}` : ''}</option>)}</optgroup>}
+            {cloud.length > 0 && <optgroup label="Ollama cloud (needs ollama signin)">{cloud.map(m => <option key={m.name} value={m.name}>{m.name}{m.parameter_size ? ` · ${m.parameter_size}` : ''}</option>)}</optgroup>}
+          </select>
+          <div className="form-hint">
+            {models.length ? `${local.length} local and ${cloud.length} cloud model${cloud.length === 1 ? '' : 's'} installed.` : <>No models found. Install one with <code>ollama pull llama3.2</code>.</>}
           </div>
-          <div className="form-hint">Click refresh to list models installed in your Ollama instance.</div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">
+            Anthropic API key {cfg?.anthropic_configured && <span className="ok-text">· saved</span>}
+          </label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input className="input" type="password" autoComplete="off"
+              placeholder={cfg?.anthropic_configured ? '•••••••• (leave blank to keep)' : 'sk-ant-…'}
+              value={form.anthropic_api_key} onChange={e => setForm(f => ({ ...f, anthropic_api_key: e.target.value }))} />
+            {cfg?.anthropic_configured && <button className="btn btn-ghost btn-sm" onClick={clearKey}>Remove</button>}
+          </div>
+          <div className="form-hint">Stored encrypted on this machine.</div>
         </div>
       </div>
 
       {testResult && (
-        <div style={{ marginTop: 14, display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12,
-                      color: testResult.ok ? 'var(--green)' : 'var(--red)' }}>
-          {testResult.ok ? <CheckCircle2 size={14} /> : <XCircleIcon size={14} />}
+        <div className={`ai-test ${testResult.ok ? 'ok' : 'err'}`}>
+          {testResult.ok ? <CheckCircle2 size={15} /> : <XCircleIcon size={15} />}
           <span>{testResult.detail}</span>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
         <button className="btn btn-secondary" onClick={test} disabled={testing}>
-          {testing ? <span className="spinner-sm" /> : <Server size={13} />}Test Connection
+          {testing ? <span className="spinner-sm" /> : <Server size={13} />} Send a test prompt
         </button>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? <span className="spinner-sm" /> : <CheckCircle2 size={13} />}Save Configuration
+          {saving ? <span className="spinner-sm" /> : <CheckCircle2 size={13} />} Save
         </button>
       </div>
     </div>
   );
+}
+
+function describeActive(c) {
+  if (!c || c.offline) return 'The AI service could not be reached.';
+  switch (c.active_provider) {
+    case 'ollama': return `Using ${c.ollama_effective_model || 'a local model'} at ${c.ollama_base_url}. Data never leaves this machine.`;
+    case 'anthropic': return 'Decisions and prompts are sent to Anthropic.';
+    default: return c.detail
+      ? `${c.detail}. AI Decision steps fall back to deterministic rules; AI Prompt steps need a model.`
+      : 'Install Ollama (ollama.com) and pull a model, or add an Anthropic key, to enable AI steps.';
+  }
 }

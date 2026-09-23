@@ -15,8 +15,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/google/uuid"
+	"github.com/regnant/knott/internal/httpx"
 	_ "modernc.org/sqlite"
 )
 
@@ -269,11 +269,7 @@ func Run() error {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger, middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"*"},
-	}))
+	r.Use(httpx.InternalOnly)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +288,7 @@ func Run() error {
 	log.Printf("║   Port: %-5s                        ║", port)
 	log.Printf("╚══════════════════════════════════════╝")
 
-	return http.ListenAndServe(getEnv("AGENT_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))+":"+port, r)
+	return httpx.Listen(getEnv("AGENT_BIND_HOST", getEnv("BIND_HOST", "127.0.0.1"))+":"+port, r)
 }
 
 var _ = fmt.Sprintf

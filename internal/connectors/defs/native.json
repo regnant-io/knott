@@ -1,0 +1,1978 @@
+[
+ {
+  "slug": "webhook",
+  "native": true,
+  "ui": "http",
+  "actions": [
+   {
+    "id": "",
+    "label": "Send request",
+    "fields": [
+     {
+      "name": "url",
+      "label": "URL",
+      "placeholder": "https://api.example.com/path",
+      "required": true
+     },
+     {
+      "name": "method",
+      "label": "Method",
+      "placeholder": "POST",
+      "type": "select",
+      "options": [
+       "GET",
+       "POST",
+       "PUT",
+       "PATCH",
+       "DELETE"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "slack",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send message",
+    "fields": [
+     {
+      "name": "channel",
+      "label": "Channel",
+      "placeholder": "#alerts"
+     },
+     {
+      "name": "text",
+      "label": "Message",
+      "placeholder": "Run {{ input.id }} needs review",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "sendgrid",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send email",
+    "fields": [
+     {
+      "name": "to",
+      "label": "To",
+      "placeholder": "user@example.com",
+      "required": true
+     },
+     {
+      "name": "subject",
+      "label": "Subject",
+      "placeholder": "Notification"
+     },
+     {
+      "name": "body",
+      "label": "Body",
+      "placeholder": "Message bodyâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "twilio",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send SMS",
+    "fields": [
+     {
+      "name": "to",
+      "label": "To Number",
+      "placeholder": "+15551234567",
+      "required": true
+     },
+     {
+      "name": "body",
+      "label": "Message",
+      "placeholder": "Your code is {{ input.code }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "telegram",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send message",
+    "fields": [
+     {
+      "name": "chat_id",
+      "label": "Chat ID",
+      "placeholder": "@channel or numeric id",
+      "required": true
+     },
+     {
+      "name": "text",
+      "label": "Message",
+      "placeholder": "Alert: {{ input.summary }}",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "parse_mode",
+      "label": "Parse Mode",
+      "type": "select",
+      "options": [
+       "",
+       "Markdown",
+       "HTML"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "discord",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send message",
+    "fields": [
+     {
+      "name": "content",
+      "label": "Message",
+      "placeholder": "Deploy finished for {{ input.app }}",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "username",
+      "label": "Override Username",
+      "placeholder": "KNOTT Bot"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "github",
+  "native": true,
+  "actions": [
+   {
+    "id": "create_issue",
+    "label": "Create Issue",
+    "fields": [
+     {
+      "name": "repo",
+      "label": "Repository",
+      "placeholder": "owner/name",
+      "required": true
+     },
+     {
+      "name": "title",
+      "label": "Issue Title",
+      "placeholder": "Alert from {{ input.source }}",
+      "required": true
+     },
+     {
+      "name": "body",
+      "label": "Issue Body",
+      "placeholder": "Detailsâ€¦ (supports {{ templates }})",
+      "type": "textarea"
+     },
+     {
+      "name": "labels",
+      "label": "Labels",
+      "placeholder": "bug, automated (comma-separated)"
+     }
+    ]
+   },
+   {
+    "id": "comment_issue",
+    "label": "Comment on Issue",
+    "fields": [
+     {
+      "name": "repo",
+      "label": "Repository",
+      "placeholder": "owner/name",
+      "required": true
+     },
+     {
+      "name": "issue_number",
+      "label": "Issue Number",
+      "placeholder": "42",
+      "required": true
+     },
+     {
+      "name": "body",
+      "label": "Comment",
+      "placeholder": "Update: {{ input.note }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   },
+   {
+    "id": "close_issue",
+    "label": "Close Issue",
+    "fields": [
+     {
+      "name": "repo",
+      "label": "Repository",
+      "placeholder": "owner/name",
+      "required": true
+     },
+     {
+      "name": "issue_number",
+      "label": "Issue Number",
+      "placeholder": "42",
+      "required": true
+     }
+    ]
+   },
+   {
+    "id": "get_issue",
+    "label": "Get Issue",
+    "fields": [
+     {
+      "name": "repo",
+      "label": "Repository",
+      "placeholder": "owner/name",
+      "required": true
+     },
+     {
+      "name": "issue_number",
+      "label": "Issue Number",
+      "placeholder": "42",
+      "required": true
+     }
+    ]
+   },
+   {
+    "id": "list_issues",
+    "label": "List Issues",
+    "fields": [
+     {
+      "name": "repo",
+      "label": "Repository",
+      "placeholder": "owner/name",
+      "required": true
+     },
+     {
+      "name": "state",
+      "label": "State",
+      "type": "select",
+      "options": [
+       "open",
+       "closed",
+       "all"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "jira",
+  "native": true,
+  "actions": [
+   {
+    "id": "create_issue",
+    "label": "Create Issue",
+    "fields": [
+     {
+      "name": "base_url",
+      "label": "Site URL",
+      "placeholder": "https://acme.atlassian.net",
+      "required": true
+     },
+     {
+      "name": "project_key",
+      "label": "Project Key",
+      "placeholder": "OPS",
+      "required": true
+     },
+     {
+      "name": "summary",
+      "label": "Summary",
+      "placeholder": "Investigate {{ input.id }}",
+      "required": true
+     },
+     {
+      "name": "issue_type",
+      "label": "Issue Type",
+      "placeholder": "Task"
+     },
+     {
+      "name": "description",
+      "label": "Description",
+      "placeholder": "Detailsâ€¦",
+      "type": "textarea"
+     }
+    ]
+   },
+   {
+    "id": "comment_issue",
+    "label": "Comment on Issue",
+    "fields": [
+     {
+      "name": "base_url",
+      "label": "Site URL",
+      "placeholder": "https://acme.atlassian.net",
+      "required": true
+     },
+     {
+      "name": "issue_key",
+      "label": "Issue Key",
+      "placeholder": "OPS-123",
+      "required": true
+     },
+     {
+      "name": "body",
+      "label": "Comment",
+      "placeholder": "{{ input.note }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "airtable",
+  "native": true,
+  "actions": [
+   {
+    "id": "create_record",
+    "label": "Create Record",
+    "fields": [
+     {
+      "name": "base_id",
+      "label": "Base ID",
+      "placeholder": "appXXXXXXXX",
+      "required": true
+     },
+     {
+      "name": "table",
+      "label": "Table",
+      "placeholder": "Leads",
+      "required": true
+     },
+     {
+      "name": "fields",
+      "label": "Fields (JSON)",
+      "placeholder": "{ \"Name\": \"{{ input.name }}\", \"Score\": {{ input.score }} }",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   },
+   {
+    "id": "update_record",
+    "label": "Update Record",
+    "fields": [
+     {
+      "name": "base_id",
+      "label": "Base ID",
+      "placeholder": "appXXXXXXXX",
+      "required": true
+     },
+     {
+      "name": "table",
+      "label": "Table",
+      "placeholder": "Leads",
+      "required": true
+     },
+     {
+      "name": "record_id",
+      "label": "Record ID",
+      "placeholder": "recXXXXXXXX",
+      "required": true
+     },
+     {
+      "name": "fields",
+      "label": "Fields (JSON)",
+      "placeholder": "{ \"Status\": \"Won\" }",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   },
+   {
+    "id": "list_records",
+    "label": "List Records",
+    "fields": [
+     {
+      "name": "base_id",
+      "label": "Base ID",
+      "placeholder": "appXXXXXXXX",
+      "required": true
+     },
+     {
+      "name": "table",
+      "label": "Table",
+      "placeholder": "Leads",
+      "required": true
+     },
+     {
+      "name": "max_records",
+      "label": "Max Records",
+      "placeholder": "100"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "notion",
+  "native": true,
+  "actions": [
+   {
+    "id": "create_page",
+    "label": "Create Page",
+    "fields": [
+     {
+      "name": "database_id",
+      "label": "Database ID",
+      "placeholder": "32-char database id",
+      "required": true
+     },
+     {
+      "name": "title",
+      "label": "Page Title",
+      "placeholder": "{{ input.title }}",
+      "required": true
+     },
+     {
+      "name": "title_property",
+      "label": "Title Property",
+      "placeholder": "Name"
+     }
+    ]
+   },
+   {
+    "id": "query_database",
+    "label": "Query Database",
+    "fields": [
+     {
+      "name": "database_id",
+      "label": "Database ID",
+      "placeholder": "32-char database id",
+      "required": true
+     },
+     {
+      "name": "filter",
+      "label": "Filter (JSON, optional)",
+      "placeholder": "{ \"property\": \"Status\", \"select\": { \"equals\": \"Open\" } }",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "hubspot",
+  "native": true,
+  "actions": [
+   {
+    "id": "create_contact",
+    "label": "Create Contact",
+    "fields": [
+     {
+      "name": "email",
+      "label": "Email",
+      "placeholder": "{{ input.email }}",
+      "required": true
+     },
+     {
+      "name": "firstname",
+      "label": "First Name",
+      "placeholder": "{{ input.first }}"
+     },
+     {
+      "name": "lastname",
+      "label": "Last Name",
+      "placeholder": "{{ input.last }}"
+     },
+     {
+      "name": "properties",
+      "label": "Extra Properties (JSON)",
+      "placeholder": "{ \"company\": \"Acme\" }",
+      "type": "textarea"
+     }
+    ]
+   },
+   {
+    "id": "create_deal",
+    "label": "Create Deal",
+    "fields": [
+     {
+      "name": "dealname",
+      "label": "Deal Name",
+      "placeholder": "{{ input.name }}",
+      "required": true
+     },
+     {
+      "name": "amount",
+      "label": "Amount",
+      "placeholder": "5000"
+     },
+     {
+      "name": "properties",
+      "label": "Extra Properties (JSON)",
+      "placeholder": "{ \"dealstage\": \"qualified\" }",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "google_sheets",
+  "native": true,
+  "actions": [
+   {
+    "id": "append_row",
+    "label": "Append Row",
+    "fields": [
+     {
+      "name": "spreadsheet_id",
+      "label": "Spreadsheet ID",
+      "placeholder": "long sheet id from URL",
+      "required": true
+     },
+     {
+      "name": "range",
+      "label": "Range",
+      "placeholder": "Sheet1!A1"
+     },
+     {
+      "name": "values",
+      "label": "Row Values (JSON array)",
+      "placeholder": "[\"{{ input.name }}\", {{ input.score }}]",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   },
+   {
+    "id": "read_range",
+    "label": "Read Range",
+    "fields": [
+     {
+      "name": "spreadsheet_id",
+      "label": "Spreadsheet ID",
+      "placeholder": "long sheet id from URL",
+      "required": true
+     },
+     {
+      "name": "range",
+      "label": "Range",
+      "placeholder": "Sheet1!A1:C10",
+      "required": true
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "google_calendar",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create event",
+    "fields": [
+     {
+      "name": "calendar_id",
+      "label": "Calendar ID",
+      "placeholder": "primary"
+     },
+     {
+      "name": "summary",
+      "label": "Event Title",
+      "placeholder": "{{ input.title }}",
+      "required": true
+     },
+     {
+      "name": "start",
+      "label": "Start (RFC3339)",
+      "placeholder": "2026-07-01T10:00:00Z",
+      "required": true
+     },
+     {
+      "name": "end",
+      "label": "End (RFC3339)",
+      "placeholder": "2026-07-01T10:30:00Z"
+     },
+     {
+      "name": "description",
+      "label": "Description",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "teams",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send message",
+    "fields": [
+     {
+      "name": "title",
+      "label": "Title",
+      "placeholder": "Deployment"
+     },
+     {
+      "name": "text",
+      "label": "Message",
+      "placeholder": "Build {{ input.id }} succeeded",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "stripe",
+  "native": true,
+  "actions": [
+   {
+    "id": "create_customer",
+    "label": "Create Customer",
+    "fields": [
+     {
+      "name": "email",
+      "label": "Email",
+      "placeholder": "{{ input.email }}"
+     },
+     {
+      "name": "name",
+      "label": "Name",
+      "placeholder": "{{ input.name }}"
+     }
+    ]
+   },
+   {
+    "id": "create_charge",
+    "label": "Create Charge",
+    "fields": [
+     {
+      "name": "amount",
+      "label": "Amount (cents)",
+      "placeholder": "2000",
+      "required": true
+     },
+     {
+      "name": "currency",
+      "label": "Currency",
+      "placeholder": "usd"
+     },
+     {
+      "name": "customer",
+      "label": "Customer ID",
+      "placeholder": "cus_..."
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "database",
+  "native": true,
+  "actions": [
+   {
+    "id": "query",
+    "label": "Query (SELECT)",
+    "fields": [
+     {
+      "name": "driver",
+      "label": "Driver",
+      "type": "select",
+      "options": [
+       "sqlite",
+       "postgres",
+       "mysql"
+      ]
+     },
+     {
+      "name": "sql",
+      "label": "SQL",
+      "placeholder": "SELECT * FROM leads WHERE score > ?",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "params",
+      "label": "Params (JSON array)",
+      "placeholder": "[80]"
+     }
+    ]
+   },
+   {
+    "id": "exec",
+    "label": "Execute (INSERT/UPDATE/DELETE)",
+    "fields": [
+     {
+      "name": "driver",
+      "label": "Driver",
+      "type": "select",
+      "options": [
+       "sqlite",
+       "postgres",
+       "mysql"
+      ]
+     },
+     {
+      "name": "sql",
+      "label": "SQL",
+      "placeholder": "INSERT INTO leads(name, score) VALUES(?, ?)",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "params",
+      "label": "Params (JSON array)",
+      "placeholder": "[\"{{ input.name }}\", {{ input.score }}]"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "linear",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create issue",
+    "fields": [
+     {
+      "name": "team_id",
+      "label": "Team ID",
+      "placeholder": "team UUID",
+      "required": true
+     },
+     {
+      "name": "title",
+      "label": "Title",
+      "placeholder": "Bug: {{ input.summary }}",
+      "required": true
+     },
+     {
+      "name": "description",
+      "label": "Description",
+      "placeholder": "Detailsâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "trello",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create card",
+    "fields": [
+     {
+      "name": "list_id",
+      "label": "List ID",
+      "placeholder": "list id",
+      "required": true
+     },
+     {
+      "name": "name",
+      "label": "Card Name",
+      "placeholder": "New card {{ input.id }}",
+      "required": true
+     },
+     {
+      "name": "desc",
+      "label": "Description",
+      "placeholder": "Detailsâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "asana",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create task",
+    "fields": [
+     {
+      "name": "project_id",
+      "label": "Project ID",
+      "placeholder": "project gid"
+     },
+     {
+      "name": "name",
+      "label": "Task Name",
+      "placeholder": "Follow up with {{ input.name }}",
+      "required": true
+     },
+     {
+      "name": "notes",
+      "label": "Notes",
+      "placeholder": "Detailsâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "clickup",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create task",
+    "fields": [
+     {
+      "name": "list_id",
+      "label": "List ID",
+      "placeholder": "list id",
+      "required": true
+     },
+     {
+      "name": "name",
+      "label": "Task Name",
+      "placeholder": "New task",
+      "required": true
+     },
+     {
+      "name": "description",
+      "label": "Description",
+      "placeholder": "Detailsâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "pagerduty",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Trigger incident",
+    "fields": [
+     {
+      "name": "summary",
+      "label": "Summary",
+      "placeholder": "Incident: {{ input.summary }}",
+      "required": true
+     },
+     {
+      "name": "severity",
+      "label": "Severity",
+      "type": "select",
+      "options": [
+       "critical",
+       "error",
+       "warning",
+       "info"
+      ]
+     },
+     {
+      "name": "source",
+      "label": "Source",
+      "placeholder": "KNOTT"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "mattermost",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send message",
+    "fields": [
+     {
+      "name": "text",
+      "label": "Message",
+      "placeholder": "Alert: {{ input.summary }}",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "channel",
+      "label": "Channel (optional)",
+      "placeholder": "town-square"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "zendesk",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create ticket",
+    "fields": [
+     {
+      "name": "base_url",
+      "label": "Site URL",
+      "placeholder": "https://acme.zendesk.com",
+      "required": true
+     },
+     {
+      "name": "subject",
+      "label": "Subject",
+      "placeholder": "Issue from {{ input.customer }}",
+      "required": true
+     },
+     {
+      "name": "comment",
+      "label": "Body",
+      "placeholder": "Ticket detailsâ€¦",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "priority",
+      "label": "Priority",
+      "type": "select",
+      "options": [
+       "",
+       "low",
+       "normal",
+       "high",
+       "urgent"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "shopify",
+  "native": true,
+  "actions": [
+   {
+    "id": "list_products",
+    "label": "List Products",
+    "fields": [
+     {
+      "name": "base_url",
+      "label": "Store URL",
+      "placeholder": "https://store.myshopify.com",
+      "required": true
+     }
+    ]
+   },
+   {
+    "id": "create_customer",
+    "label": "Create Customer",
+    "fields": [
+     {
+      "name": "base_url",
+      "label": "Store URL",
+      "placeholder": "https://store.myshopify.com",
+      "required": true
+     },
+     {
+      "name": "email",
+      "label": "Email",
+      "placeholder": "{{ input.email }}",
+      "required": true
+     },
+     {
+      "name": "firstname",
+      "label": "First Name",
+      "placeholder": "{{ input.first }}"
+     },
+     {
+      "name": "lastname",
+      "label": "Last Name",
+      "placeholder": "{{ input.last }}"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "mailchimp",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Add subscriber",
+    "fields": [
+     {
+      "name": "list_id",
+      "label": "Audience ID",
+      "placeholder": "list id",
+      "required": true
+     },
+     {
+      "name": "email",
+      "label": "Email",
+      "placeholder": "{{ input.email }}",
+      "required": true
+     },
+     {
+      "name": "status",
+      "label": "Status",
+      "type": "select",
+      "options": [
+       "subscribed",
+       "pending"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "openai",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Generate text",
+    "fields": [
+     {
+      "name": "model",
+      "label": "Model",
+      "placeholder": "gpt-4o-mini"
+     },
+     {
+      "name": "system",
+      "label": "System Prompt",
+      "placeholder": "You are a helpful assistant.",
+      "type": "textarea"
+     },
+     {
+      "name": "prompt",
+      "label": "Prompt",
+      "placeholder": "Summarize: {{ input.text }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "pushover",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send notification",
+    "fields": [
+     {
+      "name": "title",
+      "label": "Title",
+      "placeholder": "KNOTT Alert"
+     },
+     {
+      "name": "message",
+      "label": "Message",
+      "placeholder": "{{ input.summary }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "graphql",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Run query",
+    "fields": [
+     {
+      "name": "url",
+      "label": "Endpoint URL",
+      "placeholder": "https://api.example.com/graphql",
+      "required": true
+     },
+     {
+      "name": "query",
+      "label": "Query",
+      "placeholder": "{ viewer { login } }",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "variables",
+      "label": "Variables (JSON)",
+      "placeholder": "{\"id\": \"{{ input.id }}\"}"
+     },
+     {
+      "name": "auth_token",
+      "label": "Bearer Token (optional)",
+      "placeholder": "secret://MY_TOKEN"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "gitlab",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create issue",
+    "fields": [
+     {
+      "name": "project_id",
+      "label": "Project ID",
+      "placeholder": "12345",
+      "required": true
+     },
+     {
+      "name": "title",
+      "label": "Issue Title",
+      "placeholder": "Bug: {{ input.summary }}",
+      "required": true
+     },
+     {
+      "name": "description",
+      "label": "Description",
+      "placeholder": "Detailsâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "monday",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create item",
+    "fields": [
+     {
+      "name": "board_id",
+      "label": "Board ID",
+      "placeholder": "1234567",
+      "required": true
+     },
+     {
+      "name": "item_name",
+      "label": "Item Name",
+      "placeholder": "New item {{ input.id }}",
+      "required": true
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "freshdesk",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create ticket",
+    "fields": [
+     {
+      "name": "base_url",
+      "label": "Site URL",
+      "placeholder": "https://acme.freshdesk.com",
+      "required": true
+     },
+     {
+      "name": "subject",
+      "label": "Subject",
+      "placeholder": "Issue: {{ input.summary }}",
+      "required": true
+     },
+     {
+      "name": "description",
+      "label": "Description",
+      "placeholder": "Detailsâ€¦",
+      "required": true,
+      "type": "textarea"
+     },
+     {
+      "name": "email",
+      "label": "Requester Email",
+      "placeholder": "{{ input.email }}",
+      "required": true
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "intercom",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create contact",
+    "fields": [
+     {
+      "name": "email",
+      "label": "Email",
+      "placeholder": "{{ input.email }}",
+      "required": true
+     },
+     {
+      "name": "name",
+      "label": "Name",
+      "placeholder": "{{ input.name }}"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "ms_graph",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send email",
+    "fields": [
+     {
+      "name": "to",
+      "label": "To",
+      "placeholder": "{{ input.email }}",
+      "required": true
+     },
+     {
+      "name": "subject",
+      "label": "Subject",
+      "placeholder": "Notification",
+      "required": true
+     },
+     {
+      "name": "body",
+      "label": "Body",
+      "placeholder": "Messageâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "whatsapp",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Send message",
+    "fields": [
+     {
+      "name": "phone_number_id",
+      "label": "Phone Number ID",
+      "placeholder": "from Meta dashboard"
+     },
+     {
+      "name": "to",
+      "label": "To (number)",
+      "placeholder": "15551234567",
+      "required": true
+     },
+     {
+      "name": "text",
+      "label": "Message",
+      "placeholder": "Hi {{ input.name }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "coda",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Add row",
+    "fields": [
+     {
+      "name": "doc_id",
+      "label": "Doc ID",
+      "placeholder": "doc id",
+      "required": true
+     },
+     {
+      "name": "table_id",
+      "label": "Table ID",
+      "placeholder": "grid-xxxx",
+      "required": true
+     },
+     {
+      "name": "cells",
+      "label": "Cells (JSON)",
+      "placeholder": "{\"Name\":\"{{ input.name }}\"}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "close",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create lead",
+    "fields": [
+     {
+      "name": "name",
+      "label": "Lead Name",
+      "placeholder": "{{ input.company }}",
+      "required": true
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "calendly",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Get current user",
+    "fields": []
+   }
+  ]
+ },
+ {
+  "slug": "servicenow",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Create incident",
+    "fields": [
+     {
+      "name": "base_url",
+      "label": "Instance URL",
+      "placeholder": "https://acme.service-now.com",
+      "required": true
+     },
+     {
+      "name": "short_description",
+      "label": "Short Description",
+      "placeholder": "Incident: {{ input.summary }}",
+      "required": true
+     },
+     {
+      "name": "description",
+      "label": "Description",
+      "placeholder": "Detailsâ€¦",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "anthropic",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Generate text",
+    "fields": [
+     {
+      "name": "model",
+      "label": "Model",
+      "placeholder": "claude-3-5-haiku-latest"
+     },
+     {
+      "name": "system",
+      "label": "System Prompt",
+      "type": "textarea"
+     },
+     {
+      "name": "prompt",
+      "label": "Prompt",
+      "placeholder": "Summarize {{ input.text }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "gemini",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Generate text",
+    "fields": [
+     {
+      "name": "model",
+      "label": "Model",
+      "placeholder": "gemini-2.0-flash"
+     },
+     {
+      "name": "prompt",
+      "label": "Prompt",
+      "placeholder": "Analyze {{ input.text }}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "groq",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Generate text",
+    "fields": [
+     {
+      "name": "model",
+      "label": "Model",
+      "placeholder": "llama-3.3-70b-versatile"
+     },
+     {
+      "name": "prompt",
+      "label": "Prompt",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "cohere",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Generate text",
+    "fields": [
+     {
+      "name": "model",
+      "label": "Model",
+      "placeholder": "command-r-plus"
+     },
+     {
+      "name": "prompt",
+      "label": "Prompt",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "dropbox",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List folder",
+    "fields": [
+     {
+      "name": "path",
+      "label": "Folder Path",
+      "placeholder": "/Reports (blank for root)"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "box",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List folder",
+    "fields": [
+     {
+      "name": "folder_id",
+      "label": "Folder ID",
+      "placeholder": "0"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "google_drive",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Search files",
+    "fields": [
+     {
+      "name": "query",
+      "label": "Drive Query",
+      "placeholder": "mimeType='application/pdf'"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "onedrive",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List files",
+    "fields": []
+   }
+  ]
+ },
+ {
+  "slug": "cloudflare",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List zones",
+    "fields": []
+   }
+  ]
+ },
+ {
+  "slug": "digitalocean",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List droplets",
+    "fields": []
+   }
+  ]
+ },
+ {
+  "slug": "datadog",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Post event",
+    "fields": [
+     {
+      "name": "title",
+      "label": "Event Title",
+      "placeholder": "KNOTT event"
+     },
+     {
+      "name": "text",
+      "label": "Event Text",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "newrelic",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Run NerdGraph query",
+    "fields": [
+     {
+      "name": "query",
+      "label": "NerdGraph Query",
+      "placeholder": "{ actor { account(id: 1) { name } } }",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "sentry",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List projects",
+    "fields": []
+   }
+  ]
+ },
+ {
+  "slug": "grafana",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Search dashboards",
+    "fields": [
+     {
+      "name": "query",
+      "label": "Dashboard Search",
+      "placeholder": "{{ input.dashboard }}"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "elasticsearch",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Search index",
+    "fields": [
+     {
+      "name": "index",
+      "label": "Index",
+      "placeholder": "logs-*",
+      "required": true
+     },
+     {
+      "name": "query",
+      "label": "Query DSL (JSON)",
+      "placeholder": "{\"query\":{\"match_all\":{}}}",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "supabase",
+  "native": true,
+  "actions": [
+   {
+    "id": "select",
+    "label": "Select Rows",
+    "fields": [
+     {
+      "name": "table",
+      "label": "Table",
+      "placeholder": "customers",
+      "required": true
+     },
+     {
+      "name": "select",
+      "label": "Columns",
+      "placeholder": "*"
+     }
+    ]
+   },
+   {
+    "id": "insert",
+    "label": "Insert Row",
+    "fields": [
+     {
+      "name": "table",
+      "label": "Table",
+      "placeholder": "customers",
+      "required": true
+     },
+     {
+      "name": "record",
+      "label": "Record (JSON)",
+      "placeholder": "{\"email\":\"{{ input.email }}\"}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "mongodb_atlas",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Find documents",
+    "fields": [
+     {
+      "name": "data_source",
+      "label": "Data Source",
+      "placeholder": "Cluster0",
+      "required": true
+     },
+     {
+      "name": "database",
+      "label": "Database",
+      "placeholder": "app",
+      "required": true
+     },
+     {
+      "name": "collection",
+      "label": "Collection",
+      "placeholder": "customers",
+      "required": true
+     },
+     {
+      "name": "filter",
+      "label": "Filter (JSON)",
+      "placeholder": "{\"email\":\"{{ input.email }}\"}",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "rabbitmq",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Publish message",
+    "fields": [
+     {
+      "name": "vhost",
+      "label": "Virtual Host",
+      "placeholder": "/"
+     },
+     {
+      "name": "exchange",
+      "label": "Exchange",
+      "placeholder": "amq.default"
+     },
+     {
+      "name": "routing_key",
+      "label": "Routing Key",
+      "placeholder": "jobs",
+      "required": true
+     },
+     {
+      "name": "payload",
+      "label": "Payload",
+      "placeholder": "{\"id\":\"{{ input.id }}\"}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "kafka_rest",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Produce record",
+    "fields": [
+     {
+      "name": "topic",
+      "label": "Topic",
+      "placeholder": "events",
+      "required": true
+     },
+     {
+      "name": "key",
+      "label": "Key",
+      "placeholder": "{{ input.id }}"
+     },
+     {
+      "name": "value",
+      "label": "Value (JSON)",
+      "placeholder": "{\"event\":\"{{ input.event }}\"}",
+      "required": true,
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "zoom",
+  "native": true,
+  "actions": [
+   {
+    "id": "list_users",
+    "label": "List Users",
+    "fields": []
+   },
+   {
+    "id": "create_meeting",
+    "label": "Create Meeting",
+    "fields": [
+     {
+      "name": "user_id",
+      "label": "Host User ID",
+      "placeholder": "me"
+     },
+     {
+      "name": "topic",
+      "label": "Topic",
+      "placeholder": "{{ input.title }}",
+      "required": true
+     },
+     {
+      "name": "start_time",
+      "label": "Start Time",
+      "placeholder": "2026-10-01T10:00:00Z"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "typeform",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List responses",
+    "fields": [
+     {
+      "name": "form_id",
+      "label": "Form ID (blank lists forms)",
+      "placeholder": "AbCdEf"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "surveymonkey",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List surveys",
+    "fields": []
+   }
+  ]
+ },
+ {
+  "slug": "wordpress",
+  "native": true,
+  "actions": [
+   {
+    "id": "list_posts",
+    "label": "List Posts",
+    "fields": []
+   },
+   {
+    "id": "create_post",
+    "label": "Create Post",
+    "fields": [
+     {
+      "name": "title",
+      "label": "Title",
+      "placeholder": "{{ input.title }}",
+      "required": true
+     },
+     {
+      "name": "content",
+      "label": "Content",
+      "type": "textarea"
+     },
+     {
+      "name": "status",
+      "label": "Status",
+      "type": "select",
+      "options": [
+       "draft",
+       "publish",
+       "private"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "woocommerce",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "List orders",
+    "fields": []
+   }
+  ]
+ },
+ {
+  "slug": "quickbooks",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Run query",
+    "fields": [
+     {
+      "name": "query",
+      "label": "QuickBooks Query",
+      "placeholder": "select * from Customer maxresults 100",
+      "type": "textarea"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "x_twitter",
+  "native": true,
+  "actions": [
+   {
+    "id": "",
+    "label": "Search recent posts",
+    "fields": [
+     {
+      "name": "query",
+      "label": "Recent Search Query",
+      "placeholder": "from:openai -is:retweet",
+      "required": true
+     }
+    ]
+   }
+  ]
+ }
+]

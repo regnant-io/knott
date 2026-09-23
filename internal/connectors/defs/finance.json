@@ -1,0 +1,213 @@
+[
+  {
+    "slug": "xero", "name": "Xero", "category": "Finance", "color": "#13B5EA", "icon": "dollar-sign",
+    "description": "Read invoices and create contacts and invoices in Xero",
+    "docs_url": "https://developer.xero.com/documentation/api/accounting/overview",
+    "credentials": [
+      {"name": "XERO_ACCESS_TOKEN", "label": "OAuth access token", "secret": true, "help": "From a Xero app with the accounting.transactions scope."},
+      {"name": "XERO_TENANT_ID", "label": "Tenant ID", "help": "GET https://api.xero.com/connections lists the tenants your token can reach."}
+    ],
+    "http": {
+      "base_url": "https://api.xero.com/api.xro/2.0",
+      "auth": {"type": "bearer", "credential": "XERO_ACCESS_TOKEN"},
+      "headers": {"xero-tenant-id": "{cred:XERO_TENANT_ID}"},
+      "test": {"id": "test", "label": "Organisation", "method": "GET", "path": "/Organisation", "fields": []}
+    },
+    "actions": [
+      {"id": "list_invoices", "label": "List invoices", "method": "GET", "path": "/Invoices", "query": {"Statuses": "{statuses}", "where": "{where}"}, "items_path": "Invoices",
+       "fields": [
+         {"name": "statuses", "label": "Statuses", "placeholder": "AUTHORISED,PAID"},
+         {"name": "where", "label": "Filter", "placeholder": "Type==\"ACCREC\""}
+       ]},
+      {"id": "create_contact", "label": "Create contact", "method": "POST", "path": "/Contacts",
+       "body": {"Contacts": [{"Name": "{name}", "EmailAddress": "{email}"}]},
+       "fields": [
+         {"name": "name", "label": "Name", "required": true},
+         {"name": "email", "label": "Email"}
+       ]},
+      {"id": "create_invoice", "label": "Create invoice", "method": "POST", "path": "/Invoices", "body": {"Invoices": ["{invoice}"]},
+       "fields": [{"name": "invoice", "label": "Invoice (JSON)", "type": "json", "required": true, "placeholder": "{ \"Type\": \"ACCREC\", \"Contact\": { \"ContactID\": \"…\" }, \"LineItems\": [ … ] }"}]}
+    ]
+  },
+  {
+    "slug": "freshbooks", "name": "FreshBooks", "category": "Finance", "color": "#0075DD", "icon": "file-text",
+    "description": "Read invoices and clients from FreshBooks",
+    "docs_url": "https://www.freshbooks.com/api/start",
+    "credentials": [
+      {"name": "FRESHBOOKS_ACCESS_TOKEN", "label": "OAuth access token", "secret": true},
+      {"name": "FRESHBOOKS_ACCOUNT_ID", "label": "Account ID", "help": "From /auth/api/v1/users/me → business_memberships."}
+    ],
+    "http": {
+      "base_url": "https://api.freshbooks.com",
+      "auth": {"type": "bearer", "credential": "FRESHBOOKS_ACCESS_TOKEN"},
+      "test": {"id": "test", "label": "Identity", "method": "GET", "path": "/auth/api/v1/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_invoices", "label": "List invoices", "method": "GET", "path": "/accounting/account/{cred:FRESHBOOKS_ACCOUNT_ID}/invoices/invoices", "items_path": "response.result.invoices", "fields": []},
+      {"id": "list_clients", "label": "List clients", "method": "GET", "path": "/accounting/account/{cred:FRESHBOOKS_ACCOUNT_ID}/users/clients", "items_path": "response.result.clients", "fields": []}
+    ]
+  },
+  {
+    "slug": "wise", "name": "Wise", "category": "Finance", "color": "#9FE870", "icon": "globe",
+    "description": "Read Wise balances, profiles and live exchange rates",
+    "docs_url": "https://docs.wise.com/api-docs",
+    "credentials": [{"name": "WISE_API_TOKEN", "label": "Personal API token", "secret": true, "help": "Settings → API tokens. A read-only token is enough."}],
+    "http": {
+      "base_url": "https://api.transferwise.com",
+      "auth": {"type": "bearer", "credential": "WISE_API_TOKEN"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/v1/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_profiles", "label": "List profiles", "method": "GET", "path": "/v2/profiles", "fields": []},
+      {"id": "get_balances", "label": "Get balances", "method": "GET", "path": "/v4/profiles/{profile_id}/balances", "query": {"types": "STANDARD"},
+       "fields": [{"name": "profile_id", "label": "Profile ID", "required": true}]},
+      {"id": "get_rate", "label": "Get exchange rate", "method": "GET", "path": "/v1/rates", "query": {"source": "{source}", "target": "{target}"},
+       "fields": [
+         {"name": "source", "label": "Source currency", "required": true, "placeholder": "USD"},
+         {"name": "target", "label": "Target currency", "required": true, "placeholder": "EUR"}
+       ]}
+    ]
+  },
+  {
+    "slug": "mercury", "name": "Mercury", "category": "Finance", "color": "#5266EB", "icon": "landmark",
+    "description": "Read Mercury bank accounts and transactions",
+    "docs_url": "https://docs.mercury.com/reference",
+    "credentials": [{"name": "MERCURY_API_TOKEN", "label": "API token", "secret": true, "help": "Settings → API tokens. Read-only is recommended."}],
+    "http": {
+      "base_url": "https://api.mercury.com/api/v1",
+      "auth": {"type": "bearer", "credential": "MERCURY_API_TOKEN"},
+      "test": {"id": "test", "label": "Accounts", "method": "GET", "path": "/accounts", "fields": []}
+    },
+    "actions": [
+      {"id": "list_accounts", "label": "List accounts", "method": "GET", "path": "/accounts", "items_path": "accounts", "fields": []},
+      {"id": "list_transactions", "label": "List transactions", "method": "GET", "path": "/account/{account_id}/transactions", "query": {"limit": "{limit}", "start": "{start}"}, "items_path": "transactions",
+       "fields": [
+         {"name": "account_id", "label": "Account ID", "required": true},
+         {"name": "start", "label": "Start date (YYYY-MM-DD)"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 100}
+       ]}
+    ]
+  },
+  {
+    "slug": "brex", "name": "Brex", "category": "Finance", "color": "#F46A35", "icon": "credit-card",
+    "description": "Read card transactions and expenses from Brex",
+    "docs_url": "https://developer.brex.com/",
+    "credentials": [{"name": "BREX_API_TOKEN", "label": "User token", "secret": true, "help": "Developer → Settings → Create token (read scopes)."}],
+    "http": {
+      "base_url": "https://platform.brexapps.com",
+      "auth": {"type": "bearer", "credential": "BREX_API_TOKEN"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/v2/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_card_transactions", "label": "List card transactions", "method": "GET", "path": "/v2/transactions/card/primary", "query": {"posted_at_start": "{since}"}, "items_path": "items",
+       "fields": [{"name": "since", "label": "Posted since (RFC 3339)"}]},
+      {"id": "list_expenses", "label": "List expenses", "method": "GET", "path": "/v1/expenses", "items_path": "items", "fields": []}
+    ]
+  },
+  {
+    "slug": "chargebee", "name": "Chargebee", "category": "Finance", "color": "#FF7846", "icon": "repeat",
+    "description": "Manage customers and read subscriptions in Chargebee",
+    "docs_url": "https://apidocs.chargebee.com/docs/api",
+    "credentials": [
+      {"name": "CHARGEBEE_SITE", "label": "Site", "placeholder": "acme-test", "help": "The part before .chargebee.com."},
+      {"name": "CHARGEBEE_API_KEY", "label": "API key", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://{cred:CHARGEBEE_SITE}.chargebee.com/api/v2",
+      "auth": {"type": "basic", "credential": "CHARGEBEE_API_KEY", "password_value": ""}
+    },
+    "actions": [
+      {"id": "list_subscriptions", "label": "List subscriptions", "method": "GET", "path": "/subscriptions", "query": {"limit": "{limit}", "status[is]": "{status}"}, "items_path": "list",
+       "fields": [
+         {"name": "status", "label": "Status", "type": "select", "options": ["future", "in_trial", "active", "non_renewing", "paused", "cancelled"]},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]},
+      {"id": "list_customers", "label": "List customers", "method": "GET", "path": "/customers", "query": {"limit": "{limit}", "email[is]": "{email}"}, "items_path": "list",
+       "fields": [
+         {"name": "email", "label": "Email"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]},
+      {"id": "create_customer", "label": "Create customer", "method": "POST", "path": "/customers", "body_type": "form",
+       "body": {"first_name": "{first_name}", "last_name": "{last_name}", "email": "{email}", "company": "{company}"},
+       "fields": [
+         {"name": "email", "label": "Email", "required": true},
+         {"name": "first_name", "label": "First name"},
+         {"name": "last_name", "label": "Last name"},
+         {"name": "company", "label": "Company"}
+       ]}
+    ]
+  },
+  {
+    "slug": "harvest", "name": "Harvest", "category": "Finance", "color": "#FA5D00", "icon": "clock",
+    "description": "Log and read time entries in Harvest",
+    "docs_url": "https://help.getharvest.com/api-v2/",
+    "credentials": [
+      {"name": "HARVEST_ACCESS_TOKEN", "label": "Personal access token", "secret": true, "help": "id.getharvest.com/developers."},
+      {"name": "HARVEST_ACCOUNT_ID", "label": "Account ID"}
+    ],
+    "http": {
+      "base_url": "https://api.harvestapp.com/v2",
+      "auth": {"type": "bearer", "credential": "HARVEST_ACCESS_TOKEN"},
+      "headers": {"Harvest-Account-Id": "{cred:HARVEST_ACCOUNT_ID}", "User-Agent": "KNOTT"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/users/me", "fields": []}
+    },
+    "actions": [
+      {"id": "list_time_entries", "label": "List time entries", "method": "GET", "path": "/time_entries", "query": {"from": "{from}", "to": "{to}"}, "items_path": "time_entries",
+       "fields": [
+         {"name": "from", "label": "From (YYYY-MM-DD)"},
+         {"name": "to", "label": "To (YYYY-MM-DD)"}
+       ]},
+      {"id": "create_time_entry", "label": "Create time entry", "method": "POST", "path": "/time_entries",
+       "body": {"project_id": "{project_id}", "task_id": "{task_id}", "spent_date": "{spent_date}", "hours": "{hours}", "notes": "{notes}"},
+       "fields": [
+         {"name": "project_id", "label": "Project ID", "type": "number", "required": true},
+         {"name": "task_id", "label": "Task ID", "type": "number", "required": true},
+         {"name": "spent_date", "label": "Date (YYYY-MM-DD)", "required": true},
+         {"name": "hours", "label": "Hours", "type": "number"},
+         {"name": "notes", "label": "Notes"}
+       ]}
+    ]
+  },
+  {
+    "slug": "plaid", "name": "Plaid", "category": "Finance", "color": "#111111", "icon": "landmark",
+    "description": "Read balances and transactions for linked bank accounts",
+    "docs_url": "https://plaid.com/docs/api/",
+    "credentials": [
+      {"name": "PLAID_ENV", "label": "Environment", "placeholder": "sandbox", "help": "sandbox or production."},
+      {"name": "PLAID_CLIENT_ID", "label": "Client ID"},
+      {"name": "PLAID_SECRET", "label": "Secret", "secret": true}
+    ],
+    "http": {"base_url": "https://{cred:PLAID_ENV}.plaid.com", "auth": {"type": "none"}},
+    "actions": [
+      {"id": "get_balances", "label": "Get balances", "method": "POST", "path": "/accounts/balance/get",
+       "body": {"client_id": "{cred:PLAID_CLIENT_ID}", "secret": "{cred:PLAID_SECRET}", "access_token": "{access_token}"},
+       "fields": [{"name": "access_token", "label": "Item access token", "required": true}]},
+      {"id": "get_transactions", "label": "Get transactions", "method": "POST", "path": "/transactions/get", "items_path": "transactions",
+       "body": {"client_id": "{cred:PLAID_CLIENT_ID}", "secret": "{cred:PLAID_SECRET}", "access_token": "{access_token}", "start_date": "{start_date}", "end_date": "{end_date}"},
+       "fields": [
+         {"name": "access_token", "label": "Item access token", "required": true},
+         {"name": "start_date", "label": "Start date (YYYY-MM-DD)", "required": true},
+         {"name": "end_date", "label": "End date (YYYY-MM-DD)", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "open_exchange_rates", "name": "Open Exchange Rates", "category": "Finance", "color": "#2B7BB9", "icon": "trending-up",
+    "description": "Latest and historical currency exchange rates",
+    "docs_url": "https://docs.openexchangerates.org/reference/api-introduction",
+    "credentials": [{"name": "OPENEXCHANGERATES_APP_ID", "label": "App ID", "secret": true}],
+    "http": {"base_url": "https://openexchangerates.org/api", "auth": {"type": "query", "param": "app_id", "credential": "OPENEXCHANGERATES_APP_ID"}},
+    "actions": [
+      {"id": "latest", "label": "Latest rates", "method": "GET", "path": "/latest.json", "query": {"base": "{base}", "symbols": "{symbols}"},
+       "fields": [
+         {"name": "base", "label": "Base currency", "placeholder": "USD"},
+         {"name": "symbols", "label": "Symbols", "placeholder": "EUR,GBP,KES"}
+       ]},
+      {"id": "historical", "label": "Rates on a date", "method": "GET", "path": "/historical/{date}.json", "query": {"symbols": "{symbols}"},
+       "fields": [
+         {"name": "date", "label": "Date (YYYY-MM-DD)", "required": true},
+         {"name": "symbols", "label": "Symbols"}
+       ]}
+    ]
+  }
+]

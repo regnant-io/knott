@@ -1,11 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=KNOTT
-GenericName=Workflow Orchestration
-Comment=Design, run and audit workflows on your own infrastructure
-Exec=knott desktop
+GenericName=Workflow Automation
+Comment=Build and run automated, AI-assisted workflows on your own machine
+Exec=knott-desktop
 Icon=knott
 Terminal=false
-Categories=Development;Utility;
-Keywords=workflow;automation;orchestration;integration;
+Categories=Development;Utility;Office;
+Keywords=workflow;automation;orchestration;integration;ai;
 StartupNotify=true
+StartupWMClass=knott

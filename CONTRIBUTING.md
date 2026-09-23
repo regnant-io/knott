@@ -43,19 +43,27 @@ make check   # gofmt, go vet, Go tests, console tests
 ## How the code is laid out
 
 ```
-cmd/knott              the all-in-one binary — this is what people download
+cmd/knott              the server / command-line binary
 cmd/knott-{registry,engine,tasks,agents}
                        the same services as separate binaries, for scaled deploys
+desktop/               the native desktop app (Wails; its own Go module)
+internal/app           starts the whole platform in one process (CLI and desktop)
+internal/connectors    connector definitions (defs/*.json) and their validation
 internal/registry      workflow definitions, versions, validation
 internal/execution     the run loop, scheduling, triggers, the HTTP front door
 internal/execution/engine
-                       node execution and the connector implementations
+                       node execution, the declarative connector runner and
+                       the native connector implementations
+internal/execution/engine/decide
+                       the AI engine: Ollama / Anthropic, decisions, prompts,
+                       workflow generation, rule fallback
 internal/humantask     the approval queue
 internal/agents        the external agent registry
 internal/ui            the console, compiled in with go:embed
 apps/designer          the console source (React + React Flow)
 services/ai-decision-engine
-                       the optional Python decision engine
+                       the optional Python sidecar (off by default)
+build/                 installers: Windows (NSIS), macOS (.app/.dmg), Linux (nfpm)
 tools/brand            generates every brand asset from the mark's geometry
 ```
 
@@ -78,25 +86,26 @@ advisory. The console has no formatter enforced — follow the file you are in.
 
 ## Adding a connector
 
-Connectors are the most common contribution, and there is a well-worn path:
+Most connectors are a JSON entry — see [docs/connectors.md](docs/connectors.md)
+for the format:
 
-1. Add a `CatalogEntry` to `internal/execution/store/catalog.go`, with a slug,
-   category, and a `CredentialSpec` for each secret — including the one-line
-   `Help` saying where in the vendor's UI to find it. That help text is the
-   whole onboarding experience for that connector; write it as if for someone
-   who has never opened that product's settings.
-2. Implement `call<Name>` in `internal/execution/engine/connectors_more.go`,
-   using `connectorJSON` / `doRequest` so retries, timeouts and secret handling
-   come for free.
-3. Add the case to `callConnector` in `executor.go`.
-4. Add a schema entry to `CONNECTOR_SCHEMA` in
-   `apps/designer/src/pages/WorkflowDesigner.jsx` so the designer renders the
-   right fields.
-5. Add a test in `internal/execution/engine/` against an `httptest` server —
-   assert the request shape, not the vendor's response.
+1. Add a definition to `internal/connectors/defs/<category>.json`: slug,
+   credentials — each with a one-line `help` saying where in the vendor's UI to
+   find it (that help text is the whole onboarding experience for that
+   connector) — auth, a harmless `test` request, and the actions with their
+   fields.
+2. `go test ./internal/connectors/` validates it.
+3. Try it for real: save credentials on the Connectors page, press *Test
+   connection*, add an action in the builder and run it.
 
-Do not add a connector that needs a credential KNOTT cannot store, or one whose
-free tier cannot be exercised in a test.
+Only when an API needs logic a request template cannot express — OAuth refresh,
+several calls per action, pagination rules — write a native connector: mark the
+definition `"native": true`, implement `call<Name>` in
+`internal/execution/engine/`, add the case to `callConnector`, and test it
+against an `httptest` server (assert the request shape, not the vendor's
+response).
+
+Do not add a connector that needs a credential KNOTT cannot store.
 
 ## Pull requests
 

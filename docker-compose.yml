@@ -31,11 +31,12 @@ services:
       # Encrypts stored credentials. Generated and persisted on first run when
       # unset; set it explicitly to survive a volume rebuild.
       KNOTT_SECRET_KEY: ${KNOTT_SECRET_KEY:-}
-      # AI provider — leave both unset for the built-in rule-based decisions.
+      # AI provider. With the local-ai profile, OLLAMA_HOST reaches the Ollama
+      # service below; leave both unset for the built-in rule-based decisions.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
-      # Restrict browser origins in production.
-      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      # Only needed if the console is served from another origin.
+      KNOTT_ALLOWED_ORIGINS: ${KNOTT_ALLOWED_ORIGINS:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8002/api/v1/health"]
       interval: 15s

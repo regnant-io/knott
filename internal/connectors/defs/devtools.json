@@ -1,0 +1,424 @@
+[
+  {
+    "slug": "bitbucket", "name": "Bitbucket", "category": "Developer Tools", "color": "#0052CC", "icon": "git-branch",
+    "description": "Create issues, list pull requests and start pipelines in Bitbucket Cloud",
+    "docs_url": "https://developer.atlassian.com/cloud/bitbucket/rest/",
+    "credentials": [
+      {"name": "BITBUCKET_USERNAME", "label": "Username"},
+      {"name": "BITBUCKET_APP_PASSWORD", "label": "App password / API token", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://api.bitbucket.org/2.0",
+      "auth": {"type": "basic", "credential": "BITBUCKET_USERNAME", "password": "BITBUCKET_APP_PASSWORD"},
+      "test": {"id": "test", "label": "Current user", "method": "GET", "path": "/user", "fields": []}
+    },
+    "actions": [
+      {"id": "list_pull_requests", "label": "List pull requests", "method": "GET", "path": "/repositories/{workspace}/{repo_slug}/pullrequests", "query": {"state": "{state}"}, "items_path": "values",
+       "fields": [
+         {"name": "workspace", "label": "Workspace", "required": true},
+         {"name": "repo_slug", "label": "Repository", "required": true},
+         {"name": "state", "label": "State", "type": "select", "options": ["OPEN", "MERGED", "DECLINED", "SUPERSEDED"]}
+       ]},
+      {"id": "create_issue", "label": "Create issue", "method": "POST", "path": "/repositories/{workspace}/{repo_slug}/issues",
+       "body": {"title": "{title}", "content": {"raw": "{content}"}},
+       "fields": [
+         {"name": "workspace", "label": "Workspace", "required": true},
+         {"name": "repo_slug", "label": "Repository", "required": true},
+         {"name": "title", "label": "Title", "required": true},
+         {"name": "content", "label": "Description", "type": "textarea"}
+       ]},
+      {"id": "trigger_pipeline", "label": "Run pipeline", "method": "POST", "path": "/repositories/{workspace}/{repo_slug}/pipelines/",
+       "body": {"target": {"type": "pipeline_ref_target", "ref_type": "branch", "ref_name": "{branch}"}},
+       "fields": [
+         {"name": "workspace", "label": "Workspace", "required": true},
+         {"name": "repo_slug", "label": "Repository", "required": true},
+         {"name": "branch", "label": "Branch", "required": true, "default": "main"}
+       ]}
+    ]
+  },
+  {
+    "slug": "vercel", "name": "Vercel", "category": "Developer Tools", "color": "#000000", "icon": "triangle",
+    "description": "Watch deployments and projects on Vercel",
+    "docs_url": "https://vercel.com/docs/rest-api",
+    "credentials": [{"name": "VERCEL_TOKEN", "label": "Access token", "secret": true, "help": "Account settings → Tokens."}],
+    "http": {
+      "base_url": "https://api.vercel.com",
+      "auth": {"type": "bearer", "credential": "VERCEL_TOKEN"},
+      "test": {"id": "test", "label": "User", "method": "GET", "path": "/v2/user", "fields": []}
+    },
+    "actions": [
+      {"id": "list_deployments", "label": "List deployments", "method": "GET", "path": "/v6/deployments", "query": {"projectId": "{project_id}", "state": "{state}", "limit": "{limit}", "teamId": "{team_id}"}, "items_path": "deployments",
+       "fields": [
+         {"name": "project_id", "label": "Project ID"},
+         {"name": "state", "label": "State", "type": "select", "options": ["BUILDING", "ERROR", "INITIALIZING", "QUEUED", "READY", "CANCELED"]},
+         {"name": "team_id", "label": "Team ID"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 20}
+       ]},
+      {"id": "list_projects", "label": "List projects", "method": "GET", "path": "/v9/projects", "query": {"teamId": "{team_id}"}, "items_path": "projects",
+       "fields": [{"name": "team_id", "label": "Team ID"}]}
+    ]
+  },
+  {
+    "slug": "netlify", "name": "Netlify", "category": "Developer Tools", "color": "#00AD9F", "icon": "globe",
+    "description": "List sites and trigger builds on Netlify",
+    "docs_url": "https://docs.netlify.com/api/get-started/",
+    "credentials": [{"name": "NETLIFY_TOKEN", "label": "Personal access token", "secret": true, "help": "User settings → Applications → Personal access tokens."}],
+    "http": {
+      "base_url": "https://api.netlify.com/api/v1",
+      "auth": {"type": "bearer", "credential": "NETLIFY_TOKEN"},
+      "test": {"id": "test", "label": "User", "method": "GET", "path": "/user", "fields": []}
+    },
+    "actions": [
+      {"id": "trigger_build", "label": "Trigger build", "method": "POST", "path": "/sites/{site_id}/builds", "body": {"clear_cache": "{clear_cache}"},
+       "fields": [
+         {"name": "site_id", "label": "Site ID", "required": true},
+         {"name": "clear_cache", "label": "Clear cache", "type": "boolean"}
+       ]},
+      {"id": "list_deploys", "label": "List deploys", "method": "GET", "path": "/sites/{site_id}/deploys",
+       "fields": [{"name": "site_id", "label": "Site ID", "required": true}]},
+      {"id": "list_sites", "label": "List sites", "method": "GET", "path": "/sites", "fields": []}
+    ]
+  },
+  {
+    "slug": "circleci", "name": "CircleCI", "category": "Developer Tools", "color": "#343434", "icon": "refresh-cw",
+    "description": "Trigger and inspect CircleCI pipelines",
+    "docs_url": "https://circleci.com/docs/api/v2/",
+    "credentials": [{"name": "CIRCLECI_TOKEN", "label": "Personal API token", "secret": true}],
+    "http": {
+      "base_url": "https://circleci.com/api/v2",
+      "auth": {"type": "header", "header": "Circle-Token", "credential": "CIRCLECI_TOKEN"},
+      "test": {"id": "test", "label": "Me", "method": "GET", "path": "/me", "fields": []}
+    },
+    "actions": [
+      {"id": "trigger_pipeline", "label": "Trigger pipeline", "method": "POST", "path": "/project/{project_slug*}/pipeline",
+       "body": {"branch": "{branch}", "parameters": "{parameters}"},
+       "fields": [
+         {"name": "project_slug", "label": "Project slug", "required": true, "placeholder": "gh/acme/api"},
+         {"name": "branch", "label": "Branch", "default": "main"},
+         {"name": "parameters", "label": "Pipeline parameters (JSON)", "type": "json"}
+       ]},
+      {"id": "list_pipelines", "label": "List pipelines", "method": "GET", "path": "/project/{project_slug*}/pipeline", "query": {"branch": "{branch}"}, "items_path": "items",
+       "fields": [
+         {"name": "project_slug", "label": "Project slug", "required": true, "placeholder": "gh/acme/api"},
+         {"name": "branch", "label": "Branch"}
+       ]}
+    ]
+  },
+  {
+    "slug": "jenkins", "name": "Jenkins", "category": "Developer Tools", "color": "#D24939", "icon": "server",
+    "description": "Start Jenkins jobs and read their latest build",
+    "docs_url": "https://www.jenkins.io/doc/book/using/remote-access-api/",
+    "credentials": [
+      {"name": "JENKINS_URL", "label": "Jenkins URL", "placeholder": "https://ci.acme.com"},
+      {"name": "JENKINS_USER", "label": "Username"},
+      {"name": "JENKINS_API_TOKEN", "label": "API token", "secret": true, "help": "Your user → Configure → API Token."}
+    ],
+    "http": {
+      "base_url": "{cred:JENKINS_URL}",
+      "auth": {"type": "basic", "credential": "JENKINS_USER", "password": "JENKINS_API_TOKEN"},
+      "test": {"id": "test", "label": "Server", "method": "GET", "path": "/api/json", "fields": []}
+    },
+    "actions": [
+      {"id": "build_job", "label": "Build job", "method": "POST", "path": "/job/{job}/build", "body_type": "none",
+       "fields": [{"name": "job", "label": "Job name", "required": true}]},
+      {"id": "build_with_parameters", "label": "Build job with parameters", "method": "POST", "path": "/job/{job}/buildWithParameters", "body_type": "form", "body": "{parameters}",
+       "fields": [
+         {"name": "job", "label": "Job name", "required": true},
+         {"name": "parameters", "label": "Parameters (JSON)", "type": "json", "required": true, "placeholder": "{ \"ENV\": \"staging\" }"}
+       ]},
+      {"id": "last_build", "label": "Get last build", "method": "GET", "path": "/job/{job}/lastBuild/api/json",
+       "fields": [{"name": "job", "label": "Job name", "required": true}]}
+    ]
+  },
+  {
+    "slug": "render", "name": "Render", "category": "Developer Tools", "color": "#46E3B7", "icon": "server",
+    "description": "Deploy and list services on Render",
+    "docs_url": "https://api-docs.render.com/reference/introduction",
+    "credentials": [{"name": "RENDER_API_KEY", "label": "API key", "secret": true, "help": "Account settings → API keys."}],
+    "http": {
+      "base_url": "https://api.render.com/v1",
+      "auth": {"type": "bearer", "credential": "RENDER_API_KEY"},
+      "test": {"id": "test", "label": "Owners", "method": "GET", "path": "/owners", "fields": []}
+    },
+    "actions": [
+      {"id": "trigger_deploy", "label": "Trigger deploy", "method": "POST", "path": "/services/{service_id}/deploys", "body": {"clearCache": "{clear_cache}"},
+       "fields": [
+         {"name": "service_id", "label": "Service ID", "required": true},
+         {"name": "clear_cache", "label": "Cache", "type": "select", "options": ["do_not_clear", "clear"]}
+       ]},
+      {"id": "list_services", "label": "List services", "method": "GET", "path": "/services", "fields": []}
+    ]
+  },
+  {
+    "slug": "heroku", "name": "Heroku", "category": "Developer Tools", "color": "#430098", "icon": "server",
+    "description": "Restart dynos, scale process types and list Heroku apps",
+    "docs_url": "https://devcenter.heroku.com/articles/platform-api-reference",
+    "credentials": [{"name": "HEROKU_API_KEY", "label": "API key", "secret": true, "help": "Account settings → API key, or `heroku authorizations:create`."}],
+    "http": {
+      "base_url": "https://api.heroku.com",
+      "auth": {"type": "bearer", "credential": "HEROKU_API_KEY"},
+      "headers": {"Accept": "application/vnd.heroku+json; version=3"},
+      "test": {"id": "test", "label": "Account", "method": "GET", "path": "/account", "fields": []}
+    },
+    "actions": [
+      {"id": "restart_dynos", "label": "Restart all dynos", "method": "DELETE", "path": "/apps/{app}/dynos",
+       "fields": [{"name": "app", "label": "App name", "required": true}]},
+      {"id": "scale", "label": "Scale process type", "method": "PATCH", "path": "/apps/{app}/formation/{type}", "body": {"quantity": "{quantity}"},
+       "fields": [
+         {"name": "app", "label": "App name", "required": true},
+         {"name": "type", "label": "Process type", "default": "web"},
+         {"name": "quantity", "label": "Dynos", "type": "number", "required": true}
+       ]},
+      {"id": "list_apps", "label": "List apps", "method": "GET", "path": "/apps", "fields": []}
+    ]
+  },
+  {
+    "slug": "opsgenie", "name": "Opsgenie", "category": "Developer Tools", "color": "#2684FF", "icon": "alert-triangle",
+    "description": "Open and close on-call alerts in Opsgenie",
+    "docs_url": "https://docs.opsgenie.com/docs/alert-api",
+    "credentials": [{"name": "OPSGENIE_API_KEY", "label": "API integration key", "secret": true}],
+    "http": {"base_url": "https://api.opsgenie.com/v2", "auth": {"type": "header", "header": "Authorization", "prefix": "GenieKey ", "credential": "OPSGENIE_API_KEY"}},
+    "actions": [
+      {"id": "create_alert", "label": "Create alert", "method": "POST", "path": "/alerts",
+       "body": {"message": "{message}", "alias": "{alias}", "description": "{description}", "priority": "{priority}", "tags": "{tags}"},
+       "fields": [
+         {"name": "message", "label": "Message", "required": true},
+         {"name": "alias", "label": "Alias (dedupe key)"},
+         {"name": "description", "label": "Description", "type": "textarea"},
+         {"name": "priority", "label": "Priority", "type": "select", "options": ["P1", "P2", "P3", "P4", "P5"]},
+         {"name": "tags", "label": "Tags (JSON array)", "type": "json"}
+       ]},
+      {"id": "close_alert", "label": "Close alert", "method": "POST", "path": "/alerts/{identifier}/close", "query": {"identifierType": "{identifier_type}"}, "body": {"note": "{note}"},
+       "fields": [
+         {"name": "identifier", "label": "Alert ID or alias", "required": true},
+         {"name": "identifier_type", "label": "Identifier type", "type": "select", "options": ["id", "alias", "tiny"]},
+         {"name": "note", "label": "Note"}
+       ]}
+    ]
+  },
+  {
+    "slug": "statuspage", "name": "Atlassian Statuspage", "category": "Developer Tools", "color": "#0052CC", "icon": "activity",
+    "description": "Post incidents to your public status page",
+    "docs_url": "https://developer.statuspage.io/",
+    "credentials": [{"name": "STATUSPAGE_API_KEY", "label": "API key", "secret": true, "help": "User menu → API info."}],
+    "http": {
+      "base_url": "https://api.statuspage.io/v1",
+      "auth": {"type": "header", "header": "Authorization", "prefix": "OAuth ", "credential": "STATUSPAGE_API_KEY"},
+      "test": {"id": "test", "label": "Pages", "method": "GET", "path": "/pages", "fields": []}
+    },
+    "actions": [
+      {"id": "create_incident", "label": "Create incident", "method": "POST", "path": "/pages/{page_id}/incidents",
+       "body": {"incident": {"name": "{name}", "status": "{status}", "body": "{body}"}},
+       "fields": [
+         {"name": "page_id", "label": "Page ID", "required": true},
+         {"name": "name", "label": "Incident name", "required": true},
+         {"name": "status", "label": "Status", "type": "select", "options": ["investigating", "identified", "monitoring", "resolved"]},
+         {"name": "body", "label": "Update", "type": "textarea"}
+       ]}
+    ]
+  },
+  {
+    "slug": "betterstack", "name": "Better Stack Uptime", "category": "Developer Tools", "color": "#5E5CE6", "icon": "activity",
+    "description": "Read monitors and raise incidents in Better Stack",
+    "docs_url": "https://betterstack.com/docs/uptime/api/getting-started-with-uptime-api/",
+    "credentials": [{"name": "BETTERSTACK_API_TOKEN", "label": "Uptime API token", "secret": true}],
+    "http": {"base_url": "https://uptime.betterstack.com/api/v2", "auth": {"type": "bearer", "credential": "BETTERSTACK_API_TOKEN"}},
+    "actions": [
+      {"id": "list_monitors", "label": "List monitors", "method": "GET", "path": "/monitors", "items_path": "data", "fields": []},
+      {"id": "create_incident", "label": "Create incident", "method": "POST", "path": "/incidents",
+       "body": {"summary": "{summary}", "description": "{description}", "requester_email": "{requester_email}"},
+       "fields": [
+         {"name": "summary", "label": "Summary", "required": true},
+         {"name": "requester_email", "label": "Requester email", "required": true},
+         {"name": "description", "label": "Description", "type": "textarea"}
+       ]}
+    ]
+  },
+  {
+    "slug": "algolia", "name": "Algolia", "category": "Developer Tools", "color": "#003DFF", "icon": "search",
+    "description": "Search and index records in Algolia",
+    "docs_url": "https://www.algolia.com/doc/rest-api/search/",
+    "credentials": [
+      {"name": "ALGOLIA_APP_ID", "label": "Application ID"},
+      {"name": "ALGOLIA_API_KEY", "label": "API key", "secret": true, "help": "Use a key with addObject/search ACLs."}
+    ],
+    "http": {
+      "base_url": "https://{cred:ALGOLIA_APP_ID}.algolia.net/1",
+      "auth": {"type": "header", "header": "X-Algolia-API-Key", "credential": "ALGOLIA_API_KEY"},
+      "headers": {"X-Algolia-Application-Id": "{cred:ALGOLIA_APP_ID}"}
+    },
+    "actions": [
+      {"id": "search", "label": "Search index", "method": "POST", "path": "/indexes/{index}/query", "body": {"query": "{query}", "hitsPerPage": "{hits}"}, "items_path": "hits",
+       "fields": [
+         {"name": "index", "label": "Index", "required": true},
+         {"name": "query", "label": "Query", "required": true},
+         {"name": "hits", "label": "Hits per page", "type": "number", "default": 20}
+       ]},
+      {"id": "add_record", "label": "Add record", "method": "POST", "path": "/indexes/{index}", "body": "{record}",
+       "fields": [
+         {"name": "index", "label": "Index", "required": true},
+         {"name": "record", "label": "Record (JSON)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "firebase_rtdb", "name": "Firebase Realtime Database", "category": "Databases", "color": "#FFCA28", "icon": "database",
+    "description": "Read, write and push data in a Firebase Realtime Database",
+    "docs_url": "https://firebase.google.com/docs/reference/rest/database",
+    "credentials": [
+      {"name": "FIREBASE_DATABASE_URL", "label": "Database URL", "placeholder": "https://acme-default-rtdb.firebaseio.com"},
+      {"name": "FIREBASE_DATABASE_SECRET", "label": "Database secret or ID token", "secret": true}
+    ],
+    "http": {"base_url": "{cred:FIREBASE_DATABASE_URL}", "auth": {"type": "query", "param": "auth", "credential": "FIREBASE_DATABASE_SECRET"}},
+    "actions": [
+      {"id": "get", "label": "Read", "method": "GET", "path": "/{path*}.json",
+       "fields": [{"name": "path", "label": "Path", "required": true, "placeholder": "orders/2026"}]},
+      {"id": "set", "label": "Set (replace)", "method": "PUT", "path": "/{path*}.json", "body": "{value}",
+       "fields": [
+         {"name": "path", "label": "Path", "required": true},
+         {"name": "value", "label": "Value (JSON)", "type": "json", "required": true}
+       ]},
+      {"id": "push", "label": "Push to list", "method": "POST", "path": "/{path*}.json", "body": "{value}",
+       "fields": [
+         {"name": "path", "label": "Path", "required": true},
+         {"name": "value", "label": "Value (JSON)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "upstash_redis", "name": "Upstash Redis", "category": "Databases", "color": "#00E9A3", "icon": "database",
+    "description": "Run Redis commands over Upstash's REST API",
+    "docs_url": "https://upstash.com/docs/redis/features/restapi",
+    "credentials": [
+      {"name": "UPSTASH_REDIS_REST_URL", "label": "REST URL", "placeholder": "https://eu1-xyz.upstash.io"},
+      {"name": "UPSTASH_REDIS_REST_TOKEN", "label": "REST token", "secret": true}
+    ],
+    "http": {"base_url": "{cred:UPSTASH_REDIS_REST_URL}", "auth": {"type": "bearer", "credential": "UPSTASH_REDIS_REST_TOKEN"}},
+    "actions": [
+      {"id": "command", "label": "Run command", "method": "POST", "path": "", "body": "{command}",
+       "fields": [{"name": "command", "label": "Command (JSON array)", "type": "json", "required": true, "placeholder": "[\"SET\", \"order:{{ input.id }}\", \"shipped\"]"}]}
+    ]
+  },
+  {
+    "slug": "pinecone", "name": "Pinecone", "category": "Databases", "color": "#000000", "icon": "layers",
+    "description": "Upsert and query vectors in a Pinecone index",
+    "docs_url": "https://docs.pinecone.io/reference/api/introduction",
+    "credentials": [
+      {"name": "PINECONE_INDEX_HOST", "label": "Index host", "placeholder": "my-index-abc123.svc.us-east1-gcp.pinecone.io", "help": "Without https://."},
+      {"name": "PINECONE_API_KEY", "label": "API key", "secret": true}
+    ],
+    "http": {
+      "base_url": "https://{cred:PINECONE_INDEX_HOST}",
+      "auth": {"type": "header", "header": "Api-Key", "credential": "PINECONE_API_KEY"},
+      "headers": {"X-Pinecone-API-Version": "2024-10"}
+    },
+    "actions": [
+      {"id": "query", "label": "Query", "method": "POST", "path": "/query", "items_path": "matches",
+       "body": {"vector": "{vector}", "topK": "{top_k}", "namespace": "{namespace}", "includeMetadata": true, "filter": "{filter}"},
+       "fields": [
+         {"name": "vector", "label": "Vector (JSON array)", "type": "json", "required": true},
+         {"name": "top_k", "label": "Top K", "type": "number", "default": 5},
+         {"name": "namespace", "label": "Namespace"},
+         {"name": "filter", "label": "Metadata filter (JSON)", "type": "json"}
+       ]},
+      {"id": "upsert", "label": "Upsert vectors", "method": "POST", "path": "/vectors/upsert", "body": {"vectors": "{vectors}", "namespace": "{namespace}"},
+       "fields": [
+         {"name": "vectors", "label": "Vectors (JSON array)", "type": "json", "required": true},
+         {"name": "namespace", "label": "Namespace"}
+       ]}
+    ]
+  },
+  {
+    "slug": "qdrant", "name": "Qdrant", "category": "Databases", "color": "#DC244C", "icon": "layers",
+    "description": "Search and upsert points in a Qdrant vector collection",
+    "docs_url": "https://api.qdrant.tech/api-reference",
+    "credentials": [
+      {"name": "QDRANT_URL", "label": "Cluster URL", "placeholder": "https://xyz.cloud.qdrant.io:6333"},
+      {"name": "QDRANT_API_KEY", "label": "API key", "secret": true}
+    ],
+    "http": {"base_url": "{cred:QDRANT_URL}", "auth": {"type": "header", "header": "api-key", "credential": "QDRANT_API_KEY"}},
+    "actions": [
+      {"id": "search", "label": "Search", "method": "POST", "path": "/collections/{collection}/points/search", "items_path": "result",
+       "body": {"vector": "{vector}", "limit": "{limit}", "with_payload": true, "filter": "{filter}"},
+       "fields": [
+         {"name": "collection", "label": "Collection", "required": true},
+         {"name": "vector", "label": "Vector (JSON array)", "type": "json", "required": true},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 5},
+         {"name": "filter", "label": "Filter (JSON)", "type": "json"}
+       ]},
+      {"id": "upsert", "label": "Upsert points", "method": "PUT", "path": "/collections/{collection}/points", "body": {"points": "{points}"},
+       "fields": [
+         {"name": "collection", "label": "Collection", "required": true},
+         {"name": "points", "label": "Points (JSON array)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "pocketbase", "name": "PocketBase", "category": "Databases", "color": "#16161A", "icon": "database",
+    "description": "List and create records in a PocketBase backend",
+    "docs_url": "https://pocketbase.io/docs/api-records/",
+    "credentials": [
+      {"name": "POCKETBASE_URL", "label": "Server URL", "placeholder": "https://pb.acme.com"},
+      {"name": "POCKETBASE_TOKEN", "label": "Auth token", "secret": true, "help": "A superuser or collection auth token."}
+    ],
+    "http": {"base_url": "{cred:POCKETBASE_URL}/api", "auth": {"type": "header", "header": "Authorization", "credential": "POCKETBASE_TOKEN"}},
+    "actions": [
+      {"id": "list_records", "label": "List records", "method": "GET", "path": "/collections/{collection}/records", "query": {"filter": "{filter}", "sort": "{sort}"}, "items_path": "items",
+       "fields": [
+         {"name": "collection", "label": "Collection", "required": true},
+         {"name": "filter", "label": "Filter", "placeholder": "status = 'open'"},
+         {"name": "sort", "label": "Sort", "placeholder": "-created"}
+       ]},
+      {"id": "create_record", "label": "Create record", "method": "POST", "path": "/collections/{collection}/records", "body": "{record}",
+       "fields": [
+         {"name": "collection", "label": "Collection", "required": true},
+         {"name": "record", "label": "Record (JSON)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "nocodb", "name": "NocoDB", "category": "Databases", "color": "#2B2BFF", "icon": "table",
+    "description": "Read and add rows in NocoDB tables",
+    "docs_url": "https://docs.nocodb.com/developer-resources/rest-apis",
+    "credentials": [
+      {"name": "NOCODB_URL", "label": "Server URL", "placeholder": "https://app.nocodb.com"},
+      {"name": "NOCODB_TOKEN", "label": "API token", "secret": true}
+    ],
+    "http": {"base_url": "{cred:NOCODB_URL}/api/v2", "auth": {"type": "header", "header": "xc-token", "credential": "NOCODB_TOKEN"}},
+    "actions": [
+      {"id": "list_records", "label": "List records", "method": "GET", "path": "/tables/{table_id}/records", "query": {"where": "{where}", "limit": "{limit}"}, "items_path": "list",
+       "fields": [
+         {"name": "table_id", "label": "Table ID", "required": true},
+         {"name": "where", "label": "Where", "placeholder": "(Status,eq,Open)"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 25}
+       ]},
+      {"id": "create_record", "label": "Create record", "method": "POST", "path": "/tables/{table_id}/records", "body": "{record}",
+       "fields": [
+         {"name": "table_id", "label": "Table ID", "required": true},
+         {"name": "record", "label": "Record (JSON)", "type": "json", "required": true}
+       ]}
+    ]
+  },
+  {
+    "slug": "baserow", "name": "Baserow", "category": "Databases", "color": "#5190EF", "icon": "table",
+    "description": "Read and add rows in Baserow tables",
+    "docs_url": "https://baserow.io/api-docs",
+    "credentials": [
+      {"name": "BASEROW_URL", "label": "Server URL", "placeholder": "https://api.baserow.io"},
+      {"name": "BASEROW_TOKEN", "label": "Database token", "secret": true}
+    ],
+    "http": {"base_url": "{cred:BASEROW_URL}/api", "auth": {"type": "header", "header": "Authorization", "prefix": "Token ", "credential": "BASEROW_TOKEN"}},
+    "actions": [
+      {"id": "list_rows", "label": "List rows", "method": "GET", "path": "/database/rows/table/{table_id}/", "query": {"user_field_names": "true", "search": "{search}"}, "items_path": "results",
+       "fields": [
+         {"name": "table_id", "label": "Table ID", "required": true},
+         {"name": "search", "label": "Search"}
+       ]},
+      {"id": "create_row", "label": "Create row", "method": "POST", "path": "/database/rows/table/{table_id}/", "query": {"user_field_names": "true"}, "body": "{row}",
+       "fields": [
+         {"name": "table_id", "label": "Table ID", "required": true},
+         {"name": "row", "label": "Row (JSON)", "type": "json", "required": true}
+       ]}
+    ]
+  }
+]

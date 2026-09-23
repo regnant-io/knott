@@ -40,6 +40,7 @@ var nodeTypes = map[string]bool{
 	"tool_call": true, "agent_call": true, "sub_workflow": true, "parallel": true,
 	"loop": true, "merge": true, "transform": true, "set": true, "filter": true,
 	"wait": true, "code": true, "emit": true, "end": true,
+	"llm": true, "list": true, "datetime": true, "crypto": true, "stop_error": true,
 }
 
 type step struct {
@@ -227,7 +228,7 @@ func Validate(def map[string]any) Findings {
 		}
 	}
 	for _, s := range steps {
-		if s.kind == "end" || !reachable[s.id] || driven[s.id] {
+		if s.kind == "end" || s.kind == "stop_error" || !reachable[s.id] || driven[s.id] {
 			continue
 		}
 		if len(outgoing(&s)) == 0 {
@@ -291,6 +292,28 @@ func Validate(def map[string]any) Findings {
 		case "loop":
 			if str(cfg["items"]) == "" {
 				f.Errors = append(f.Errors, fmt.Sprintf("Loop %s has no list to iterate over", label(s.id)))
+			}
+		case "llm":
+			if strings.TrimSpace(str(cfg["prompt"])) == "" {
+				f.Errors = append(f.Errors, fmt.Sprintf("AI prompt %s has no prompt", label(s.id)))
+			}
+		case "list":
+			if strings.TrimSpace(str(cfg["items"])) == "" {
+				f.Errors = append(f.Errors, fmt.Sprintf("List step %s has no list to work on", label(s.id)))
+			}
+			switch str(cfg["operation"]) {
+			case "filter":
+				if strings.TrimSpace(str(cfg["condition"])) == "" {
+					f.Errors = append(f.Errors, fmt.Sprintf("List step %s filters without a condition", label(s.id)))
+				}
+			case "map":
+				if strings.TrimSpace(str(cfg["expression"])) == "" {
+					f.Errors = append(f.Errors, fmt.Sprintf("List step %s maps without an expression", label(s.id)))
+				}
+			}
+		case "crypto":
+			if str(cfg["operation"]) == "hmac" && str(cfg["key_credential"]) == "" {
+				f.Errors = append(f.Errors, fmt.Sprintf("Crypto step %s signs with HMAC but names no key credential", label(s.id)))
 			}
 		case "wait":
 			if str(cfg["mode"]) == "until" {

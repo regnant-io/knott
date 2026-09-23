@@ -1,0 +1,60 @@
+# Linux package for the KNOTT desktop app (nfpm — https://nfpm.goreleaser.com).
+#
+#     nfpm package -f build/nfpm-desktop.yaml -p deb -t dist/
+#     nfpm package -f build/nfpm-desktop.yaml -p rpm -t dist/
+#
+# A native GTK window over the system WebKitGTK — the app appears in the
+# applications menu like any other. It depends on the server package for the
+# knott command-line tool.
+
+name: knott-desktop
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: Regnant <opensource@regnant.io>
+description: |
+  KNOTT desktop app.
+  Build and run automated, AI-assisted, human-in-the-loop workflows on your
+  own machine, in a native window.
+vendor: Regnant
+homepage: https://github.com/regnant-io/knott
+license: Apache-2.0
+
+depends:
+  - knott (= ${VERSION})
+
+overrides:
+  deb:
+    depends:
+      - knott (= ${VERSION})
+      - libgtk-3-0
+      - libwebkit2gtk-4.1-0
+  rpm:
+    depends:
+      - knott = ${VERSION}
+      - gtk3
+      - webkit2gtk4.1
+
+contents:
+  - src: ./dist/pkgroot/knott-desktop
+    dst: /usr/bin/knott-desktop
+    file_info:
+      mode: 0755
+
+  - src: ./build/linux/knott.desktop
+    dst: /usr/share/applications/knott.desktop
+
+  - src: ./brand/icons/knott-512.png
+    dst: /usr/share/icons/hicolor/512x512/apps/knott.png
+  - src: ./brand/icons/knott-256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/knott.png
+  - src: ./brand/icons/knott-128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/knott.png
+  - src: ./brand/icons/knott-64.png
+    dst: /usr/share/icons/hicolor/64x64/apps/knott.png
+  - src: ./brand/icons/knott-48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/knott.png
+  - src: ./brand/knott-icon.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/knott.svg
