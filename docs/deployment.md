@@ -80,7 +80,9 @@ curl -X POST https://knott.example.com/api/v1/hooks/<workflow-id> \
 Add an `Idempotency-Key` header and a repeated delivery returns the original run
 instead of starting a second one.
 
-**4. Set `CORS_ORIGINS`** to your console's origin.
+**4. Leave browser origins closed.** The console is served from KNOTT itself, so
+no cross-origin access is needed; requests from other origins are refused. Only
+if you host the console elsewhere, list its origin in `KNOTT_ALLOWED_ORIGINS`.
 
 **5. Terminate TLS in front of it.** KNOTT speaks plain HTTP.
 `infra/nginx/nginx.conf` is a working configuration — note that it routes

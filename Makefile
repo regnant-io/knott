@@ -25,8 +25,8 @@ PLATFORMS  := windows/amd64 windows/arm64 \
               linux/amd64 linux/arm64
 
 .DEFAULT_GOAL := build
-.PHONY: help build ui embed test test-go test-ui lint fmt vet run desktop clean \
-        release packages deb rpm appimage macapp docker brand tidy check
+.PHONY: help build ui embed test test-go test-ui lint fmt vet run desktop desktop-run clean \
+        release packages deb rpm macapp windows-installer docker brand tidy check
 
 help: ## Show the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -55,8 +55,29 @@ services: ## Build the per-service binaries for a distributed deployment
 run: build ## Build and run KNOTT
 	$(BIN)/knott serve --open
 
-desktop: build ## Build and run KNOTT in a desktop window
-	$(BIN)/knott desktop
+# The native desktop app (Wails) lives in its own module so the server stays a
+# pure-Go, CGO-free build. Windows needs no C toolchain; macOS needs Xcode's
+# command-line tools; Linux needs libgtk-3-dev and libwebkit2gtk-4.1-dev.
+DESKTOP_TAGS := desktop,production
+DESKTOP_OUT  := $(BIN)/knott-desktop
+ifeq ($(OS),Windows_NT)
+  DESKTOP_LDFLAGS := -H windowsgui
+  DESKTOP_OUT     := $(BIN)/KNOTT.exe
+else
+  UNAME_S := $(shell uname -s)
+  ifeq ($(UNAME_S),Linux)
+    DESKTOP_TAGS := desktop,production,webkit2_41
+  endif
+endif
+
+desktop: ui embed ## Build the native desktop app into bin/
+	@if [ "$(OS)" = "Windows_NT" ]; then cd desktop && go run github.com/tc-hib/go-winres@v0.3.3 make --in winres/winres.json --out rsrc --arch amd64,arm64; fi
+	cd desktop && CGO_ENABLED=$(if $(filter Windows_NT,$(OS)),0,1) go build -trimpath -tags $(DESKTOP_TAGS) \
+	  -ldflags '$(LDFLAGS) $(DESKTOP_LDFLAGS)' -o ../$(DESKTOP_OUT) .
+	@echo "built $(DESKTOP_OUT)"
+
+desktop-run: desktop ## Build and open the desktop app
+	./$(DESKTOP_OUT)
 
 brand: ## Regenerate every brand asset from the mark geometry
 	python tools/brand/generate.py
@@ -95,8 +116,6 @@ release: ui embed ## Cross-compile release archives for every platform
 	  GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 \
 	    go build -trimpath -ldflags '$(LDFLAGS)' -o "$$out/knott$$ext" ./cmd/knott || exit 1; \
 	  cp LICENSE NOTICE README.md "$$out/"; \
-	  mkdir -p "$$out/ai-decision-engine"; \
-	  cp services/ai-decision-engine/main.py "$$out/ai-decision-engine/"; \
 	  if [ "$$os" = "windows" ] && command -v zip >/dev/null 2>&1; then \
 	    (cd $(DIST) && zip -qr "$$(basename $$out).zip" "$$(basename $$out)") || exit 1; \
 	  else \
@@ -115,11 +134,13 @@ deb: ## Build a .deb (needs nfpm)
 rpm: ## Build an .rpm (needs nfpm)
 	VERSION=$(VERSION) nfpm package -f build/nfpm.yaml -p rpm -t $(DIST)/
 
-macapp: ## Assemble KNOTT.app for macOS
-	bash build/macos/make-app.sh "$(VERSION)"
+macapp: desktop build ## Assemble KNOTT.app and a .dmg (macOS)
+	bash build/macos/make-app.sh "$(VERSION)" $(DESKTOP_OUT) $(BIN)/knott
 
-appimage: ## Assemble a Linux AppImage (needs appimagetool)
-	bash build/linux/make-appimage.sh "$(VERSION)"
+windows-installer: ## Build the Windows installer (needs NSIS; run after `make desktop`)
+	mkdir -p $(DIST)/win && cp $(BIN)/KNOTT.exe $(DIST)/win/ && GOOS=windows go build -trimpath -ldflags '$(LDFLAGS)' -o $(DIST)/win/knott.exe ./cmd/knott
+	cp LICENSE NOTICE $(DIST)/win/
+	makensis -DVERSION=$(patsubst v%,%,$(VERSION)) -DSOURCE=$(abspath $(DIST)/win) -DOUTFILE=$(abspath $(DIST))/KNOTT-$(patsubst v%,%,$(VERSION))-windows-x64-setup.exe build/windows/installer.nsi
 
 docker: ## Build the container image
 	docker build -f build/docker/Dockerfile -t knott:$(VERSION) -t knott:latest .
