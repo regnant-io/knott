@@ -1,5 +1,4 @@
-/* The Wails title strip takes 42px of the viewport. All app screens must
-   measure against the remaining flex area, not 100vh/100dvh. */
+/* Keep desktop surfaces within the area below the Wails title strip. */
 .desktop-content > .console-shell,
 .desktop-content > .designer-shell,
 .desktop-content > .login-shell {
@@ -10,4 +9,20 @@
 .desktop-content .studio {
   height: 100%;
   min-height: 0;
+}
+
+.desktop-shell .drawer-overlay,
+.desktop-shell .modal-overlay {
+  top: var(--desktop-titlebar-height);
+}
+
+.desktop-shell .modal {
+  max-height: calc(100dvh - var(--desktop-titlebar-height) - 40px);
+}
+
+@media (max-width: 700px) {
+  .desktop-shell .sidebar,
+  .desktop-shell .sidebar-scrim {
+    top: var(--desktop-titlebar-height);
+  }
 }
