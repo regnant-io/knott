@@ -63,6 +63,35 @@
        "method": "POST", "path": "/purchase.order/button_cancel",
        "body": {"ids": ["{order_id}"]},
        "fields": [{"name": "order_id", "label": "Purchase order ID", "type": "number", "required": true}]},
+      {"id": "find_product", "label": "Find a product by internal reference",
+       "description": "The product variant whose Internal Reference (default_code) matches, e.g. a spare part number from a maintenance system.",
+       "method": "POST", "path": "/product.product/search_read", "items_path": ".",
+       "body": {"domain": [["default_code", "=", "{default_code}"]], "fields": "{fields}", "limit": 1},
+       "fields": [
+         {"name": "default_code", "label": "Internal reference", "required": true, "placeholder": "BRG-6308-2Z"},
+         {"name": "fields", "label": "Fields", "type": "json", "default": ["name", "default_code", "product_tmpl_id", "standard_price", "uom_id"]}
+       ]},
+      {"id": "product_vendors", "label": "Get a product's vendors",
+       "description": "The product's vendor price list (Purchase tab), preferred vendor first.",
+       "method": "POST", "path": "/product.supplierinfo/search_read", "items_path": ".",
+       "body": {"domain": [["product_tmpl_id", "=", "{product_tmpl_id}"]], "fields": ["partner_id", "price", "min_qty", "delay", "currency_id"], "order": "sequence, price", "limit": "{limit}"},
+       "fields": [
+         {"name": "product_tmpl_id", "label": "Product template ID", "type": "number", "required": true},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 5}
+       ]},
+      {"id": "create_purchase_order", "label": "Create a request for quotation",
+       "description": "A new purchase order in draft (RFQ) with one line. Confirm it afterwards to send it through Odoo's approval rule.",
+       "method": "POST", "path": "/purchase.order/create", "items_path": ".",
+       "body": {"vals_list": [{"partner_id": "{partner_id}", "origin": "{origin}", "partner_ref": "{partner_ref}",
+                "order_line": [[0, 0, {"product_id": "{product_id}", "product_qty": "{quantity}", "price_unit": "{price_unit}"}]]}]},
+       "fields": [
+         {"name": "partner_id", "label": "Vendor ID", "type": "number", "required": true},
+         {"name": "product_id", "label": "Product ID", "type": "number", "required": true},
+         {"name": "quantity", "label": "Quantity", "type": "number", "required": true},
+         {"name": "price_unit", "label": "Unit price", "type": "number", "help": "Leave empty to use the vendor's price list."},
+         {"name": "origin", "label": "Source document", "placeholder": "IIN action 4f2c…"},
+         {"name": "partner_ref", "label": "Vendor reference"}
+       ]},
       {"id": "post_note", "label": "Log a note on a record",
        "description": "An internal note in the record's chatter, so the decision is visible inside Odoo as well as in KNOTT's audit log.",
        "method": "POST", "path": "/{model}/message_post",

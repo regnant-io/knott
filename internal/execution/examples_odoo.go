@@ -15,7 +15,11 @@ package execution
 // work, as well as to KNOTT's audit log.
 //
 // The policy step holds the numbers a customer sets: the amount limit (in the
-// company currency) and the confidence threshold.
+// company currency) and the confidence threshold. With use_matta on, KNOTT
+// also asks Matta (Regnant's semantic layer) what the business knows about
+// the vendor across its systems — the same supplier in the CRM, open
+// disputes, payment history — and gives those cited facts to the model and to
+// the approver. Off by default, so the workflow needs nothing but Odoo.
 func odooPurchaseApproval() exampleWorkflow {
 	odoo := func(id, name, action string, cfg map[string]any, next, onError string, x, y float64) map[string]any {
 		c := map[string]any{"connector": "odoo", "action": action, "retries": float64(1)}
@@ -61,14 +65,25 @@ func odooPurchaseApproval() exampleWorkflow {
 						"amount_limit":   float64(10000000),
 						"currency":       "TZS",
 						"min_confidence": float64(0.85),
+						"use_matta":      false,
 					}},
-					"notes":    "The numbers the business sets. Orders above amount_limit always go to a person.",
+					"notes":    "The numbers the business sets. Orders above amount_limit always go to a person. use_matta: also ask Matta about the vendor (needs the Matta connector).",
 					"position": map[string]any{"x": 360, "y": 240}},
 				odoo("lines", "Odoo: order lines", "purchase_order_lines",
 					map[string]any{"order_id": "{{ input.item.id }}"}, "history", "odoo_failed", 640, 240),
 				odoo("history", "Odoo: vendor's recent orders", "vendor_purchase_history",
 					map[string]any{"partner_id": "{{ input.item.partner_id[0] }}", "exclude_id": "{{ input.item.id }}", "limit": float64(20)},
-					"assess", "odoo_failed", 920, 240),
+					"matta_gate", "odoo_failed", 920, 240),
+				{"id": "matta_gate", "type": "condition", "name": "Ask Matta?",
+					"cases":    []map[string]any{{"condition": "steps.policy.output.use_matta == true", "next": "vendor_profile"}},
+					"default":  "assess",
+					"position": map[string]any{"x": 1060, "y": 400}},
+				{"id": "vendor_profile", "type": "tool_call", "name": "Matta: what we know about the vendor",
+					"config": map[string]any{"connector": "matta", "action": "context", "retries": float64(1), "on_error": "assess",
+						"question": "What do we know about the supplier {{ input.item.partner_id[1] }}: its records in other systems, open disputes or quality issues, payment terms and history?",
+						"top_k":    float64(5)},
+					"notes": "If Matta is unreachable the order is still assessed, on Odoo's data alone.",
+					"next":  "assess", "position": map[string]any{"x": 1200, "y": 400}},
 				{"id": "assess", "type": "ai_decision", "name": "Score the order",
 					"config": map[string]any{"task": "purchase_order_approval", "confidence_threshold": 0.85, "model_profile": "ollama_default"},
 					"inputs": map[string]any{
@@ -78,8 +93,9 @@ func odooPurchaseApproval() exampleWorkflow {
 						"vendor_history": "{{ steps.history.output.items }}",
 						"amount_limit":   "{{ steps.policy.output.amount_limit }}",
 						"currency":       "{{ steps.policy.output.currency }}",
+						"vendor_facts":   "{{ steps.vendor_profile.output.response.citations }}",
 					},
-					"next": "gate", "position": map[string]any{"x": 1200, "y": 240}},
+					"next": "gate", "position": map[string]any{"x": 1340, "y": 240}},
 				{"id": "gate", "type": "condition", "name": "Routine, or a person decides?",
 					"cases": []map[string]any{
 						{"condition": "steps.assess.model_id == 'simulation'", "next": "review"},
@@ -114,6 +130,7 @@ func odooPurchaseApproval() exampleWorkflow {
 						"lines":          "{{ steps.lines.output.items }}",
 						"vendor_history": "{{ steps.history.output.items }}",
 						"model":          "{{ steps.assess.model_id }}",
+						"vendor_facts":   "{{ steps.vendor_profile.output.response.citations }}",
 					},
 					"next_map": map[string]any{"APPROVE": "human_approve", "REJECT": "human_cancel"},
 					"next":     "human_approve",

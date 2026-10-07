@@ -45,6 +45,9 @@ it anywhere else.
 | Approve purchase order | `purchase.order/button_approve` |
 | Confirm purchase order | `purchase.order/button_confirm` (Odoo applies its own two-step rule) |
 | Cancel purchase order | `purchase.order/button_cancel` |
+| Find a product by internal reference | `product.product/search_read` on `default_code` |
+| Get a product's vendors | `product.supplierinfo/search_read`, preferred vendor first |
+| Create a request for quotation | `purchase.order/create` with one `[0, 0, {...}]` line; the price comes from the vendor's price list unless given |
 | Log a note on a record | `<model>/message_post` as an internal note (`mail.mt_note`) |
 | Search records / Update records | `search_read` / `write` on any model |
 | Call a model method | any public method, with a JSON body of `ids`, `context` and named arguments |
@@ -106,6 +109,21 @@ and the reviewer's decision. With Cordon as the AI provider, the decision also
 carries Cordon's receipt — the request ID in Cordon's audit log and the
 response signature — under `inference_receipt`.
 
+### Adding what Matta knows about the vendor
+
+Odoo knows a vendor's orders. It does not know that the same supplier has two
+short deliveries logged in the CRM, or a quality complaint in another system.
+[Matta](https://regnant.io), Regnant's semantic layer, does: it resolves the
+same supplier across systems into one governed record, with every fact cited
+to its source.
+
+Set `use_matta` to `true` in the **Approval policy** step and add the **Matta**
+connector (its address and a read API key). The workflow then asks Matta's
+`/ask/context` about the vendor before scoring, gives the cited facts to the
+model as `vendor_facts`, and shows them to the approver. An open dispute is a
+reason to escalate an order that looks routine in Odoo alone. If Matta cannot
+be reached, the order is assessed on Odoo's data as before.
+
 ### In Odoo
 
 Turn on **Purchase → Configuration → Settings → Purchase Order Approval** and
@@ -124,12 +142,43 @@ is on, so orders already waiting when the workflow is activated are picked up.
 
 ---
 
+## Spare-part reorders from IIN
+
+**Workflows → Examples → Spare Part Reorder → Odoo RFQ.** IIN, Regnant's
+industrial intelligence network, predicts equipment failures and proposes
+reorders when a needed part is below its minimum. When an engineer approves a
+reorder in IIN, IIN's decision engine starts this workflow (`POST
+/api/v1/runs` with an `Idempotency-Key` naming the IIN action, so a retry never
+raises a second order). KNOTT then:
+
+1. finds the part in Odoo by its Internal Reference (the IIN part number);
+2. takes the preferred vendor from the product's Purchase tab;
+3. creates an RFQ for the approved quantity at that vendor's price, with the
+   IIN action as its source document;
+4. notes on the RFQ why it was raised and who approved it in IIN (and, when
+   IIN's agents run on Cordon, the signed request ID of the recommendation);
+5. confirms it, so Odoo's own approval rule applies. Above the threshold it
+   waits in *To Approve*, where the purchase-order approval workflow picks it
+   up like any other order.
+
+A part Odoo does not know, or one without a vendor, goes to a buyer's Task
+Inbox instead. The need (IIN, approved by an engineer) and the spend (Odoo,
+approved under purchasing policy) stay separate decisions with separate
+approvers.
+
+In IIN set `KNOTT_URL`, `KNOTT_API_KEY` (an operator key) and
+`KNOTT_REORDER_WORKFLOW_ID` (the published workflow's ID) on the decision
+engine.
+
 ## Rehearsing without Odoo
 
 `tools/odoo-sim` is a stand-in that speaks the same JSON-2 calls over an
 in-memory purchasing dataset in Tanzanian shillings: four vendors with order
 history, and four orders waiting — one routine, one above the limit, one from
-a new vendor, one unusually large.
+a new vendor, one unusually large. It also stocks seven plant spare parts with
+the same part numbers as IIN's demo plant, each with a vendor price list, and
+applies two-step approval to confirmed RFQs of 5,000,000 TZS or more
+(`-approval-min`).
 
 ```bash
 go run ./tools/odoo-sim                       # http://127.0.0.1:8069, key demo-key, db demo

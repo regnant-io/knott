@@ -29,6 +29,19 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once
 - Polling triggers accept a composite `dedup_key` (`id,write_date`), so a
   changed record fires again.
 - Example templates can be seeded as drafts.
+- **Spare Part Reorder → Odoo RFQ** example workflow, started by IIN when an
+  engineer approves a reorder: finds the part by internal reference, raises an
+  RFQ with the preferred vendor, notes why, and confirms it under Odoo's own
+  approval rule. New Odoo actions: find a product, a product's vendors, create
+  an RFQ. `odoo-sim` gained spare parts, vendor price lists, RFQ creation and
+  two-step approval.
+- **Matta connector** (`regnant.json`): grounded facts and answers from Matta,
+  Regnant's semantic layer, each cited to its source system. The purchase-order
+  workflow can ask Matta about the vendor (`use_matta`) and give the facts to
+  the model and the approver.
+- `POST /api/v1/runs` honours `Idempotency-Key`: a retried call returns the
+  original run instead of starting another.
+- Condition cases can call functions, e.g. `len(steps.x.output.items) == 0`.
 
 ### Changed
 

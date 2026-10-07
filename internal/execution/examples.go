@@ -63,6 +63,7 @@ func exampleWorkflows() []exampleWorkflow {
 	return []exampleWorkflow{
 		// ── 0. ERP — Odoo purchase order approval (polls Odoo, acts in Odoo) ──
 		odooPurchaseApproval(),
+		odooSparePartReorder(),
 
 		// ── 1. Finance — Invoice approval (classic HITL on AI decision) ──────────
 		{
