@@ -128,7 +128,7 @@ screen).
 |---|---|
 | **Triggers** | Manual, webhook, schedule (interval, daily, cron), polling for new items |
 | **AI** | AI Prompt (write, summarise, extract JSON), AI Decision (with a confidence threshold), external agents |
-| **Apps** | 177 connectors, HTTP Request for any API, Run workflow (sub-workflows) |
+| **Apps** | 178 connectors (Odoo among them), HTTP Request for any API, Run workflow (sub-workflows) |
 | **Flow** | If / Switch, Filter, Loop, Parallel, Merge, Wait, Stop and error, End |
 | **Data** | Set fields, Expression, Transform, Sort, Limit, Remove duplicates, Filter items, Map items, Aggregate, Date & time, Crypto |
 | **Human** | Review tasks — approve, reject or fill in a form, with SLAs |
@@ -143,18 +143,36 @@ not retry in lockstep.
 restart resumes where it left off without re-firing a side effect that already
 happened. A distributed lease means exactly one replica executes a given run.
 
-**AI, wherever you want it.** Install [Ollama](https://ollama.com), pull any
-model, and KNOTT uses it — no configuration: it finds the local server
-(honouring `OLLAMA_HOST`), picks an installed model, and keeps it loaded
-between steps. Or add an Anthropic API key. With neither, AI Decision steps
-fall back to deterministic rules that escalate anything they cannot clear, and
-the audit log says so. Everything runs inside the binary; Python is not needed.
+**AI, wherever you want it.** Point KNOTT at
+[Cordon](https://github.com/regnant-io/cordon), Regnant's confidential
+inference engine, and every AI decision is admitted under KNOTT's client
+identity, written to Cordon's tamper-evident audit log and signed by the node;
+KNOTT keeps Cordon's receipt (request ID and Ed25519 signature) with the
+decision, so either audit trail leads to the other. Or install
+[Ollama](https://ollama.com), pull any model, and KNOTT uses it — no
+configuration: it finds the local server (honouring `OLLAMA_HOST`), picks an
+installed model, and keeps it loaded between steps. Or add an Anthropic API
+key. With none of these, AI Decision steps fall back to deterministic rules
+that escalate anything they cannot clear, and the audit log says so.
+Everything runs inside the binary; Python is not needed.
+
+---
+
+## ERP: Odoo purchase approval
+
+KNOTT ships an Odoo 19 connector (the JSON-2 API) and a ready-made
+**Purchase Order Approval (Odoo)** workflow: it watches Odoo's *To Approve*
+queue, scores each order against its lines and the vendor's recent orders,
+approves only routine orders under the amount limit you set, sends everything
+else to an approver, and writes every decision into the order's chatter in
+Odoo as well as KNOTT's audit log. A simulator lets you rehearse it without an
+Odoo server. See [docs/odoo.md](docs/odoo.md).
 
 ---
 
 ## Connectors
 
-**177 integrations** across CRM, marketing and analytics, e-commerce and
+**178 integrations** across ERP (Odoo), CRM, marketing and analytics, e-commerce and
 logistics, finance, developer tools, databases and vector stores, AI models,
 communication, customer support, productivity, HR, healthcare (FHIR), education,
 legal and e-signature, maps and data, smart home and social media — plus HTTP
@@ -217,6 +235,9 @@ AGENT_URL=http://agents:8005 knott-engine
 | `KNOTT_HOME` | State directory. Defaults to the per-OS application data path |
 | `PORT`, `KNOTT_BIND_HOST` | Where to listen. Defaults to `127.0.0.1:8002` |
 | `OLLAMA_HOST` / `OLLAMA_BASE_URL` | Where Ollama listens (detected automatically on `127.0.0.1:11434`). `KNOTT_DETECT_OLLAMA=0` turns detection off |
+| `CORDON_URL` | Use a [Cordon](https://github.com/regnant-io/cordon) node for AI steps, e.g. `http://127.0.0.1:8443`. Also settable in Settings → AI |
+| `CORDON_CLIENT_ID`, `CORDON_MODEL` | The client ID Cordon enrolled for KNOTT (default `knott`) and the model to ask for (default: the one the node loaded) |
+| `CORDON_CLIENT_CERT`, `CORDON_CLIENT_KEY`, `CORDON_CA_CERT` | Mutual-TLS identity for Cordon outside Light mode |
 | `ANTHROPIC_API_KEY` | Use Anthropic Claude. Also settable in Settings → AI |
 | `KNOTT_ENV_SECRETS` | `off` stops workflows reading credentials from environment variables (stored credentials only) |
 | `RUN_RETENTION_DAYS` | Prunes finished runs after this many days |

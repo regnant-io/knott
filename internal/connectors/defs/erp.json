@@ -1,0 +1,104 @@
+[
+  {
+    "slug": "odoo", "name": "Odoo", "category": "ERP", "color": "#714B67", "icon": "layers",
+    "description": "Read and act on Odoo 19+ records over the JSON-2 API: purchase orders, partners, chatter notes and any model method",
+    "docs_url": "https://www.odoo.com/documentation/19.0/developer/reference/external_api.html",
+    "credentials": [
+      {"name": "ODOO_URL", "label": "Odoo address", "secret": false, "placeholder": "https://odoo.example.co.tz",
+       "help": "The address you open Odoo at, without /odoo or /web. A test database on its own address is the safest place to start."},
+      {"name": "ODOO_DATABASE", "label": "Database", "secret": false, "placeholder": "chesify_test",
+       "help": "The database name, shown on the /web/database/selector page. Sent as X-Odoo-Database so a server hosting several databases picks the right one."},
+      {"name": "ODOO_API_KEY", "label": "API key", "secret": true,
+       "help": "In Odoo: avatar → My Preferences → Account Security → New API Key. Use a dedicated bot user with only the rights the workflow needs. Keys last at most three months."}
+    ],
+    "http": {
+      "base_url": "{cred:ODOO_URL}/json/2",
+      "auth": {"type": "bearer", "credential": "ODOO_API_KEY", "prefix": "bearer "},
+      "headers": {"X-Odoo-Database": "{cred:ODOO_DATABASE}", "User-Agent": "KNOTT (by Regnant)"},
+      "test": {"id": "test", "label": "Read the company", "method": "POST", "path": "/res.company/search_read",
+               "body": {"fields": ["name"], "limit": 1}, "fields": []}
+    },
+    "actions": [
+      {"id": "purchase_orders_to_approve", "label": "List purchase orders awaiting approval",
+       "description": "Purchase orders in a state that needs a decision — by default Odoo's own 'To Approve' queue.",
+       "method": "POST", "path": "/purchase.order/search_read", "items_path": ".",
+       "body": {"domain": "{domain}", "fields": "{fields}", "limit": "{limit}", "order": "{order}"},
+       "fields": [
+         {"name": "domain", "label": "Domain", "type": "json", "default": [["state", "=", "to approve"]],
+          "help": "An Odoo domain. Use [[\"state\",\"in\",[\"draft\",\"sent\"]]] to review RFQs before they are confirmed instead."},
+         {"name": "fields", "label": "Fields", "type": "json",
+          "default": ["id", "name", "partner_id", "amount_untaxed", "amount_total", "currency_id", "date_order", "date_planned", "user_id", "company_id", "origin", "state", "write_date"]},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 25},
+         {"name": "order", "label": "Order", "default": "date_order asc"}
+       ]},
+      {"id": "purchase_order_lines", "label": "Get purchase order lines",
+       "method": "POST", "path": "/purchase.order.line/search_read", "items_path": ".",
+       "body": {"domain": [["order_id", "=", "{order_id}"]], "fields": "{fields}"},
+       "fields": [
+         {"name": "order_id", "label": "Purchase order ID", "type": "number", "required": true},
+         {"name": "fields", "label": "Fields", "type": "json",
+          "default": ["name", "product_id", "product_qty", "product_uom_id", "price_unit", "price_subtotal", "taxes_id", "date_planned"]}
+       ]},
+      {"id": "vendor_purchase_history", "label": "Get a vendor's recent purchase orders",
+       "description": "Confirmed orders from the same vendor, for judging whether an amount is ordinary for them.",
+       "method": "POST", "path": "/purchase.order/search_read", "items_path": ".",
+       "body": {"domain": [["partner_id", "=", "{partner_id}"], ["state", "=", "purchase"], ["id", "!=", "{exclude_id}"]],
+                "fields": ["name", "amount_total", "currency_id", "date_order"], "limit": "{limit}", "order": "date_order desc"},
+       "fields": [
+         {"name": "partner_id", "label": "Vendor (partner) ID", "type": "number", "required": true},
+         {"name": "exclude_id", "label": "Exclude order ID", "type": "number", "default": 0},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 20}
+       ]},
+      {"id": "approve_purchase_order", "label": "Approve purchase order",
+       "description": "Odoo's Approve button (button_approve). The API user needs Purchase / Administrator rights.",
+       "method": "POST", "path": "/purchase.order/button_approve",
+       "body": {"ids": ["{order_id}"]},
+       "fields": [{"name": "order_id", "label": "Purchase order ID", "type": "number", "required": true}]},
+      {"id": "confirm_purchase_order", "label": "Confirm purchase order",
+       "description": "Odoo's Confirm Order button (button_confirm) on an RFQ. Odoo applies its own two-step approval rule if it is enabled.",
+       "method": "POST", "path": "/purchase.order/button_confirm",
+       "body": {"ids": ["{order_id}"]},
+       "fields": [{"name": "order_id", "label": "Purchase order ID", "type": "number", "required": true}]},
+      {"id": "cancel_purchase_order", "label": "Cancel purchase order",
+       "method": "POST", "path": "/purchase.order/button_cancel",
+       "body": {"ids": ["{order_id}"]},
+       "fields": [{"name": "order_id", "label": "Purchase order ID", "type": "number", "required": true}]},
+      {"id": "post_note", "label": "Log a note on a record",
+       "description": "An internal note in the record's chatter, so the decision is visible inside Odoo as well as in KNOTT's audit log.",
+       "method": "POST", "path": "/{model}/message_post",
+       "body": {"ids": ["{record_id}"], "body": "{body}", "message_type": "comment", "subtype_xmlid": "mail.mt_note"},
+       "fields": [
+         {"name": "model", "label": "Model", "default": "purchase.order", "required": true},
+         {"name": "record_id", "label": "Record ID", "type": "number", "required": true},
+         {"name": "body", "label": "Note", "type": "textarea", "required": true}
+       ]},
+      {"id": "search_read", "label": "Search records",
+       "method": "POST", "path": "/{model}/search_read", "items_path": ".",
+       "body": {"domain": "{domain}", "fields": "{fields}", "limit": "{limit}", "order": "{order}"},
+       "fields": [
+         {"name": "model", "label": "Model", "required": true, "placeholder": "res.partner"},
+         {"name": "domain", "label": "Domain", "type": "json", "default": []},
+         {"name": "fields", "label": "Fields", "type": "json", "placeholder": "[\"name\"]"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50},
+         {"name": "order", "label": "Order", "placeholder": "id desc"}
+       ]},
+      {"id": "write", "label": "Update records",
+       "method": "POST", "path": "/{model}/write",
+       "body": {"ids": "{ids}", "vals": "{vals}"},
+       "fields": [
+         {"name": "model", "label": "Model", "required": true},
+         {"name": "ids", "label": "Record IDs", "type": "json", "required": true, "placeholder": "[42]"},
+         {"name": "vals", "label": "Values", "type": "json", "required": true, "placeholder": "{\"note\": \"…\"}"}
+       ]},
+      {"id": "call_method", "label": "Call a model method",
+       "description": "Any public method, for workflows this catalogue does not cover. Arguments are sent as the JSON-2 body: ids, context and the method's named parameters.",
+       "method": "POST", "path": "/{model}/{method}",
+       "body": "{arguments}",
+       "fields": [
+         {"name": "model", "label": "Model", "required": true, "placeholder": "sale.order"},
+         {"name": "method", "label": "Method", "required": true, "placeholder": "action_confirm"},
+         {"name": "arguments", "label": "Arguments", "type": "json", "default": {}, "placeholder": "{\"ids\": [42]}"}
+       ]}
+    ]
+  }
+]

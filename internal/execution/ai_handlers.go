@@ -152,6 +152,12 @@ func aiStatusPayload(st decide.Status) map[string]any {
 		"models":                 st.Models,
 		"detail":                 st.Detail,
 		"embedded":               true,
+		"cordon_url":             st.CordonURL,
+		"cordon_client_id":       st.CordonClientID,
+		"cordon_model":           st.CordonModel,
+		"cordon_mtls":            st.CordonMTLS,
+		"cordon_reachable":       st.CordonReachable,
+		"cordon_detail":          st.CordonDetail,
 	}
 }
 
@@ -199,6 +205,24 @@ func applyAIPatch(cfg decide.Config, patch map[string]any, persist bool) decide.
 		cfg.OllamaModel = v
 		save("OLLAMA_MODEL", v)
 	}
+	// Cordon. The address, client ID and model are settings; the certificate
+	// paths point at files on this machine, never at key material itself.
+	for _, f := range []struct {
+		field, name string
+		set         func(string)
+	}{
+		{"cordon_url", "CORDON_URL", func(v string) { cfg.CordonURL = strings.TrimRight(v, "/") }},
+		{"cordon_client_id", "CORDON_CLIENT_ID", func(v string) { cfg.CordonClientID = v }},
+		{"cordon_model", "CORDON_MODEL", func(v string) { cfg.CordonModel = v }},
+		{"cordon_cert_file", "CORDON_CLIENT_CERT", func(v string) { cfg.CordonCertFile = v }},
+		{"cordon_key_file", "CORDON_CLIENT_KEY", func(v string) { cfg.CordonKeyFile = v }},
+		{"cordon_ca_file", "CORDON_CA_CERT", func(v string) { cfg.CordonCAFile = v }},
+	} {
+		if v, ok := get(f.field); ok {
+			f.set(v)
+			save(f.name, v)
+		}
+	}
 	if v, ok := get("anthropic_api_key"); ok && v != "" {
 		cfg.AnthropicKey = v
 		save("ANTHROPIC_API_KEY", v)
@@ -219,7 +243,7 @@ func testAIConfig(cfg decide.Config) map[string]any {
 	result := map[string]any{"provider": st.ActiveProvider, "active_provider": st.ActiveProvider, "models": st.Models}
 	if st.ActiveProvider == "simulation" {
 		result["ok"] = true
-		if cfg.Provider == "ollama" || cfg.Provider == "anthropic" {
+		if cfg.Provider == "ollama" || cfg.Provider == "anthropic" || cfg.Provider == "cordon" {
 			result["ok"] = false
 		}
 		detail := "No model is configured — decisions use the built-in rules."
@@ -245,5 +269,17 @@ func testAIConfig(cfg decide.Config) map[string]any {
 	result["ok"] = true
 	result["model"] = res.Model
 	result["detail"] = "Answered by " + res.Model + " in " + time.Since(start).Round(time.Millisecond).String()
+	if len(res.Evidence) > 0 {
+		result["evidence"] = res.Evidence
+		result["detail"] = result["detail"].(string) + " · signed by Cordon (request " + fmtAny(res.Evidence["request_id"]) + ")"
+	}
 	return result
+}
+
+func fmtAny(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	b, _ := json.Marshal(v)
+	return string(b)
 }

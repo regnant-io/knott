@@ -313,6 +313,16 @@ h3 {
   padding: 0 14px 12px;
   border: 0;
 }
+.by-regnant {
+  padding: 6px 3px 0;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7f9381;
+  opacity: 0.85;
+  user-select: none;
+}
+.sidebar.is-collapsed .by-regnant { display: none; }
 .system-status {
   background: none;
   border: 0;

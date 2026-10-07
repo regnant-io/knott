@@ -227,6 +227,12 @@ type Status struct {
 	Models               []OllamaModel `json:"models"`
 	Detail               string        `json:"detail,omitempty"`
 	Embedded             bool          `json:"embedded"`
+	CordonURL            string        `json:"cordon_url"`
+	CordonClientID       string        `json:"cordon_client_id"`
+	CordonModel          string        `json:"cordon_model"`
+	CordonMTLS           bool          `json:"cordon_mtls"`
+	CordonReachable      bool          `json:"cordon_reachable"`
+	CordonDetail         string        `json:"cordon_detail,omitempty"`
 }
 
 // Status reports the current AI configuration. refresh forces a fresh probe
@@ -241,6 +247,13 @@ func (e *Engine) Status(refresh bool) Status {
 		OllamaModel:         cfg.OllamaModel,
 		Embedded:            true,
 		Models:              []OllamaModel{},
+		CordonURL:           e.CordonURL(),
+		CordonClientID:      cfg.CordonClientID,
+		CordonModel:         cfg.CordonModel,
+		CordonMTLS:          cfg.CordonCertFile != "",
+	}
+	if st.CordonURL != "" {
+		st.CordonReachable, st.CordonDetail = e.cordonReachable()
 	}
 	if st.OllamaBaseURL == "" {
 		st.OllamaBaseURL = DefaultOllamaURL()

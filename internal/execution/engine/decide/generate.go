@@ -50,7 +50,7 @@ NODE TYPES:
 EXPRESSIONS: {{ input.<field> }}, {{ steps.<id>.output.<path> }}, {{ item }} inside loops.
 
 TASKS for ai_decision: fraud_risk_assessment, credit_risk_assessment, content_moderation, document_classification,
-sentiment_analysis, general_decision, invoice_approval, expense_audit, lead_scoring, supply_chain_exception, offboarding_review.
+sentiment_analysis, general_decision, invoice_approval, purchase_order_approval, expense_audit, lead_scoring, supply_chain_exception, offboarding_review.
 
 RULES:
 - First node is a "trigger" with id "start". At least one "end" node.
@@ -312,6 +312,7 @@ func templateWorkflow(prompt string) map[string]any {
 		task  string
 		words []string
 	}{
+		{"purchase_order_approval", []string{"purchase order", "procurement", "odoo", "rfq"}},
 		{"invoice_approval", []string{"invoice", "payable", "bill"}},
 		{"expense_audit", []string{"expense", "reimburse"}},
 		{"lead_scoring", []string{"lead", "sales", "prospect", "marketing"}},
