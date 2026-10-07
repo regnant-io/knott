@@ -187,6 +187,26 @@ Return ONLY a valid JSON object:
 APPROVE clean low-value invoices matching a PO. ESCALATE high-value, missing-PO, or anomalous ones.
 REJECT clear duplicates or invalid invoices. Return ONLY the JSON.""",
     },
+    "purchase_order_approval": {
+        "name": "Purchase Order Approval",
+        "description": "Score an ERP purchase order before it is confirmed (Odoo, or any ERP that exposes orders)",
+        "system_prompt": """You are a procurement controller reviewing a purchase order before it is confirmed
+in the ERP. You see the order, its lines, the vendor's recent confirmed orders and the company's
+approval policy. Judge whether the order is ordinary for this vendor and complete enough to confirm:
+compare the amount with the vendor's history, look for a missing or new vendor, unusual unit prices
+or quantities, lines without a product, empty or duplicated orders, and a total above the policy limit.
+
+Return ONLY a valid JSON object — no other text, no markdown:
+{"decision":"APPROVE|REJECT|ESCALATE","confidence":<0.0-1.0>,"risk_score":<0-100>,
+"reasoning":"<max 500 chars, written for the approver>",
+"flags":[{"code":"<CODE>","description":"<desc>","severity":"LOW|MEDIUM|HIGH|CRITICAL"}]}
+
+APPROVE routine orders consistent with the vendor's history and within policy.
+ESCALATE new vendors, amounts well above the vendor's usual orders, anything above the policy limit,
+or anything you cannot judge from the data. REJECT only clear errors (empty order, zero or negative
+total, obvious duplicate). Your decision is a recommendation; a person approves anything uncertain.
+Return ONLY the JSON.""",
+    },
     "expense_audit": {
         "name": "Expense Report Audit",
         "description": "Audit employee expense reports against policy",
@@ -585,6 +605,33 @@ def simulate_decision(task, inputs):
                     "reasoning": reasoning, "flags": [{"code": "NO_PO", "description": "No matching purchase order", "severity": "MEDIUM"}]}
         return {"decision": "APPROVE", "confidence": 0.9, "risk_score": 15, "matched_po": True, "reasoning": reasoning, "flags": []}
 
+    if task == "purchase_order_approval":
+        def _num(v):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return 0.0
+        order = inputs.get("order") if isinstance(inputs.get("order"), dict) else {}
+        policy = inputs.get("policy") if isinstance(inputs.get("policy"), dict) else {}
+        amount = _num(inputs.get("amount_total", order.get("amount_total", inputs.get("amount"))))
+        limit = _num(inputs.get("amount_limit", policy.get("amount_limit")))
+        history = [_num(o.get("amount_total")) for o in (inputs.get("vendor_history") or []) if isinstance(o, dict)]
+        highest = max(history) if history else 0.0
+        fmt = lambda f: str(int(f)) if f == int(f) else f"{f:g}"
+        if amount <= 0:
+            return {"decision": "REJECT", "confidence": 0.9, "risk_score": 80, "reasoning": reasoning,
+                    "flags": [{"code": "EMPTY_ORDER", "description": "The order total is zero or negative", "severity": "HIGH"}]}
+        if limit > 0 and amount > limit:
+            return {"decision": "ESCALATE", "confidence": 0.7, "risk_score": 60, "reasoning": reasoning,
+                    "flags": [{"code": "ABOVE_LIMIT", "description": f"Order total {fmt(amount)} is above the approval limit {fmt(limit)}", "severity": "HIGH"}]}
+        if not history:
+            return {"decision": "ESCALATE", "confidence": 0.68, "risk_score": 50, "reasoning": reasoning,
+                    "flags": [{"code": "NEW_VENDOR", "description": "No confirmed orders from this vendor to compare against", "severity": "MEDIUM"}]}
+        if amount > highest * 1.5:
+            return {"decision": "ESCALATE", "confidence": 0.7, "risk_score": 55, "reasoning": reasoning,
+                    "flags": [{"code": "UNUSUAL_AMOUNT", "description": f"Order total {fmt(amount)} is well above this vendor's largest recent order ({fmt(highest)})", "severity": "MEDIUM"}]}
+        return {"decision": "APPROVE", "confidence": 0.86, "risk_score": 18, "reasoning": reasoning, "flags": []}
+
     if task == "expense_audit":
         amount = inputs.get("amount", 0)
         if isinstance(amount, (int, float)) and amount > 1000:
@@ -752,7 +799,7 @@ EXPRESSIONS: use {{ ... }} referencing input.<field>, steps.<id>.output.<path>, 
 Functions available: upper,lower,trim,len,concat,replace,split,substring,contains,number,round,abs,min,max,default,coalesce,if,json,jsonparse,now,today,dateadd.
 
 AI TASK list for ai_decision config.task: fraud_risk_assessment, credit_risk_assessment, content_moderation,
-document_classification, sentiment_analysis, general_decision, invoice_approval, expense_audit, lead_scoring,
+document_classification, sentiment_analysis, general_decision, invoice_approval, purchase_order_approval, expense_audit, lead_scoring,
 supply_chain_exception, offboarding_review. If none fit, use "general_decision".
 
 RULES:
@@ -875,6 +922,7 @@ def _simulate_workflow(prompt):
     p = (prompt or "").lower()
     task = "general_decision"
     for key, words in {
+        "purchase_order_approval": ["purchase order", "procurement", "odoo", "rfq"],
         "invoice_approval": ["invoice", "payable", "ap "],
         "expense_audit": ["expense", "reimburse"],
         "lead_scoring": ["lead", "sales", "prospect", "marketing"],

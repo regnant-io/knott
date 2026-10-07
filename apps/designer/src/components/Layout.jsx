@@ -370,6 +370,7 @@ export function Layout({
                 <LogOut size={15} /> Sign out
               </button>
             )}
+          <div className="by-regnant" title="KNOTT is built by Regnant · regnant.io">by Regnant</div>
         </div>
       </aside>
       <div className="main-area">

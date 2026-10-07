@@ -10,7 +10,7 @@ import (
 
 // RuleReasoning is attached to every rule-based decision so nobody mistakes one
 // for a model's judgement when reading the audit log six months later.
-const RuleReasoning = "Rule-based decision. Configure an Anthropic API key or Ollama in Settings for model-backed decisions."
+const RuleReasoning = "Rule-based decision. Connect Cordon or Ollama (or an Anthropic API key) in Settings for model-backed decisions."
 
 // Rules makes a decision without a model.
 //
@@ -102,6 +102,39 @@ func Rules(task string, inputs map[string]any) map[string]any {
 			})
 		}
 		return base("APPROVE", 0.9, 15, map[string]any{"matched_po": true})
+
+	case "purchase_order_approval":
+		amount := number(inputs, "amount_total", "order.amount_total", "amount")
+		limit := number(inputs, "amount_limit", "policy.amount_limit")
+		var history []float64
+		if h, ok := inputs["vendor_history"].([]any); ok {
+			for _, o := range h {
+				if m, ok := o.(map[string]any); ok {
+					history = append(history, number(m, "amount_total"))
+				}
+			}
+		}
+		highest := 0.0
+		for _, a := range history {
+			highest = max(highest, a)
+		}
+		switch {
+		case amount <= 0:
+			return base("REJECT", 0.9, 80, map[string]any{
+				"flags": flag("EMPTY_ORDER", "The order total is zero or negative", "HIGH")})
+		case limit > 0 && amount > limit:
+			return base("ESCALATE", 0.7, 60, map[string]any{
+				"flags": flag("ABOVE_LIMIT",
+					fmt.Sprintf("Order total %s is above the approval limit %s", money(amount), money(limit)), "HIGH")})
+		case len(history) == 0:
+			return base("ESCALATE", 0.68, 50, map[string]any{
+				"flags": flag("NEW_VENDOR", "No confirmed orders from this vendor to compare against", "MEDIUM")})
+		case amount > highest*1.5:
+			return base("ESCALATE", 0.7, 55, map[string]any{
+				"flags": flag("UNUSUAL_AMOUNT",
+					fmt.Sprintf("Order total %s is well above this vendor's largest recent order (%s)", money(amount), money(highest)), "MEDIUM")})
+		}
+		return base("APPROVE", 0.86, 18, nil)
 
 	case "expense_audit":
 		if number(inputs, "amount") > 1000 {

@@ -241,7 +241,7 @@ function CreateAgentModal({ onClose, onCreated }) {
 }
 
 // ─── Settings.jsx ─────────────────────────────────────────────────────────────
-import { Settings as SettingsIcon, Key, Server, Info, Cpu, CheckCircle2, XCircle as XCircleIcon, RefreshCw as Refresh, Sun, Moon, Monitor, Globe, Cloud } from 'lucide-react';
+import { Settings as SettingsIcon, Key, Server, Info, Cpu, CheckCircle2, XCircle as XCircleIcon, RefreshCw as Refresh, Sun, Moon, Monitor, Globe, Cloud, ShieldCheck } from 'lucide-react';
 import { stats as statsApi, aiConfig as aiConfigApi } from '../lib/api.js';
 
 export function Settings({ theme = 'system', onSetTheme }) {
@@ -365,7 +365,7 @@ export function Settings({ theme = 'system', onSetTheme }) {
 // and why — and lets the operator override it.
 function AIProviderSettings({ toast }) {
   const [cfg, setCfg]         = useState(null);
-  const [form, setForm]       = useState({ provider: 'auto', anthropic_api_key: '', ollama_base_url: '', ollama_model: '' });
+  const [form, setForm]       = useState({ provider: 'auto', anthropic_api_key: '', ollama_base_url: '', ollama_model: '', ...CORDON_BLANK });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [testing, setTesting] = useState(false);
@@ -379,6 +379,10 @@ function AIProviderSettings({ toast }) {
       anthropic_api_key: '',               // never echoed back; blank means unchanged
       ollama_base_url: c.ollama_configured_url || '',
       ollama_model: c.ollama_model || '',
+      cordon_url: c.cordon_url || '',
+      cordon_client_id: c.cordon_client_id || '',
+      cordon_model: c.cordon_model || '',
+      cordon_cert_file: '', cordon_key_file: '', cordon_ca_file: '',   // paths are write-only here
     });
   }
 
@@ -390,8 +394,10 @@ function AIProviderSettings({ toast }) {
   useEffect(() => { load(); }, []);
 
   function patch() {
-    const p = { provider: form.provider, ollama_base_url: form.ollama_base_url.trim(), ollama_model: form.ollama_model };
+    const p = { provider: form.provider, ollama_base_url: form.ollama_base_url.trim(), ollama_model: form.ollama_model,
+      cordon_url: form.cordon_url.trim(), cordon_client_id: form.cordon_client_id.trim(), cordon_model: form.cordon_model.trim() };
     if (form.anthropic_api_key.trim()) p.anthropic_api_key = form.anthropic_api_key.trim();
+    for (const k of ['cordon_cert_file', 'cordon_key_file', 'cordon_ca_file']) if (form[k].trim()) p[k] = form[k].trim();
     return p;
   }
 
@@ -427,9 +433,9 @@ function AIProviderSettings({ toast }) {
   return (
     <div className="ai-settings">
       <div className={`ai-status ${active}`}>
-        <div className="ai-status-icon">{active === 'simulation' ? <Server size={18} /> : active === 'ollama' ? <Cpu size={18} /> : <Cloud size={18} />}</div>
+        <div className="ai-status-icon">{active === 'simulation' ? <Server size={18} /> : active === 'cordon' ? <ShieldCheck size={18} /> : active === 'ollama' ? <Cpu size={18} /> : <Cloud size={18} />}</div>
         <div className="ai-status-text">
-          <strong>{active === 'ollama' ? 'Local AI with Ollama' : active === 'anthropic' ? 'Anthropic Claude' : 'Built-in rules (no AI model)'}</strong>
+          <strong>{active === 'cordon' ? 'Cordon · signed, audited inference' : active === 'ollama' ? 'Local AI with Ollama' : active === 'anthropic' ? 'Anthropic Claude' : 'Built-in rules (no AI model)'}</strong>
           <span>{describeActive(cfg)}</span>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => { setRefreshing(true); load(true); }} disabled={refreshing} title="Check again">
@@ -441,11 +447,44 @@ function AIProviderSettings({ toast }) {
         <div className="form-group">
           <label className="form-label">Provider</label>
           <select className="select" value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
-            <option value="auto">Automatic — Anthropic if a key is set, else local Ollama, else rules</option>
+            <option value="auto">Automatic — Cordon if set up, else Anthropic if a key is set, else local Ollama, else rules</option>
+            <option value="cordon">Cordon (Regnant — local, signed and audited)</option>
             <option value="ollama">Ollama (local, private)</option>
             <option value="anthropic">Anthropic Claude (cloud)</option>
             <option value="simulation">Built-in rules only (no model)</option>
           </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">
+            Cordon address {cfg?.cordon_url
+              ? (cfg.cordon_reachable ? <span className="ok-text">· serving</span> : <span className="muted">· not reachable</span>)
+              : <span className="muted">· not set up</span>}
+          </label>
+          <input className="input" placeholder="http://127.0.0.1:8443"
+            value={form.cordon_url} onChange={e => setForm(f => ({ ...f, cordon_url: e.target.value }))} />
+          <div className="form-hint">
+            {cfg?.cordon_detail || <>Every decision is admitted under KNOTT's client identity, written to Cordon's audit log and signed. Start a node with <code>cordon run &lt;model&gt;</code>.</>}
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Cordon client ID · model</label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input className="input" placeholder="knott" value={form.cordon_client_id}
+              onChange={e => setForm(f => ({ ...f, cordon_client_id: e.target.value }))} />
+            <input className="input" placeholder="default (the loaded model)" value={form.cordon_model}
+              onChange={e => setForm(f => ({ ...f, cordon_model: e.target.value }))} />
+          </div>
+          <div className="form-hint">The client ID must be enrolled in Cordon's <code>clients.json</code>. Outside Light mode Cordon needs mutual TLS:</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <input className="input" placeholder={cfg?.cordon_mtls ? 'client cert · saved' : 'client.crt path'} value={form.cordon_cert_file}
+              onChange={e => setForm(f => ({ ...f, cordon_cert_file: e.target.value }))} />
+            <input className="input" placeholder="client.key path" value={form.cordon_key_file}
+              onChange={e => setForm(f => ({ ...f, cordon_key_file: e.target.value }))} />
+            <input className="input" placeholder="ca.crt path" value={form.cordon_ca_file}
+              onChange={e => setForm(f => ({ ...f, cordon_ca_file: e.target.value }))} />
+          </div>
         </div>
 
         <div className="form-group">
@@ -505,10 +544,21 @@ function AIProviderSettings({ toast }) {
   );
 }
 
+const CORDON_BLANK = { cordon_url: '', cordon_client_id: '', cordon_model: '', cordon_cert_file: '', cordon_key_file: '', cordon_ca_file: '' };
+
 function describeActive(c) {
   if (!c || c.offline) return 'The AI service could not be reached.';
   switch (c.active_provider) {
-    case 'ollama': return `Using ${c.ollama_effective_model || 'a local model'} at ${c.ollama_base_url}. Data never leaves this machine.`;
+    case 'cordon': return c.cordon_reachable
+      ? `Decisions go through Cordon at ${c.cordon_url} as client "${c.cordon_client_id || 'knott'}". Each answer is audited and signed by the node; the receipt is kept with the decision.`
+      : `Cordon at ${c.cordon_url} is not answering${c.cordon_detail ? ` (${c.cordon_detail})` : ''}. AI Decision steps fall back to rules until it is back.`;
+    case 'ollama': {
+      // A cloud model listed by Ollama runs on Ollama's servers, not here.
+      const m = (c.models || []).find(x => x.name === c.ollama_effective_model);
+      return m?.remote
+        ? `Using ${m.name} through Ollama's cloud. Prompts leave this machine; pick a local model to keep them here.`
+        : `Using ${c.ollama_effective_model || 'a local model'} at ${c.ollama_base_url}. Data never leaves this machine.`;
+    }
     case 'anthropic': return 'Decisions and prompts are sent to Anthropic.';
     default: return c.detail
       ? `${c.detail}. AI Decision steps fall back to deterministic rules; AI Prompt steps need a model.`

@@ -21,6 +21,10 @@ type exampleWorkflow struct {
 	Tags        []string       `json:"tags"`
 	Definition  map[string]any `json:"definition"`
 	SampleInput map[string]any `json:"sample_input"`
+	// Status is what the template is seeded as. Empty means active; a template
+	// that polls a system needing credentials is seeded as a draft, so it does
+	// not start calling a server nobody has configured yet.
+	Status string `json:"status,omitempty"`
 }
 
 // aiReviewGraph builds a standard 4-node graph: trigger → ai_decision → condition
@@ -57,6 +61,9 @@ func aiReviewGraph(task string, inputs map[string]any, reviewTitle string, roles
 
 func exampleWorkflows() []exampleWorkflow {
 	return []exampleWorkflow{
+		// ── 0. ERP — Odoo purchase order approval (polls Odoo, acts in Odoo) ──
+		odooPurchaseApproval(),
+
 		// ── 1. Finance — Invoice approval (classic HITL on AI decision) ──────────
 		{
 			Name:        "Invoice Approval (Finance)",
@@ -350,7 +357,7 @@ func seedExamples(w http.ResponseWriter, r *http.Request) {
 		payload, _ := json.Marshal(map[string]any{
 			"name":        ex.Name,
 			"description": ex.Description,
-			"status":      "active",
+			"status":      firstNonEmptyStr(ex.Status, "active"),
 			"definition":  ex.Definition,
 			"tags":        ex.Tags,
 		})

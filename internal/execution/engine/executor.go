@@ -357,6 +357,7 @@ func (e *Executor) executeAIDecision(runID string, node *WorkflowStep, ctx map[s
 				"tokens_used": local.TokensUsed,
 				"latency_ms":  local.LatencyMs,
 				"routing":     local.Routing,
+				"evidence":    local.Evidence,
 			}, nil
 		} else {
 			err = fmt.Errorf("%w (built-in engine: %v)", err, lerr)
@@ -390,6 +391,12 @@ func (e *Executor) executeAIDecision(runID string, node *WorkflowStep, ctx map[s
 		// Keep the downgrade visible downstream and in the run log: a rule-based
 		// answer standing in for a model is not the same decision.
 		output["fallback_reason"] = fallback
+	}
+	if ev, ok := result["evidence"].(map[string]any); ok && len(ev) > 0 {
+		// The inference node's own receipt for this answer (Cordon: its audit
+		// request ID and response signature), kept with the decision so the
+		// KNOTT audit entry and the inference audit entry point at each other.
+		output["inference_receipt"] = ev
 	}
 	confidence, _ := result["confidence"].(float64)
 	routing, _ := result["routing"].(string)
@@ -466,7 +473,7 @@ func (e *Executor) executeHumanTask(runID string, node *WorkflowStep, ctx map[st
 		config = map[string]any{}
 	}
 
-	title, _ := config["title"].(string)
+	title := str(resolveValue(config["title"], ctx))
 	if title == "" {
 		title = node.Name
 	}
@@ -2274,50 +2281,56 @@ func resolveTemplate(tmpl string, ctx map[string]any) any {
 }
 
 func getContextValue(path string, ctx map[string]any) any {
-	// Handle dot-notation with "steps.node_id.output.field" and "input.field"
-	parts := strings.Split(path, ".")
+	// Handle dot-notation with "steps.node_id.output.field" and "input.field".
+	// A list element is addressed as items[0] or items.0 — ERP APIs return
+	// references as [id, name] pairs, so input.item.partner_id[1] is the name.
+	parts := pathSegments(path)
 
 	// First check if path starts with "steps." and the node ID contains sub-keys
 	// context has keys like "steps.node_id" as flat keys
 	if len(parts) >= 2 && parts[0] == "steps" {
-		// Try "steps.node_id" as a key first
-		if len(parts) >= 2 {
-			stepKey := "steps." + parts[1]
-			if stepData, ok := ctx[stepKey]; ok {
-				if len(parts) == 2 {
-					return stepData
-				}
-				// Navigate deeper into the step data
-				return navigateMap(stepData, parts[2:])
+		stepKey := "steps." + parts[1]
+		if stepData, ok := ctx[stepKey]; ok {
+			if len(parts) == 2 {
+				return stepData
 			}
+			// Navigate deeper into the step data
+			return navigateMap(stepData, parts[2:])
 		}
 	}
 
 	// Try direct path navigation
-	var current any = ctx
-	for _, part := range parts {
-		if current == nil {
-			return nil
-		}
-		switch c := current.(type) {
-		case map[string]any:
-			current = c[part]
-		default:
-			return nil
+	return navigateMap(ctx, parts)
+}
+
+// pathSegments splits "a.b[0].c" into a, b, 0, c.
+func pathSegments(path string) []string {
+	path = strings.NewReplacer("[", ".", "]", "").Replace(path)
+	raw := strings.Split(path, ".")
+	parts := raw[:0]
+	for _, p := range raw {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
 		}
 	}
-	return current
+	return parts
 }
 
 func navigateMap(v any, parts []string) any {
 	if len(parts) == 0 {
 		return v
 	}
-	m, ok := v.(map[string]any)
-	if !ok {
-		return nil
+	switch c := v.(type) {
+	case map[string]any:
+		return navigateMap(c[parts[0]], parts[1:])
+	case []any:
+		i, err := strconv.Atoi(parts[0])
+		if err != nil || i < 0 || i >= len(c) {
+			return nil
+		}
+		return navigateMap(c[i], parts[1:])
 	}
-	return navigateMap(m[parts[0]], parts[1:])
+	return nil
 }
 
 // ─── Condition Evaluator ──────────────────────────────────────────────────────
