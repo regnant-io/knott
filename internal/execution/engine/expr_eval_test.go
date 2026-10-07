@@ -95,3 +95,25 @@ func TestBackwardCompatPlainPath(t *testing.T) {
 		t.Fatalf("plain path: %v", got)
 	}
 }
+
+func TestExprListIndex(t *testing.T) {
+	ctx := map[string]any{
+		"input":       map[string]any{"item": map[string]any{"partner_id": []any{float64(7), "Kilimanjaro Office Supplies"}}},
+		"steps.lines": map[string]any{"output": map[string]any{"items": []any{map[string]any{"name": "Paper"}}}},
+	}
+	if v := evalT(t, "input.item.partner_id[0]", ctx); v != float64(7) {
+		t.Errorf("partner_id[0]: got %v", v)
+	}
+	if v := evalT(t, "input.item.partner_id.1", ctx); v != "Kilimanjaro Office Supplies" {
+		t.Errorf("partner_id.1: got %v", v)
+	}
+	if v := evalT(t, "steps.lines.output.items[0].name", ctx); v != "Paper" {
+		t.Errorf("items[0].name: got %v", v)
+	}
+	if v := evalT(t, "input.item.partner_id[5]", ctx); v != nil {
+		t.Errorf("out of range: got %v", v)
+	}
+	if got := resolveTemplate("{{ input.item.partner_id[1] }} · {{ input.item.partner_id[0] }}", ctx); got != "Kilimanjaro Office Supplies · 7" {
+		t.Errorf("template: got %v", got)
+	}
+}

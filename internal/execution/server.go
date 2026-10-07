@@ -432,6 +432,9 @@ func processRun(runID string) {
 	if inputData != nil {
 		ctx["input"] = inputData
 	}
+	// The run's own identity, so a step can cite it — a note written into
+	// another system that names the run is how an auditor finds its way back.
+	ctx["run"] = map[string]any{"id": runID, "workflow_id": run.WorkflowID}
 
 	// Determine starting node
 	currentNodeID := run.CurrentNode
@@ -2199,12 +2202,25 @@ func Run() error {
 		OllamaBaseURL: storedOrEnv("OLLAMA_BASE_URL", ""),
 		OllamaModel:   storedOrEnv("OLLAMA_MODEL", ""),
 		Provider:      storedOrEnv("AI_PROVIDER", "auto"),
+		// Cordon, Regnant's confidential inference engine, when one is set up.
+		CordonURL:      storedOrEnv("CORDON_URL", ""),
+		CordonClientID: storedOrEnv("CORDON_CLIENT_ID", "knott"),
+		CordonModel:    storedOrEnv("CORDON_MODEL", ""),
+		CordonCertFile: storedOrEnv("CORDON_CLIENT_CERT", ""),
+		CordonKeyFile:  storedOrEnv("CORDON_CLIENT_KEY", ""),
+		CordonCAFile:   storedOrEnv("CORDON_CA_CERT", ""),
 		// A local Ollama is used without configuration unless turned off.
 		DetectOllama: os.Getenv("KNOTT_DETECT_OLLAMA") != "0",
 	})
 	go func() {
 		st := executor.Decider.Status(true)
 		switch st.ActiveProvider {
+		case "cordon":
+			reach := "reachable"
+			if !st.CordonReachable {
+				reach = "not reachable: " + st.CordonDetail
+			}
+			log.Printf("[Engine] AI: Cordon at %s as client %q (%s)", st.CordonURL, st.CordonClientID, reach)
 		case "ollama":
 			log.Printf("[Engine] AI: Ollama at %s, model %s", st.OllamaBaseURL, st.OllamaEffectiveModel)
 		case "anthropic":

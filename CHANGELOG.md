@@ -6,6 +6,41 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once
 
 ## [Unreleased]
 
+### Added
+
+- **Odoo connector** (`erp.json`) for Odoo 19+ over the External JSON-2 API:
+  purchase orders awaiting approval, order lines, a vendor's recent orders,
+  approve / confirm / cancel, chatter notes, and generic search, write and
+  method calls. See `docs/odoo.md`.
+- **Purchase Order Approval (Odoo)** example workflow: polls Odoo's To Approve
+  queue, scores each order with the new `purchase_order_approval` decision
+  task, auto-approves only routine orders within policy, routes the rest to an
+  approver, and writes every decision back to the order's chatter. Seeded as a
+  draft.
+- **`tools/odoo-sim`**, a JSON-2 stand-in with a Tanzanian purchasing dataset,
+  and `rehearse.sh` to wire a KNOTT to it (or to a real Odoo) in one command.
+- **Cordon as an AI provider.** Settings → AI (or `CORDON_URL`) sends AI steps
+  to a Cordon node over its OpenAI-compatible route, with Light-mode client IDs
+  or mutual TLS. Each decision keeps Cordon's receipt — audit request ID and
+  Ed25519 signature — under `inference_receipt`. JSON-mode decoding is
+  requested for decisions, so small local models return parseable answers.
+- Expressions index lists: `items[0].name`, `partner_id[1]`.
+- `{{ run.id }}` and `{{ run.workflow_id }}` in every step.
+- Polling triggers accept a composite `dedup_key` (`id,write_date`), so a
+  changed record fires again.
+- Example templates can be seeded as drafts.
+
+### Changed
+
+- A model answer without a valid decision (`APPROVE`, `REJECT`, `ESCALATE`
+  for the built-in tasks) is treated as a provider failure and falls back to
+  the rules with the reason recorded, instead of being routed on a missing
+  decision with a made-up 0.5 confidence.
+- Human task titles are templated like their descriptions.
+- Settings → AI says when an Ollama model runs in Ollama's cloud rather than
+  on this machine.
+- The console sidebar carries a small "by Regnant" mark.
+
 ## [1.0.0] — 2026-09-23
 
 A native desktop app, a rebuilt workflow builder, local AI that works out of

@@ -46,6 +46,10 @@ type Result struct {
 	// FallbackReason is set when a model was configured but the rules answered
 	// instead. It is what stops a broken provider hiding behind plausible output.
 	FallbackReason string `json:"fallback_reason,omitempty"`
+	// Evidence is what the inference provider returned about this answer, when
+	// it returns anything: for Cordon, the request ID in its audit log and the
+	// response signature.
+	Evidence map[string]any `json:"evidence,omitempty"`
 }
 
 // Config selects a provider. Empty means "no provider" and the rules answer.
@@ -54,7 +58,17 @@ type Config struct {
 	AnthropicBase string // defaults to the public API
 	OllamaBaseURL string
 	OllamaModel   string
-	// Provider forces a choice: anthropic, ollama, simulation, or auto (default).
+	// Cordon: Regnant's confidential inference engine. CordonURL is the node's
+	// API address; the client ID names KNOTT on a Light node, and the
+	// certificate files identify it under mutual TLS everywhere else.
+	CordonURL      string
+	CordonClientID string
+	CordonModel    string
+	CordonCertFile string
+	CordonKeyFile  string
+	CordonCAFile   string
+	// Provider forces a choice: cordon, anthropic, ollama, simulation, or auto
+	// (default).
 	Provider string
 	// DetectOllama lets auto mode use a local Ollama that nobody configured.
 	// Installing Ollama and pulling a model is all a desktop user should have to
@@ -75,6 +89,16 @@ type Engine struct {
 	cacheMu     sync.Mutex
 	cache       ollamaSnapshot
 	substituted map[string]bool // models we already logged a substitution for
+
+	cordonClient *http.Client // carries the Cordon TLS identity; see cordonHTTP
+	cordonKey    string
+}
+
+// reply is one model answer, with whatever evidence the provider attached.
+type reply struct {
+	text     string
+	tokens   int
+	evidence map[string]any
 }
 
 // OllamaModel is one model an Ollama server reports.
@@ -127,6 +151,7 @@ func (e *Engine) SetConfig(cfg Config) {
 	e.mu.Unlock()
 	e.cacheMu.Lock()
 	e.cache = ollamaSnapshot{}
+	e.cordonClient = nil
 	e.cacheMu.Unlock()
 }
 
@@ -156,6 +181,10 @@ func (e *Engine) OllamaURL() string {
 func (e *Engine) provider() string {
 	cfg := e.Config()
 	switch strings.ToLower(strings.TrimSpace(cfg.Provider)) {
+	case "cordon":
+		if e.CordonURL() != "" {
+			return "cordon"
+		}
 	case "anthropic":
 		if cfg.AnthropicKey != "" {
 			return "anthropic"
@@ -167,6 +196,11 @@ func (e *Engine) provider() string {
 	case "simulation":
 		return "simulation"
 	default: // auto
+		// Someone who set up Cordon wants decisions to go through it: it is
+		// the provider that keeps both the model and the record in-house.
+		if e.CordonURL() != "" {
+			return "cordon"
+		}
 		if cfg.AnthropicKey != "" {
 			return "anthropic"
 		}
@@ -217,10 +251,15 @@ func (e *Engine) Decide(req Request) (Result, error) {
 		label    string
 		err      error
 		fallback string
+		evidence map[string]any
 	)
 
 	provider := e.provider()
 	switch provider {
+	case "cordon":
+		model := e.cordonModelFor(req.ModelProfile)
+		label = "cordon:" + model
+		output, tokens, evidence, err = e.completeJSON(provider, model, prompt, decisionPrompt(req.Inputs), req.Temperature, req.MaxTokens)
 	case "anthropic":
 		model := ModelProfiles[req.ModelProfile]
 		// An ollama_* profile means nothing to Anthropic; use the default model.
@@ -228,18 +267,21 @@ func (e *Engine) Decide(req Request) (Result, error) {
 			model = ModelProfiles["default"]
 		}
 		label = "anthropic:" + model
-		output, tokens, err = e.completeJSON(provider, model, prompt, decisionPrompt(req.Inputs), req.Temperature, req.MaxTokens)
+		output, tokens, evidence, err = e.completeJSON(provider, model, prompt, decisionPrompt(req.Inputs), req.Temperature, req.MaxTokens)
 	case "ollama":
 		var model string
 		model, err = e.ollamaModelFor(req.ModelProfile)
 		label = "ollama:" + model
 		if err == nil {
-			output, tokens, err = e.completeJSON(provider, model, prompt, decisionPrompt(req.Inputs), req.Temperature, req.MaxTokens)
+			output, tokens, evidence, err = e.completeJSON(provider, model, prompt, decisionPrompt(req.Inputs), req.Temperature, req.MaxTokens)
 		}
 	default:
 		output, label = Rules(req.Task, req.Inputs), "simulation"
 	}
 
+	if provider != "simulation" && err == nil {
+		err = validDecision(output, req.SystemPrompt == "")
+	}
 	if provider != "simulation" && (err != nil || len(output) == 0) {
 		if err == nil {
 			err = errors.New("the model returned an empty answer")
@@ -249,7 +291,7 @@ func (e *Engine) Decide(req Request) (Result, error) {
 		}
 		log.Printf("[decide] %s failed for task %s (%v) — answering with rules", label, req.Task, err)
 		fallback = fmt.Sprintf("%s failed: %v", label, err)
-		output, label, tokens = Rules(req.Task, req.Inputs), "simulation", 0
+		output, label, tokens, evidence = Rules(req.Task, req.Inputs), "simulation", 0, nil
 	}
 
 	confidence, _ := toFloat(output["confidence"])
@@ -271,7 +313,31 @@ func (e *Engine) Decide(req Request) (Result, error) {
 		LatencyMs:      int(time.Since(start).Milliseconds()),
 		Routing:        routing,
 		FallbackReason: fallback,
+		Evidence:       evidence,
 	}, nil
+}
+
+// validDecision rejects a reply that parsed as JSON but is not a decision.
+// A small model that answers with some other object would otherwise be routed
+// on a missing decision and a made-up confidence of 0.5, which looks like a
+// judgement and is not one. The built-in tasks all ask for APPROVE, REJECT or
+// ESCALATE, so with their prompt (standard) anything else is refused too; a
+// custom system prompt may define its own decisions for a route map.
+func validDecision(output map[string]any, standard bool) error {
+	d, _ := output["decision"].(string)
+	d = strings.TrimSpace(d)
+	if d == "" {
+		return errors.New("the model's answer has no decision")
+	}
+	if !standard {
+		return nil
+	}
+	switch up := strings.ToUpper(d); up {
+	case "APPROVE", "REJECT", "ESCALATE":
+		output["decision"] = up
+		return nil
+	}
+	return fmt.Errorf("the model answered %q, not APPROVE, REJECT or ESCALATE", d)
 }
 
 func decisionPrompt(inputs map[string]any) string {
@@ -288,7 +354,7 @@ type Completion struct {
 	Prompt      string
 	JSON        bool
 	Model       string // optional override; provider default otherwise
-	Provider    string // optional override: anthropic | ollama
+	Provider    string // optional override: cordon | anthropic | ollama
 	Temperature *float64
 	MaxTokens   int
 }
@@ -301,11 +367,12 @@ type CompletionResult struct {
 	Provider  string         `json:"provider"`
 	Tokens    int            `json:"tokens_used"`
 	LatencyMs int            `json:"latency_ms"`
+	Evidence  map[string]any `json:"evidence,omitempty"`
 }
 
 // ErrNoProvider is returned when a completion is asked for with no model
 // configured or detected.
-var ErrNoProvider = errors.New("no AI model is available — install Ollama (https://ollama.com) and pull a model, or add an Anthropic API key in Settings → AI")
+var ErrNoProvider = errors.New("no AI model is available — connect Cordon, or install Ollama (https://ollama.com) and pull a model, or add an Anthropic API key in Settings → AI")
 
 // Complete sends a free-form prompt to the active provider.
 func (e *Engine) Complete(c Completion) (CompletionResult, error) {
@@ -315,6 +382,14 @@ func (e *Engine) Complete(c Completion) (CompletionResult, error) {
 	}
 	var model string
 	switch provider {
+	case "cordon":
+		if e.CordonURL() == "" {
+			return CompletionResult{}, errors.New("Cordon is not configured — set its address in Settings → AI")
+		}
+		model = c.Model
+		if _, isProfile := ModelProfiles[model]; isProfile || model == "" {
+			model = e.cordonModelFor(model)
+		}
 	case "anthropic":
 		if e.Config().AnthropicKey == "" {
 			return CompletionResult{}, errors.New("Anthropic is not configured — add an API key in Settings → AI")
@@ -340,13 +415,14 @@ func (e *Engine) Complete(c Completion) (CompletionResult, error) {
 	}
 
 	start := time.Now()
-	text, tokens, err := e.chat(provider, model, c.System, c.Prompt, c.JSON, c.Temperature, c.MaxTokens)
+	r, err := e.chatReply(provider, model, c.System, c.Prompt, c.JSON, c.Temperature, c.MaxTokens)
 	if err != nil {
 		return CompletionResult{}, fmt.Errorf("%s:%s: %w", provider, model, err)
 	}
+	text := r.text
 	res := CompletionResult{
 		Text: strings.TrimSpace(text), Model: provider + ":" + model, Provider: provider,
-		Tokens: tokens, LatencyMs: int(time.Since(start).Milliseconds()),
+		Tokens: r.tokens, LatencyMs: int(time.Since(start).Milliseconds()), Evidence: r.evidence,
 	}
 	if c.JSON {
 		data, err := ExtractJSON(text)
@@ -363,14 +439,14 @@ func (e *Engine) Complete(c Completion) (CompletionResult, error) {
 // completeJSON asks for a JSON object and retries once on an empty or
 // unparseable reply: a local model can drop the first response entirely on a
 // cold start, and one retry is almost always enough.
-func (e *Engine) completeJSON(provider, model, system, user string, temp *float64, maxTokens int) (map[string]any, int, error) {
+func (e *Engine) completeJSON(provider, model, system, user string, temp *float64, maxTokens int) (map[string]any, int, map[string]any, error) {
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
-		text, tokens, err := e.chat(provider, model, system, user, true, temp, maxTokens)
+		r, err := e.chatReply(provider, model, system, user, true, temp, maxTokens)
 		if err == nil {
-			out, perr := ExtractJSON(text)
+			out, perr := ExtractJSON(r.text)
 			if perr == nil && len(out) > 0 {
-				return out, tokens, nil
+				return out, r.tokens, r.evidence, nil
 			}
 			if perr == nil {
 				perr = errors.New("the model returned an empty object")
@@ -386,14 +462,28 @@ func (e *Engine) completeJSON(provider, model, system, user string, temp *float6
 		}
 		time.Sleep(time.Duration(400*(attempt+1)) * time.Millisecond)
 	}
-	return nil, 0, lastErr
+	return nil, 0, nil, lastErr
 }
 
 // chat sends one system+user exchange and returns the reply text.
 func (e *Engine) chat(provider, model, system, user string, wantJSON bool, temp *float64, maxTokens int) (string, int, error) {
+	r, err := e.chatReply(provider, model, system, user, wantJSON, temp, maxTokens)
+	return r.text, r.tokens, err
+}
+
+// chatReply is chat with the provider's evidence kept.
+func (e *Engine) chatReply(provider, model, system, user string, wantJSON bool, temp *float64, maxTokens int) (reply, error) {
 	if maxTokens <= 0 {
 		maxTokens = 1024
 	}
+	if provider == "cordon" {
+		return e.cordonChat(model, system, user, wantJSON, temp, maxTokens)
+	}
+	text, tokens, err := e.chatText(provider, model, system, user, wantJSON, temp, maxTokens)
+	return reply{text: text, tokens: tokens}, err
+}
+
+func (e *Engine) chatText(provider, model, system, user string, wantJSON bool, temp *float64, maxTokens int) (string, int, error) {
 	cfg := e.Config()
 	switch provider {
 	case "anthropic":
@@ -544,6 +634,10 @@ func (h *httpError) Error() string {
 }
 
 func (e *Engine) post(url string, headers map[string]string, body any) ([]byte, error) {
+	return e.postWith(e.Client, url, headers, body)
+}
+
+func (e *Engine) postWith(client *http.Client, url string, headers map[string]string, body any) ([]byte, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -556,7 +650,7 @@ func (e *Engine) post(url string, headers map[string]string, body any) ([]byte, 
 	for k, v := range headers {
 		httpReq.Header.Set(k, v)
 	}
-	resp, err := e.Client.Do(httpReq)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}

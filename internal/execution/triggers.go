@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/regnant/knott/internal/execution/engine"
@@ -424,7 +425,20 @@ func pollOnce(pt *store.PollTrigger, now time.Time) {
 
 // pollItemKey computes a dedup key for an item. If dedup_key is a field path it
 // is read from the item; otherwise the whole item is hashed-ish via JSON.
+//
+// Several comma-separated paths form a composite key. "id,write_date" fires
+// again when a record that was already seen changes — an ERP order sent back
+// for approval a second time is a new decision, not a duplicate.
 func pollItemKey(item any, dedupKey string) string {
+	if strings.Contains(dedupKey, ",") {
+		var parts []string
+		for _, p := range strings.Split(dedupKey, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				parts = append(parts, fmt.Sprintf("%v", extractItemField(item, p)))
+			}
+		}
+		return strings.Join(parts, "|")
+	}
 	if dedupKey != "" {
 		if v := extractItemField(item, dedupKey); v != nil {
 			return fmt.Sprintf("%v", v)
