@@ -1,0 +1,45 @@
+[
+  {
+    "slug": "matta", "name": "Matta", "category": "Data & Knowledge", "color": "#1F3A5F", "icon": "database",
+    "description": "Ask Matta, Regnant's semantic layer, what the business knows about a supplier, customer or employee: governed facts across ERP, CRM and HR, each cited to its source system",
+    "docs_url": "https://regnant.io",
+    "credentials": [
+      {"name": "MATTA_URL", "label": "Matta address", "placeholder": "http://matta.internal:8000",
+       "help": "Matta's ontology API (port 8000 in the default deployment), without /api/v1."},
+      {"name": "MATTA_API_KEY", "label": "API key", "secret": true,
+       "help": "A read key: one of the hashes in Matta's MATTA_API_KEYS, with role read. Sent as X-API-Key."}
+    ],
+    "http": {
+      "base_url": "{cred:MATTA_URL}/api/v1",
+      "auth": {"type": "header", "header": "X-API-Key", "credential": "MATTA_API_KEY"},
+      "headers": {"User-Agent": "KNOTT (by Regnant)"},
+      "test": {"id": "test", "label": "Check the grounded-answer service", "method": "GET", "path": "/ask/health", "fields": []}
+    },
+    "actions": [
+      {"id": "context", "label": "Get grounded facts",
+       "description": "The entities that match a question and their facts, each with its source system, plus a prompt block to hand to a model. Matta retrieves; the workflow's own AI step does the judging.",
+       "method": "POST", "path": "/ask/context",
+       "body": {"question": "{question}", "top_k": "{top_k}"},
+       "fields": [
+         {"name": "question", "label": "Question", "required": true, "placeholder": "What do we know about supplier Kilimanjaro Office Supplies?"},
+         {"name": "top_k", "label": "Entities to retrieve", "type": "number", "default": 5}
+       ]},
+      {"id": "ask", "label": "Ask a grounded question",
+       "description": "A short answer composed only from Matta's facts, with citations. If Matta's model is Cordon, the answer carries Cordon's signed receipt.",
+       "method": "POST", "path": "/ask/",
+       "body": {"question": "{question}", "top_k": "{top_k}"},
+       "fields": [
+         {"name": "question", "label": "Question", "required": true},
+         {"name": "top_k", "label": "Entities to retrieve", "type": "number", "default": 5}
+       ]},
+      {"id": "list_instances", "label": "List records of a type",
+       "method": "GET", "path": "/instances/", "query": {"type": "{type}", "status": "{status}", "limit": "{limit}"},
+       "items_path": "instances",
+       "fields": [
+         {"name": "type", "label": "Class IRI", "placeholder": "https://matta.enterprise.com/ontology/Supplier"},
+         {"name": "status", "label": "Status"},
+         {"name": "limit", "label": "Limit", "type": "number", "default": 50}
+       ]}
+    ]
+  }
+]

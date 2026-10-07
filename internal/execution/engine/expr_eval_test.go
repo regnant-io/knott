@@ -117,3 +117,21 @@ func TestExprListIndex(t *testing.T) {
 		t.Errorf("template: got %v", got)
 	}
 }
+
+// Condition cases may call functions: len() of a connector's result list is
+// how a workflow asks "did Odoo find anything?".
+func TestConditionFunctionCall(t *testing.T) {
+	ctx := map[string]any{
+		"steps.product": map[string]any{"output": map[string]any{"items": []any{map[string]any{"id": float64(31)}}}},
+		"steps.vendors": map[string]any{"output": map[string]any{"items": []any{}}},
+	}
+	if evaluateCondition("len(steps.product.output.items) == 0", ctx) {
+		t.Error("one product counted as none")
+	}
+	if !evaluateCondition("len(steps.vendors.output.items) == 0", ctx) {
+		t.Error("no vendors counted as some")
+	}
+	if !evaluateCondition("len(steps.product.output.items) > 0 && steps.product.output.items[0].id == 31", ctx) {
+		t.Error("combined condition failed")
+	}
+}

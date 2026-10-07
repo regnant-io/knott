@@ -40,6 +40,9 @@ var (
 	addr   = flag.String("addr", "127.0.0.1:8069", "listen address")
 	apiKey = flag.String("key", "demo-key", "API key accepted as the bearer token")
 	dbName = flag.String("db", "demo", "database name; requests naming another database are refused")
+	// Odoo's Purchase → Order Approval: confirming an RFQ at or above this
+	// total sends it to "to approve" instead of straight to "purchase".
+	approvalMinFlag = flag.Float64("approval-min", 5000000, "two-step approval threshold for confirmed RFQs (0 = off)")
 )
 
 // ─── Dataset ────────────────────────────────────────────────────────────────
@@ -68,10 +71,11 @@ func (s *store) reset() {
 	s.models = map[string]map[int]record{
 		"res.company": {}, "res.partner": {}, "res.currency": {},
 		"purchase.order": {}, "purchase.order.line": {}, "product.product": {},
+		"product.supplierinfo": {},
 	}
 	s.nextID = map[string]int{}
 	s.messages = map[string][]record{}
-	s.approvalMin = 0
+	s.approvalMin = *approvalMinFlag
 
 	s.put("res.company", record{"id": 1, "name": "Demo Company (Dar es Salaam)", "currency_id": m2o(1, "TZS")})
 	s.put("res.currency", record{"id": 1, "name": "TZS", "symbol": "TSh"})
@@ -83,6 +87,8 @@ func (s *store) reset() {
 		{8, "Msasani IT Solutions"},
 		{9, "Dar Fuel & Lubricants"},
 		{10, "Arusha Packaging Ltd"},
+		{11, "Tanga Industrial Bearings"},
+		{12, "Mwanza Pumps & Seals"},
 	}
 	for _, v := range vendors {
 		s.put("res.partner", record{"id": v.id, "name": v.name, "is_company": true, "supplier_rank": 1, "city": "Dar es Salaam", "country_id": m2o(215, "Tanzania")})
@@ -92,7 +98,34 @@ func (s *store) reset() {
 		24: "Diesel (litre)", 25: "Engine oil 15W-40 (20 L)", 26: "Corrugated carton 40x30x30",
 	}
 	for id, name := range products {
-		s.put("product.product", record{"id": id, "name": name, "display_name": name})
+		s.put("product.product", record{"id": id, "name": name, "display_name": name, "default_code": false,
+			"product_tmpl_id": m2o(id, name), "standard_price": 0.0, "uom_id": m2o(1, "Units")})
+	}
+
+	// Plant spare parts, with the same Internal References a maintenance
+	// system (IIN) uses, and each one's vendor price list in TZS.
+	spares := []struct {
+		id     int
+		code   string
+		name   string
+		vendor int
+		price  float64
+		delay  int
+	}{
+		{31, "BRG-6308-2Z", "Bearing SKF 6308-2Z", 11, 118000, 14},
+		{32, "BRG-6312-2RS", "Bearing SKF 6312-2RS", 11, 205000, 14},
+		{33, "SEAL-PMP002-MECH", "Mechanical Seal Pump 002", 12, 840000, 21},
+		{34, "CMP001-OIL-10L", "Compressor Oil 10L", 9, 225000, 3},
+		{35, "MOT001-COUPLING", "Flexible Coupling Motor 001", 12, 1370000, 21},
+		{36, "BELT-V-A55", "V-Belt A55", 11, 58000, 3},
+		{37, "PCB-VFD-MOT001", "VFD Control Board Motor 001", 8, 4870000, 45},
+	}
+	for _, p := range spares {
+		s.put("product.product", record{"id": p.id, "name": p.name, "display_name": "[" + p.code + "] " + p.name,
+			"default_code": p.code, "product_tmpl_id": m2o(p.id, p.name), "standard_price": p.price, "uom_id": m2o(1, "Units")})
+		s.put("product.supplierinfo", record{"partner_id": m2o(p.vendor, s.models["res.partner"][p.vendor]["name"].(string)),
+			"product_tmpl_id": m2o(p.id, p.name), "price": p.price, "min_qty": 1.0, "delay": p.delay,
+			"currency_id": m2o(1, "TZS"), "sequence": 1})
 	}
 
 	// Confirmed history, so each vendor has a usual order size.
@@ -305,6 +338,25 @@ func (s *store) call(model, method string, args map[string]any) (any, error) {
 		}
 		return true, nil
 
+	case "create":
+		if model != "purchase.order" {
+			return nil, &odooError{404, "werkzeug.exceptions.NotFound", fmt.Sprintf("odoo-sim creates purchase orders only, not %s", model)}
+		}
+		vals, _ := args["vals_list"].([]any)
+		if len(vals) == 0 {
+			return nil, userError("create expects vals_list")
+		}
+		out := make([]any, 0, len(vals))
+		for _, v := range vals {
+			m, _ := v.(map[string]any)
+			id, err := s.createOrder(m)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, id)
+		}
+		return out, nil
+
 	case "context_get":
 		return map[string]any{"lang": "en_US", "tz": "Africa/Dar_es_Salaam", "uid": 2}, nil
 
@@ -339,6 +391,56 @@ func (s *store) call(model, method string, args map[string]any) (any, error) {
 		}
 	}
 	return nil, &odooError{404, "werkzeug.exceptions.NotFound", fmt.Sprintf("method %q not found on %s (odoo-sim models only what the workflow uses)", method, model)}
+}
+
+// createOrder makes an RFQ from create() values: a vendor and order_line
+// commands of the form [0, 0, {product_id, product_qty, price_unit}]. A line
+// without a price takes the vendor's price-list price, as Odoo does.
+func (s *store) createOrder(vals map[string]any) (int, error) {
+	vendor := int(num(vals["partner_id"]))
+	if _, ok := s.models["res.partner"][vendor]; !ok {
+		return 0, userError(fmt.Sprintf("odoo-sim: vendor %d does not exist", vendor))
+	}
+	var lines [][3]any
+	cmds, _ := vals["order_line"].([]any)
+	for _, c := range cmds {
+		cmd, _ := c.([]any)
+		if len(cmd) != 3 || num(cmd[0]) != 0 {
+			return 0, userError("odoo-sim: order_line supports only [0, 0, {...}] create commands")
+		}
+		lv, _ := cmd[2].(map[string]any)
+		pid := int(num(lv["product_id"]))
+		prod, ok := s.models["product.product"][pid]
+		if !ok {
+			return 0, userError(fmt.Sprintf("odoo-sim: product %d does not exist", pid))
+		}
+		qty := num(lv["product_qty"])
+		if qty <= 0 {
+			qty = 1
+		}
+		price, given := numeric(lv["price_unit"])
+		if !given {
+			price = num(prod["standard_price"])
+			for _, si := range s.models["product.supplierinfo"] {
+				if equal(si["product_tmpl_id"].([]any)[0], pid) && equal(si["partner_id"].([]any)[0], vendor) {
+					price = num(si["price"])
+				}
+			}
+		}
+		lines = append(lines, [3]any{pid, qty, price})
+	}
+	if len(lines) == 0 {
+		return 0, userError("odoo-sim: an RFQ needs at least one line")
+	}
+	id := s.order(vendor, "draft", time.Now().Format(time.DateTime), lines)
+	po := s.models["purchase.order"][id]
+	if o := str(vals["origin"]); o != "" {
+		po["origin"] = o
+	}
+	if ref := str(vals["partner_ref"]); ref != "" {
+		po["partner_ref"] = ref
+	}
+	return id, nil
 }
 
 // button applies purchase.order's state machine the way Odoo does.
@@ -466,6 +568,9 @@ func project(recs []record, fields any) []any {
 
 func sortRecords(recs []record, order string) {
 	field, desc := "id", false
+	if i := strings.Index(order, ","); i >= 0 {
+		order = order[:i] // the first sort key is enough for the simulator
+	}
 	if f := strings.Fields(order); len(f) > 0 {
 		field = f[0]
 		desc = len(f) > 1 && strings.EqualFold(f[1], "desc")
@@ -601,7 +706,7 @@ table{border-collapse:collapse;width:100%;background:#fff}td,th{border-bottom:1p
 <h1>Odoo simulator · database <code>{{.DB}}</code></h1>
 <p>Purchase orders, newest first. Refreshes every five seconds. Notes are what KNOTT posted to each order's chatter.</p>
 <table><tr><th>Order</th><th>Vendor</th><th>Total</th><th>Status</th><th>Notes</th></tr>
-{{range .Orders}}<tr><td>{{.name}}</td><td>{{name .partner_id}}</td><td>{{money .amount_total}}</td>
+{{range .Orders}}<tr><td>{{.name}}{{if .origin}}<div class="note">{{.origin}}</div>{{end}}</td><td>{{name .partner_id}}</td><td>{{money .amount_total}}</td>
 <td><span class="s s-{{if eq .state "to approve"}}to{{else}}{{.state}}{{end}}">{{.state}}</span></td>
 <td>{{range .notes}}<div class="note">{{.date}} — {{.body}}</div>{{end}}</td></tr>{{end}}
 </table><footer>odoo-sim, part of KNOTT · by Regnant. Not Odoo; a rehearsal stand-in for the JSON-2 API.</footer></body></html>`))

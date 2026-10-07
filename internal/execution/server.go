@@ -789,10 +789,26 @@ func createRun(w http.ResponseWriter, r *http.Request) {
 		inputData = json.RawMessage(`{}`)
 	}
 
+	// Idempotency: a caller that retries (Wallgarden's actions, IIN's decision
+	// engine) sends the same Idempotency-Key and gets the original run back
+	// instead of starting a second one.
+	idemKey := r.Header.Get("Idempotency-Key")
+	if idemKey != "" {
+		if existing, ok := db.GetIdempotentRun(body.WorkflowID, idemKey); ok {
+			if prior, err := db.GetRunByID(existing); err == nil && prior != nil {
+				writeJSON(w, 200, prior)
+				return
+			}
+		}
+	}
+
 	run, err := db.CreateRun(body.WorkflowID, 1, inputData)
 	if err != nil {
 		writeError(w, 500, "CREATE_FAILED", err.Error())
 		return
+	}
+	if idemKey != "" {
+		db.SaveIdempotencyKey(body.WorkflowID, idemKey, run.ID)
 	}
 
 	// Start processing in background
