@@ -2401,6 +2401,14 @@ func resolveValueForCondition(expr string, ctx map[string]any) any {
 		return nil
 	}
 
+	// A function call — len(steps.x.output.items), lower(input.state) — goes
+	// to the expression evaluator, which has the function library.
+	if strings.Contains(expr, "(") {
+		if v, err := evalExpression(expr, ctx); err == nil {
+			return v
+		}
+	}
+
 	// Variable reference
 	return getContextValue(expr, ctx)
 }

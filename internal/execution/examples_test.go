@@ -14,8 +14,8 @@ import (
 // cheap guard so a broken template can never ship to a client install.
 func TestExampleWorkflowsValid(t *testing.T) {
 	exs := exampleWorkflows()
-	if len(exs) != 11 {
-		t.Fatalf("expected 11 templates, got %d", len(exs))
+	if len(exs) != 12 {
+		t.Fatalf("expected 12 templates, got %d", len(exs))
 	}
 
 	names := map[string]bool{}
