@@ -1,0 +1,136 @@
+Regnant × Chesify tackling AI on top of ERP systems
+Inbox
+Summarize this email
+
+Ye <daudi.abinallah@gmail.com>
+Oct 4, 2026, 2:47 PM (3 days ago)
+to info
+
+Hi Chesify team,
+
+I came across your work around Odoo implementation and integration for Tanzanian businesses. I like the fact that you are close to the actual operating systems of the companies you serve.
+
+I’m Daudi Idd, founder and chief architect of Regnant.
+
+That makes Chesify interesting for Matta and Knott.
+
+Matta creates a semantic layer across ERP/CRM/HR data so AI does not have to guess what different records mean.
+
+Knott then orchestrates business workflows with human approval around consequential actions.
+
+Regnant: regnant.io
+Matta: Matta
+Knott: Knott
+
+I’d like to take one real Odoo workflow and see whether we can turn the repetitive parts into controlled AI automation without losing auditability.
+
+You bring the ERP knowledge. We bring the AI/semantic layer.
+
+That feels like a much more interesting experiment than simply adding a chatbot to an ERP.
+
+Open to talking?
+
+Daudi
+
+
+Said Mpinga <said@chesifylabs.co.tz>
+Oct 5, 2026, 12:47 PM (2 days ago)
+to Frank, me, Chesify
+
+Hi Daudi,
+
+Thanks for reaching out. It's good to see a Tanzanian team building sovereign AI, and a controlled, auditable approach is the right way to bring AI into ERP workflows.
+
+I'm open to a call. To make it useful, it would help to know a few things beforehand:
+
+Demo: Could you show Knott or Matta running on a real workflow, even a simple one?
+Odoo readiness: Do you have any Odoo connector or ERP mapping built yet, or would that be built during the pilot?
+Terms: How do you see the collaboration working commercially (pricing, revenue share or co-development), and who would own any integration work built along the way?
+On our side, I'd suggest starting with one small internal workflow on our own Odoo instance with demo data, such as an approval or status-update process. That keeps client data out of the experiment and lets us judge the results quickly. If it works, we can talk about a joint case study or a client pilot with the client's consent.
+
+I'm free for a 30-minute call this week. Let me know what suits you.
+
+Best regards,
+
+
+chesifylogoformail.png
+Said Mpinga
+CEO
+Tel: +255 655 633 441 | +255 759 345 551
+E: said@chesifylabs.co.tz, info@chesifylabs.co.tz
+OFFICIAL ODOO ERP CONSULTANT
+Ali Maua A, Kijitonyama, Dar es Salaam, Tanzania
+P.O. Box 72641, Dar es Salaam, Tanzania
+Website: www.chesifylabs.co.tz
+
+
+
+
+From: Chesify Labs <info@chesifylabs.co.tz>
+To: "Said Mpinga"<said@chesifylabs.co.tz>
+Date: Mon, 05 Oct 2026 12:44:56 +0300
+Subject: Fwd: Regnant × Chesify tackling AI on top of ERP systems
+
+
+
+
+
+============ Forwarded message ============
+From: Ye <daudi.abinallah@gmail.com>
+To: <info@chesifylabs.co.tz>
+Date: Sun, 04 Oct 2026 14:47:53 +0300
+Subject: Regnant × Chesify tackling AI on top of ERP systems
+============ Forwarded message ============
+
+Daud <daudi.abinallah@gmail.com>
+Attachments
+Oct 5, 2026, 9:26 PM (2 days ago)
+to Said, Chesify, Frank
+
+Hi Said,
+
+Thank you for the quick and thoughtful reply. Your proposal is exactly how we would like to start: one small internal workflow on your own Odoo instance with demo data, so no client data is involved and we can judge the results quickly.
+
+On your three questions:
+
+1. Demo
+Yes, we can show both Knott and Matta on the call, running on demo data. For Knott, we can run an invoice or purchase approval end to end on a local model with nothing leaving the machine: an AI decision step scores its confidence, anything below a set threshold goes to a human reviewer before the ERP is touched, and every step is recorded with its reason in an audit trail. For Matta, we can show how customer, supplier and employee records from different systems become one governed record, with duplicates resolved and every fact traceable to its source system, so the answers Knott's workflows rely on come with evidence attached.
+
+2. Odoo readiness
+To be direct: we do not yet have a packaged Odoo connector or ERP mapping, so it would be built during the pilot. Knott connects to other systems through connector definitions and a generic HTTP and GraphQL step, and Odoo exposes an external API, so a first approval or status-update workflow is a small, well-bounded piece of work. Your team's knowledge of Odoo's data model and access rights would make that part faster and more reliable.
+
+3. Terms
+Happy to keep this simple at the start. My suggestion: the pilot is at no charge, with each side covering its own time. On ownership, Knott is open source under Apache 2.0 and its core stays with Regnant; anything specific to your Odoo environment or your customers' configurations stays yours; and the Odoo connector we build together would be shared work that we agree on in writing before we start. If the pilot succeeds, we could explore a partner model where Chesify leads Odoo implementation and Regnant provides the platform and support, with the commercial split agreed per client deployment. Matta for consistent master data across Odoo and other systems, and Wallgarden as a decision layer above the ERP, could follow in later phases once the first workflow has proven itself.
+
+To prepare a useful demo, it would help to know your Odoo version and edition (Community or Enterprise, hosted or on-premise), and which workflow you would like to start with, for example purchase approval or a status update.
+
+I am free for a 30-minute call on Wednesday or Thursday. Let me know what suits you.
+
+Best regards,
+Daudi
+Regnant | Dar es Salaam, Tanzania
+ One attachment
+  •  Scanned by Gmail
+
+Said Mpinga
+Oct 6, 2026, 2:00 PM (23 hours ago)
+to me, Chesify, Frank
+
+Hi Daudi,
+
+Thank you for the clear answers. The scope and terms you suggest work for us.
+
+For the demo, we'd use our own instance:
+
+Odoo version: Odoo 19 Enterprise, hosted on-premise, loaded with demo data only
+Starting workflow: Purchase order approval. Knott would score each order and send anything below your confidence threshold, or above an amount we set, to a human approver before the order is confirmed. Every step would be logged in the audit trail.
+Since the instance is on-premise, Knott's local-model setup should fit well, and nothing needs to leave our network. We'd expose Odoo's external API to Knott on a test database only.
+
+Before the pilot starts, could you send:
+
+The Knott repository link and licence file
+A short written note on the points you mentioned: ownership of the shared Odoo connector, confidentiality, and no exclusivity on either side
+The hardware you'd need for the local model, and who would provide it
+We're free on Thursday for the call, at a time that suits you. Frank (copied) will join, since he leads our systems integration work.
+
+Warm Regards,
